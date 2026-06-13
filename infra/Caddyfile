@@ -1,0 +1,31 @@
+# Example production reverse proxy for Sveltry (Caddy auto-provisions TLS).
+# Replace the domains with your own and run: caddy run --config infra/Caddyfile
+#
+# Set these origins in infra/.env to match the public URLs:
+#   CONVEX_CLOUD_ORIGIN=https://convex.example.com
+#   CONVEX_SITE_ORIGIN=https://ingest.example.com
+# and in apps/dashboard/.env:
+#   PUBLIC_CONVEX_URL=https://convex.example.com
+#   PUBLIC_SVELTRY_INGEST_URL=https://ingest.example.com
+#   PUBLIC_APP_URL=https://app.example.com
+
+# The SvelteKit dashboard (adapter-node, listening on :3000).
+app.example.com {
+	reverse_proxy 127.0.0.1:3000
+}
+
+# Convex client/WebSocket API (.cloud equivalent).
+convex.example.com {
+	reverse_proxy 127.0.0.1:3210
+}
+
+# Convex HTTP actions / Sentry ingest endpoint (.site equivalent). This is the
+# host that goes into project DSNs.
+ingest.example.com {
+	reverse_proxy 127.0.0.1:3211
+}
+
+# Optional: the Convex admin dashboard. Lock this down (basic auth / IP allowlist).
+convex-admin.example.com {
+	reverse_proxy 127.0.0.1:6791
+}

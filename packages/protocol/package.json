@@ -1,0 +1,24 @@
+{
+  "name": "@sveltry/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sentry-compatible wire protocol: DSN parsing, byte-accurate envelope parsing, auth extraction, event normalization, and issue fingerprinting.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sveltry/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,10 @@
+Sveltry
+Copyright 2026 The Sveltry Authors
+
+This product includes software developed by the Sveltry Authors and contributors.
+
+Sveltry implements a wire-compatible subset of the Sentry ingestion protocol so that
+unmodified official Sentry SDKs can report to a self-hosted Sveltry deployment. "Sentry"
+is a trademark of Functional Software, Inc. Sveltry is an independent, open-source project
+and is not affiliated with, endorsed by, or sponsored by Functional Software, Inc. or the
+Sentry project. References to Sentry are used solely to describe interoperability.

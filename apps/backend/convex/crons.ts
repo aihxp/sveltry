@@ -1,0 +1,23 @@
+import { cronJobs } from 'convex/server';
+import { internal } from './_generated/api';
+
+const crons = cronJobs();
+
+// Prune events past their per-project retention window, daily at 03:00 UTC.
+crons.daily(
+  'prune expired events',
+  { hourUTC: 3, minuteUTC: 0 },
+  internal.maintenance.sweepRetention,
+);
+
+// Transition `new` issues older than 7 days to `ongoing`, hourly.
+crons.hourly('age new issues to ongoing', { minuteUTC: 15 }, internal.maintenance.sweepOngoing);
+
+// Drop rolled-over ingest rate-limit windows so the table stays bounded, daily.
+crons.daily(
+  'prune rate-limit windows',
+  { hourUTC: 3, minuteUTC: 30 },
+  internal.maintenance.sweepRateLimitWindows,
+);
+
+export default crons;

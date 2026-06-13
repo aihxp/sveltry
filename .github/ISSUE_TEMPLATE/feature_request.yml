@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or pain point.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: parity
+    attributes:
+      label: Is this Sentry feature parity?
+      description: Does Sentry already do this? It helps us prioritize against the roadmap.
+      options:
+        - 'Yes, Sentry has this'
+        - 'No, this is net-new'
+        - 'Not sure'
+    validations:
+      required: true

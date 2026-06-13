@@ -1,0 +1,6 @@
+# Default owners for everything in the repo.
+* @aihxp
+
+# The Sentry wire protocol is the compatibility-critical core.
+/packages/protocol/ @aihxp
+/apps/backend/convex/ingest.ts @aihxp

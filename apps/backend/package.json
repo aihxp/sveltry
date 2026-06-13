@@ -1,0 +1,23 @@
+{
+  "name": "@sveltry/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sveltry's Convex backend: Sentry-compatible ingestion, issue grouping, and reactive queries.",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "codegen": "convex codegen",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sveltry/protocol": "workspace:*",
+    "@sveltry/types": "workspace:*",
+    "convex": "catalog:",
+    "convex-helpers": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "catalog:"
+  }
+}

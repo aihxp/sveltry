@@ -1,0 +1,50 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug. Please fill out the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure DSN ...
+        2. Trigger an error ...
+        3. See ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Ingestion / Sentry compatibility
+        - Dashboard (SvelteKit)
+        - Backend (Convex)
+        - Auth (Better Auth)
+        - Self-hosting / Docker
+        - SDK
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Sveltry version, Sentry SDK + version, OS, Bun/Node version, deployment (local/VPS).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell

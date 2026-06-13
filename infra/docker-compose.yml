@@ -1,0 +1,104 @@
+# Self-hosted Sveltry infrastructure: Postgres + open-source Convex backend +
+# the Convex admin dashboard. The SvelteKit app (apps/dashboard) and Better Auth
+# run separately (see README) and connect to the backend over its public origin.
+#
+# Run from the repo root:
+#   docker compose --env-file infra/.env -f infra/docker-compose.yml up -d
+#
+# One Postgres server backs two logical databases: `convex_self_hosted` (the
+# Convex backend's own store) and `sveltry` (Better Auth's identity store).
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sveltry_dev_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - '${BACKEND_PORT:-3210}:3210'
+      - '${SITE_PROXY_PORT:-3211}:3211'
+    volumes:
+      - backend-data:/convex/data
+    environment:
+      - INSTANCE_NAME=${INSTANCE_NAME:-convex-self-hosted}
+      - INSTANCE_SECRET=${INSTANCE_SECRET}
+      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
+      # POSTGRES_URL must be host-only (no database name, no query params); the
+      # backend derives the db name `convex_self_hosted` from the instance name.
+      - POSTGRES_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-sveltry_dev_password}@postgres:5432
+      - DO_NOT_REQUIRE_SSL=${DO_NOT_REQUIRE_SSL:-1}
+      - DISABLE_BEACON=${DISABLE_BEACON:-true}
+      - DISABLE_METRICS_ENDPOINT=${DISABLE_METRICS_ENDPOINT:-true}
+      - RUST_LOG=${RUST_LOG:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3210/version']
+      interval: 5s
+      start_period: 15s
+      timeout: 5s
+      retries: 20
+
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    restart: unless-stopped
+    ports:
+      - '${CONVEX_DASHBOARD_PORT:-6791}:6791'
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # The Sveltry SvelteKit app. Opt in with `--profile app` once the backend is
+  # deployed and the Better Auth schema is migrated:
+  #   docker compose --env-file infra/.env -f infra/docker-compose.yml --profile app up -d --build app
+  #
+  # All-Docker auth note: the backend verifies Better Auth JWTs by fetching JWKS
+  # from the dashboard. A browser-facing loopback origin (PUBLIC_APP_URL) is not
+  # reachable from inside the backend container, so point the deployment's JWKS
+  # URL at the compose service name once, after deploy:
+  #   cd apps/backend && bunx convex env set SVELTRY_JWKS_URL http://app:3000/api/auth/jwks
+  # SITE_URL stays the browser origin (PUBLIC_APP_URL) so the issuer claim matches.
+  app:
+    profiles: ['app']
+    build:
+      context: ..
+      dockerfile: apps/dashboard/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    environment:
+      - PUBLIC_CONVEX_URL=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      - PUBLIC_SVELTRY_INGEST_URL=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://localhost:3000}
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-sveltry_dev_password}@postgres:5432/sveltry
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in infra/.env}
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  backend-data:

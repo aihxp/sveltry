@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/.svelte-kit
+**/build
+**/dist
+.git
+.github
+**/.env
+**/.env.*
+!**/.env.example
+infra/data
+infra/postgres-data
+*.log
+coverage

@@ -1,0 +1,8 @@
+# Pin the isolated (pnpm-style, symlinked) linker for reproducible monorepo installs.
+# https://bun.com/docs/install/workspaces
+[install]
+linker = "isolated"
+
+[install.lockfile]
+# Emit the reviewable text lockfile (bun.lock), not the binary bun.lockb.
+save = true

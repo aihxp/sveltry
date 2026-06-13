@@ -1,0 +1,55 @@
+{
+  "name": "@aihxp/sveltry-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Point official Sentry SDKs at a self-hosted Sveltry deployment: DSN builder, recommended init options, and an ad-blocker-proof tunnel handler.",
+  "license": "Apache-2.0",
+  "author": "The Sveltry Authors",
+  "homepage": "https://github.com/aihxp/sveltry/tree/main/packages/sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aihxp/sveltry.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": "https://github.com/aihxp/sveltry/issues",
+  "keywords": [
+    "sentry",
+    "sveltry",
+    "error-tracking",
+    "sveltekit",
+    "observability",
+    "self-hosted"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "peerDependencies": {
+    "@sentry/sveltekit": ">=9"
+  },
+  "peerDependenciesMeta": {
+    "@sentry/sveltekit": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@sentry/sveltekit": "catalog:testing",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build output
+dist/
+build/
+.svelte-kit/
+.vercel/
+.output/
+*.tsbuildinfo
+
+# Convex generated code is committed for type-checking convenience in CI;
+# uncomment the next line if you prefer to regenerate it on every build.
+# **/convex/_generated/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.local
+.env.sentry-build-plugin
+.npmrc.local
+
+# Self-hosted backend data
+infra/data/
+infra/postgres-data/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+
+# Test / coverage
+coverage/
+.nyc_output/

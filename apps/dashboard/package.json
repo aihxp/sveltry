@@ -1,0 +1,44 @@
+{
+  "name": "@sveltry/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sveltry's SvelteKit dashboard: live issue stream, triage, projects, and alerts.",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+  },
+  "dependencies": {
+    "@sveltry/types": "workspace:*",
+    "@lucide/svelte": "catalog:",
+    "@tanstack/table-core": "catalog:",
+    "better-auth": "catalog:",
+    "bits-ui": "catalog:",
+    "clsx": "catalog:",
+    "convex": "catalog:",
+    "convex-svelte": "catalog:",
+    "mode-watcher": "catalog:",
+    "pg": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tailwind-variants": "catalog:"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.2.0",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "^25.9.3",
+    "@types/pg": "^8.11.0",
+    "svelte": "catalog:",
+    "svelte-check": "^4.1.0",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "zod": "catalog:"
+  }
+}

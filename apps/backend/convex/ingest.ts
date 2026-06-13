@@ -1,0 +1,333 @@
+import { v } from 'convex/values';
+import {
+  coerceEventId,
+  computeGrouping,
+  decompressBody,
+  DecodeError,
+  extractAuth,
+  ingestError,
+  ingestSuccess,
+  normalizeEvent,
+  parseEnvelope,
+  projectIdFromPath,
+  rateLimited,
+  corsHeaders,
+} from '@sveltry/protocol';
+import type { SentryEventPayload } from '@sveltry/types';
+import { internal } from './_generated/api';
+import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
+import type { Id } from './_generated/dataModel';
+import { levelValidator } from './schema';
+import { scrubPayload } from './lib/scrub';
+
+const decoder = new TextDecoder();
+
+/**
+ * The Sentry-compatible ingestion endpoint. Mounted in `http.ts` under the
+ * `/api/` path prefix, it accepts both the modern `/api/<id>/envelope/` and the
+ * legacy `/api/<id>/store/` routes from unmodified official Sentry SDKs.
+ *
+ * Compatibility contract (see docs/sentry-compatibility.md):
+ *  - Auth from `X-Sentry-Auth` header OR query string (`?sentry_key=...`).
+ *  - Bodies may be gzip/deflate compressed; decompressed transparently.
+ *  - Success is always `200` with JSON `{"id":"<32-hex>"}` and no rate-limit
+ *    headers; throttling uses `429` + `Retry-After`.
+ *  - Unknown envelope item types and endpoints are tolerated (200), never fatal.
+ */
+export const ingest = httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const cors = corsHeaders(request.headers.get('origin') ?? '*');
+
+  const route = projectIdFromPath(url.pathname);
+  if (!route) {
+    return ingestError(404, 'unknown ingest endpoint', [], cors);
+  }
+
+  const auth = extractAuth(request.headers.get('x-sentry-auth'), url.searchParams);
+  const publicKey = auth.sentry_key;
+  if (!publicKey) {
+    return ingestError(
+      401,
+      'missing sentry_key',
+      ['no credential in X-Sentry-Auth or query string'],
+      cors,
+    );
+  }
+
+  const resolved = await ctx.runQuery(internal.projects.resolveIngestKey, {
+    publicId: route.projectId,
+    publicKey,
+  });
+  if (!resolved) {
+    return ingestError(401, 'invalid dsn', ['unknown or revoked key for this project'], cors);
+  }
+
+  // Optional per-key rate limiting (fixed window).
+  if (resolved.rateLimitCount && resolved.rateLimitWindowSeconds) {
+    const verdict = await ctx.runMutation(internal.ingest.checkRateLimit, {
+      keyId: resolved.keyId,
+      limitCount: resolved.rateLimitCount,
+      windowSeconds: resolved.rateLimitWindowSeconds,
+    });
+    if (!verdict.ok) {
+      // Pass CORS headers so browser SDKs can read Retry-After and honor the backoff.
+      return rateLimited(verdict.retryAfter ?? 60, undefined, cors);
+    }
+  }
+
+  // Read + decompress the raw body.
+  let body: Uint8Array;
+  try {
+    const raw = new Uint8Array(await request.arrayBuffer());
+    body = await decompressBody(raw, request.headers.get('content-encoding'));
+  } catch (err) {
+    if (err instanceof DecodeError) {
+      return ingestError(400, err.message, err.causes, cors);
+    }
+    return ingestError(400, 'failed to read request body', [String(err)], cors);
+  }
+
+  // Collect the error/default events from the request.
+  let events: SentryEventPayload[] = [];
+  let headerEventId: string | undefined;
+
+  if (route.endpoint === 'store') {
+    try {
+      events = [JSON.parse(decoder.decode(body)) as SentryEventPayload];
+    } catch (err) {
+      return ingestError(400, 'invalid event', [String(err)], cors);
+    }
+  } else if (route.endpoint === 'envelope') {
+    try {
+      const env = parseEnvelope(body);
+      headerEventId = env.header.event_id;
+      for (const item of env.items) {
+        if (item.type === 'event') {
+          try {
+            events.push(JSON.parse(decoder.decode(item.payload)) as SentryEventPayload);
+          } catch {
+            // Skip an unparseable item; do not fail the whole envelope.
+          }
+        }
+        // transaction / session / replay / attachment items are accepted but
+        // not yet persisted (see ROADMAP.md). They are silently tolerated.
+      }
+    } catch (err) {
+      return ingestError(400, 'invalid envelope', [String(err)], cors);
+    }
+  } else {
+    // security/minidump/unreal/attachment endpoints: acknowledge without storing.
+    return ingestSuccess(coerceEventId(headerEventId), cors);
+  }
+
+  const receivedAt = Date.now();
+  let firstId: string | undefined;
+
+  for (const payload of events) {
+    const normalized = normalizeEvent(payload, { receivedAt });
+    const grouping = computeGrouping(payload, normalized);
+    const storedPayload = resolved.scrubPii ? scrubPayload(payload) : payload;
+    if (!firstId) firstId = normalized.eventId;
+
+    await ctx.runMutation(internal.ingest.recordEvent, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      eventId: normalized.eventId,
+      timestamp: normalized.timestamp,
+      receivedAt,
+      level: normalized.level,
+      platform: normalized.platform,
+      environment: normalized.environment,
+      release: normalized.release,
+      message: normalized.message,
+      culprit: normalized.culprit,
+      errorType: normalized.errorType,
+      tags: normalized.tags,
+      userId: normalized.userId,
+      fingerprint: grouping.fingerprint,
+      groupingConfig: grouping.groupingConfig,
+      payload: storedPayload,
+    });
+  }
+
+  return ingestSuccess(coerceEventId(firstId ?? headerEventId), cors);
+});
+
+/** Upsert an issue and persist an event. Schedules alert dispatch. */
+export const recordEvent = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    organizationId: v.string(),
+    eventId: v.string(),
+    timestamp: v.number(),
+    receivedAt: v.number(),
+    level: levelValidator,
+    platform: v.string(),
+    environment: v.string(),
+    release: v.optional(v.string()),
+    message: v.string(),
+    culprit: v.string(),
+    errorType: v.optional(v.string()),
+    tags: v.record(v.string(), v.string()),
+    userId: v.optional(v.string()),
+    fingerprint: v.string(),
+    groupingConfig: v.string(),
+    payload: v.any(),
+  },
+  handler: async (ctx, args) => {
+    // Idempotency: an SDK retry resending the same event_id must not double-count
+    // the issue or insert a duplicate event row. Scope the lookup to the project
+    // so the index stays selective.
+    const duplicate = await ctx.db
+      .query('events')
+      .withIndex('by_project_eventId', (q) =>
+        q.eq('projectId', args.projectId).eq('eventId', args.eventId),
+      )
+      .first();
+    if (duplicate) return { eventId: args.eventId, duplicate: true };
+
+    const existing = await ctx.db
+      .query('issues')
+      .withIndex('by_project_fingerprint', (q) =>
+        q.eq('projectId', args.projectId).eq('fingerprint', args.fingerprint),
+      )
+      .first();
+
+    let issueId;
+    let isNew = false;
+    let isRegression = false;
+
+    if (existing) {
+      issueId = existing._id;
+      const reopen = existing.status === 'resolved';
+      if (reopen) isRegression = true;
+      const newUser = args.userId ? await markIssueUser(ctx, issueId, args.userId) : false;
+      await ctx.db.patch(existing._id, {
+        count: existing.count + 1,
+        userCount: existing.userCount + (newUser ? 1 : 0),
+        // Late-arriving events can be older than what we have seen; keep the
+        // true first/last bounds.
+        firstSeen: Math.min(existing.firstSeen, args.timestamp),
+        lastSeen: Math.max(existing.lastSeen, args.timestamp),
+        level: args.level,
+        title: existing.title || args.message,
+        culprit: args.culprit || existing.culprit,
+        ...(reopen ? { status: 'unresolved' as const, substatus: 'regressed' as const } : {}),
+      });
+    } else {
+      isNew = true;
+      issueId = await ctx.db.insert('issues', {
+        organizationId: args.organizationId,
+        projectId: args.projectId,
+        fingerprint: args.fingerprint,
+        groupingConfig: args.groupingConfig,
+        title: args.message,
+        culprit: args.culprit,
+        level: args.level,
+        platform: args.platform,
+        status: 'unresolved',
+        substatus: 'new',
+        count: 1,
+        userCount: args.userId ? 1 : 0,
+        firstSeen: args.timestamp,
+        lastSeen: args.timestamp,
+        errorType: args.errorType,
+      });
+      if (args.userId) await markIssueUser(ctx, issueId, args.userId);
+    }
+
+    await ctx.db.insert('events', {
+      organizationId: args.organizationId,
+      projectId: args.projectId,
+      issueId,
+      eventId: args.eventId,
+      timestamp: args.timestamp,
+      receivedAt: args.receivedAt,
+      level: args.level,
+      platform: args.platform,
+      environment: args.environment,
+      release: args.release,
+      message: args.message,
+      culprit: args.culprit,
+      tags: args.tags,
+      payload: args.payload,
+    });
+
+    if (args.release) {
+      const existingRelease = await ctx.db
+        .query('releases')
+        .withIndex('by_project_version', (q) =>
+          q.eq('projectId', args.projectId).eq('version', args.release as string),
+        )
+        .first();
+      if (existingRelease) {
+        await ctx.db.patch(existingRelease._id, {
+          lastEventAt: Math.max(existingRelease.lastEventAt ?? 0, args.timestamp),
+          firstEventAt: Math.min(existingRelease.firstEventAt ?? args.timestamp, args.timestamp),
+        });
+      } else {
+        await ctx.db.insert('releases', {
+          organizationId: args.organizationId,
+          projectId: args.projectId,
+          version: args.release,
+          createdAt: args.receivedAt,
+          firstEventAt: args.timestamp,
+          lastEventAt: args.timestamp,
+        });
+      }
+    }
+
+    // Fan out alert evaluation without blocking the ingest path.
+    await ctx.scheduler.runAfter(0, internal.alerts.dispatchForEvent, {
+      issueId,
+      isNew,
+      isRegression,
+    });
+
+    return { eventId: args.eventId };
+  },
+});
+
+/**
+ * Record that `userId` was seen on `issueId`, returning true only the first time.
+ * Backs the distinct `issues.userCount` ("users affected") metric.
+ */
+async function markIssueUser(
+  ctx: MutationCtx,
+  issueId: Id<'issues'>,
+  userId: string,
+): Promise<boolean> {
+  const seen = await ctx.db
+    .query('issueUsers')
+    .withIndex('by_issue_user', (q) => q.eq('issueId', issueId).eq('userId', userId))
+    .first();
+  if (seen) return false;
+  await ctx.db.insert('issueUsers', { issueId, userId, firstSeen: Date.now() });
+  return true;
+}
+
+/** Fixed-window rate limiter for a DSN key. Returns `{ ok, retryAfter }`. */
+export const checkRateLimit = internalMutation({
+  args: { keyId: v.id('projectKeys'), limitCount: v.number(), windowSeconds: v.number() },
+  returns: v.object({ ok: v.boolean(), retryAfter: v.optional(v.number()) }),
+  handler: async (ctx, { keyId, limitCount, windowSeconds }) => {
+    const now = Date.now();
+    const windowMs = windowSeconds * 1000;
+    const windowStart = Math.floor(now / windowMs) * windowMs;
+
+    const existing = await ctx.db
+      .query('ingestWindows')
+      .withIndex('by_key_window', (q) => q.eq('keyId', keyId).eq('windowStart', windowStart))
+      .first();
+
+    if (!existing) {
+      await ctx.db.insert('ingestWindows', { keyId, windowStart, count: 1 });
+      return { ok: true };
+    }
+    if (existing.count >= limitCount) {
+      return { ok: false, retryAfter: Math.ceil((windowStart + windowMs - now) / 1000) };
+    }
+    await ctx.db.patch(existing._id, { count: existing.count + 1 });
+    return { ok: true };
+  },
+});
