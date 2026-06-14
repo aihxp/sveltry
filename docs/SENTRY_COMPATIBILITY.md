@@ -138,9 +138,9 @@ Sveltry parses every item in an envelope but only persists what it currently mod
 | Item type        | Behavior                                  |
 | ---------------- | ----------------------------------------- |
 | `event`          | Parsed and persisted (grouped into issues)|
-| `transaction`    | Accepted (200), not yet persisted         |
-| `session`        | Accepted (200), not yet persisted         |
-| `sessions`       | Accepted (200), not yet persisted         |
+| `transaction`    | Parsed and persisted (performance + traces)|
+| `session`        | Parsed and persisted (release health)     |
+| `sessions`       | Accepted (200), not yet aggregated        |
 | `attachment`     | Accepted (200), not yet persisted         |
 | `replay_event`   | Accepted (200), not yet persisted         |
 | `replay_recording`| Accepted (200), not yet persisted        |
@@ -288,10 +288,11 @@ off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
 
 - `br` (Brotli) and `zstd` request compression are not supported and return `400`. Send
   the body uncompressed or gzip/deflate.
-- `event` and `transaction` items are persisted (errors and performance). `session`,
-  `sessions`, `attachment`, `replay_*`, `profile`, `check_in`, `client_report`, and
-  `feedback` are accepted with `200` but not yet stored or aggregated. Sessions/release
-  health, replays, profiling, cron monitors, and user feedback have no UI surface yet.
+- `event`, `transaction`, and individual `session` items are persisted (errors,
+  performance, and release health). Aggregated `sessions` buckets, `attachment`,
+  `replay_*`, `profile`, `check_in`, `client_report`, and `feedback` are accepted with
+  `200` but not yet stored or aggregated. Replays, profiling, cron monitors, and user
+  feedback have no UI surface yet.
 - Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
   uploaded for the same release), not by debug ID. Upload maps per release via
   `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to

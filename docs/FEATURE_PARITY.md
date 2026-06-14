@@ -93,7 +93,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Basic releases | Done | Release upserted per event into the `releases` table. |
-| Release health (crash-free rates) | Partial | `session` / `sessions` envelope items are accepted at ingest but not aggregated yet. |
+| Release health (crash-free rates) | Done | Individual `session` items are persisted (upserted by sid, latest status wins) and aggregated into crash-free sessions/users per release. Aggregated `sessions` buckets are accepted but not yet folded in. |
 | Resolve in next release | Planned | Not yet implemented. |
 | Suspect commits / commit association | Planned | Not yet implemented. |
 | Deploy tracking | Planned | Not yet implemented. |

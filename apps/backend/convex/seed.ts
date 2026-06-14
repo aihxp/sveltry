@@ -138,6 +138,28 @@ export const debugTransactions = internalQuery({
   },
 });
 
+/** Raw sessions for an org, for release-health verification. */
+export const debugSessions = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const rows = await ctx.db
+      .query('sessions')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .order('desc')
+      .take(50);
+    return {
+      count: rows.length,
+      sessions: rows.map((s) => ({
+        sid: s.sid,
+        did: s.did,
+        status: s.status,
+        release: s.release,
+        errors: s.errors,
+      })),
+    };
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

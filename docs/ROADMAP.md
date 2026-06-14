@@ -18,6 +18,7 @@ The error-tracking vertical slice, end to end:
 - Basic releases (recorded per event)
 - Source-map symbolication: per-release `.map` upload (`POST /artifacts/upload`) and on-ingest resolution of minified JavaScript frames to original source
 - Performance monitoring: `transaction` items persisted with spans, per-transaction p50/p95 latency over a recent-window sample, and a span-waterfall trace view
+- Release health: individual `session` items persisted (upsert by sid) and aggregated into crash-free sessions/users per release
 - Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest
@@ -30,8 +31,8 @@ Highest-value additions that build on the existing tables:
 
 - **Debug-ID artifact bundles.** Match source maps by debug ID (in addition to the current
   name-based matching) so bundler plugins that emit debug IDs work without naming conventions.
-- **Release health.** Aggregate the `session` / `sessions` envelope items already accepted at
-  ingest into crash-free rates; resolve-in-next-release and suspect commits.
+- **Release health, deeper.** Aggregated `sessions` buckets, session adoption over time,
+  resolve-in-next-release, and suspect commits (the crash-free-rate core already ships).
 - **Email alerts.** Wire an SMTP / transactional-email transport to the existing alert pipeline.
 - **More alert integrations.** Microsoft Teams, PagerDuty / Opsgenie, and issue-tracker actions
   (Jira / Linear).
