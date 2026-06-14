@@ -815,6 +815,71 @@ export const debugMergeUnmerge = internalMutation({
   },
 });
 
+/**
+ * Exercise the teams flow: create a team, add a member, assign a project, read the
+ * aggregation back, then detach + clean up. Mirrors the teams mutations (which
+ * require a JWT) to verify membership and project-assignment plumbing end to end.
+ */
+export const debugTeams = internalMutation({
+  args: { organizationId: v.string(), projectId: v.id('projects') },
+  handler: async (ctx, { organizationId, projectId }) => {
+    const now = Date.now();
+    const teamId = await ctx.db.insert('teams', {
+      organizationId,
+      name: 'Platform',
+      slug: 'platform',
+      createdAt: now,
+    });
+    const memberId = await ctx.db.insert('teamMembers', {
+      organizationId,
+      teamId,
+      userId: 'debug-user',
+      email: 'dev@x.io',
+      addedAt: now,
+    });
+    await ctx.db.patch(projectId, { teamId });
+
+    // Read back the way listTeams does.
+    const members = await ctx.db
+      .query('teamMembers')
+      .withIndex('by_team', (q) => q.eq('teamId', teamId))
+      .collect();
+    const projects = await ctx.db
+      .query('projects')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .filter((q) => q.eq(q.field('teamId'), teamId))
+      .collect();
+    const dedup = await ctx.db
+      .query('teamMembers')
+      .withIndex('by_team_user', (q) => q.eq('teamId', teamId).eq('userId', 'debug-user'))
+      .first();
+
+    const result = {
+      memberCount: members.length,
+      projectCount: projects.length,
+      projectAssigned: projects.some((p) => p._id === projectId),
+      dedupFound: dedup?._id === memberId,
+    };
+
+    // Cleanup: detach project, drop member + team.
+    await ctx.db.patch(projectId, { teamId: undefined });
+    await ctx.db.delete(memberId);
+    await ctx.db.delete(teamId);
+    const projAfter = await ctx.db.get(projectId);
+
+    return {
+      ...result,
+      detachedOnCleanup: projAfter?.teamId === undefined,
+      ok:
+        result.memberCount === 1 &&
+        result.projectCount === 1 &&
+        result.projectAssigned &&
+        result.dedupFound &&
+        projAfter?.teamId === undefined,
+    };
+  },
+});
+
 /** Run suspect-commit matching against stored release commits, for verification. */
 export const debugSuspectCommits = internalQuery({
   args: { projectId: v.id('projects'), release: v.string(), files: v.array(v.string()) },

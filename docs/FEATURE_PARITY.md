@@ -74,7 +74,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | DSN / client keys | Done | `projectKeys` per project, resolved at ingest by `resolveIngestKey`. |
 | Org-scoped data access | Done | Every dashboard query calls `requireOrg(ctx)`; Convex verifies RS256 JWTs statelessly via a Custom JWT provider. |
 | Authentication and identity | Done | Better Auth in Postgres; RS256 JWTs with a published JWKS at `/api/auth/jwks`. |
-| Teams | Planned | Org membership exists; team-level grouping not yet modeled. |
+| Teams | Done | Teams group org members and own projects (assignable per project). Modeled in Convex; managed on the Teams page. Hard team-based visibility is layered on by roles. |
 | Fine-grained roles / permissions | Planned | Beyond organization membership. |
 
 ## Alerts and integrations

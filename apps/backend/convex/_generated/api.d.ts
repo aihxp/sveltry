@@ -31,6 +31,7 @@ import type * as savedViews from "../savedViews.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as sourcemaps from "../sourcemaps.js";
+import type * as teams from "../teams.js";
 import type * as transactions from "../transactions.js";
 import type * as usage from "../usage.js";
 
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   sessions: typeof sessions;
   sourcemaps: typeof sourcemaps;
+  teams: typeof teams;
   transactions: typeof transactions;
   usage: typeof usage;
 }>;

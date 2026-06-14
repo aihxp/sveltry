@@ -72,10 +72,38 @@ export default defineSchema({
     monthlyEventQuota: v.optional(v.number()),
     /** Optional automatic spike protection: max events accepted per minute. */
     spikeThresholdPerMinute: v.optional(v.number()),
+    /** Optional owning team (see the `teams` table); null = org-wide. */
+    teamId: v.optional(v.id('teams')),
   })
     .index('by_org', ['organizationId'])
     .index('by_publicId', ['publicId'])
     .index('by_org_slug', ['organizationId', 'slug']),
+
+  // Teams group an org's members and own a subset of its projects (Sentry's teams).
+  // Modeled in Convex (alongside projects and all other data) rather than in Better
+  // Auth's Postgres, so project/team access logic lives in one place.
+  teams: defineTable({
+    organizationId: v.string(),
+    name: v.string(),
+    slug: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_org', ['organizationId'])
+    .index('by_org_slug', ['organizationId', 'slug']),
+
+  // Which users belong to a team. `email`/`name` are denormalized from the Better
+  // Auth member record at add time, for display without a cross-system join.
+  teamMembers: defineTable({
+    organizationId: v.string(),
+    teamId: v.id('teams'),
+    userId: v.string(),
+    email: v.optional(v.string()),
+    name: v.optional(v.string()),
+    addedAt: v.number(),
+  })
+    .index('by_team', ['teamId'])
+    .index('by_team_user', ['teamId', 'userId'])
+    .index('by_org_user', ['organizationId', 'userId']),
 
   // Per-project fixed one-minute windows for automatic spike protection.
   spikeWindows: defineTable({
