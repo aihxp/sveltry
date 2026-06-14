@@ -1,6 +1,7 @@
 import { httpRouter } from 'convex/server';
 import { corsPreflight } from '@sveltry/protocol';
 import { httpAction } from './_generated/server';
+import { uploadCommits } from './commits';
 import { ingest } from './ingest';
 import { uploadArtifact } from './sourcemaps';
 import { recordDeployHttp } from './usage';
@@ -18,6 +19,10 @@ http.route({ path: '/artifacts/upload', method: 'POST', handler: uploadArtifact 
 
 // Deploy API (DSN-key authenticated): record a deploy against a release.
 http.route({ path: '/deploys', method: 'POST', handler: recordDeployHttp });
+
+// Release commits (DSN-key authenticated): upload commit metadata for a release,
+// powering suspect-commit association (Sentry's `set-commits`).
+http.route({ path: '/releases/commits', method: 'POST', handler: uploadCommits });
 
 const preflight = httpAction(async (_ctx, request) =>
   corsPreflight(request.headers.get('origin') ?? '*'),

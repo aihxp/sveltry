@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Suspect commits.** Upload a release's commits and their changed files via
+  `POST /releases/commits` (DSN-key auth, mirrors `sentry-cli releases set-commits`,
+  accepts `files` or `patch_set`). The issue page then shows the commits that changed
+  a file appearing in the stack trace, most recent first, as the likely cause.
 - **Debug-ID source maps.** Artifacts now carry a debug id (parsed from a minified file's
   `//# debugId=` comment or a source map's `debugId` field). Stack frames resolve by matching
   the event's `debug_meta` images to that id, independent of release name or file path, so
