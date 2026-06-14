@@ -6,10 +6,13 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
 
-  let { data } = $props();
   const auth = useAuth();
   const client = useConvexClient();
-  const activeOrg = authClient.useActiveOrganization();
+  const session = authClient.useSession();
+  const user = $derived($session.data?.user);
+  const activeOrg = useQuery(api.organizations.activeOrg, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
 
   const roleData = useQuery(api.roles.listMemberRoles, () =>
     auth.isAuthenticated ? {} : ('skip' as const),
@@ -28,7 +31,14 @@
   type Role = (typeof ROLES)[number];
 
   type OrgMember = { userId: string; user?: { email?: string; name?: string } };
-  const orgMembers = $derived(($activeOrg.data?.members ?? []) as OrgMember[]);
+  const orgMembers = $derived(
+    (roleData.data?.roles ?? []).map(
+      (r): OrgMember => ({
+        userId: r.userId,
+        user: { email: r.email ?? undefined, name: r.name ?? undefined },
+      }),
+    ),
+  );
   const callerRole = $derived(roleData.data?.callerRole ?? 'member');
   const canManage = $derived(callerRole === 'owner' || callerRole === 'admin');
 
@@ -66,10 +76,10 @@
     <Card.Header><Card.Title>Account</Card.Title></Card.Header>
     <Card.Content class="space-y-2 text-sm">
       <div class="flex justify-between">
-        <span class="text-muted-foreground">Name</span><span>{data.user.name}</span>
+        <span class="text-muted-foreground">Name</span><span>{user?.name ?? ''}</span>
       </div>
       <div class="flex justify-between">
-        <span class="text-muted-foreground">Email</span><span>{data.user.email}</span>
+        <span class="text-muted-foreground">Email</span><span>{user?.email ?? ''}</span>
       </div>
     </Card.Content>
   </Card.Root>
@@ -79,12 +89,12 @@
     <Card.Content class="space-y-2 text-sm">
       <div class="flex justify-between">
         <span class="text-muted-foreground">Name</span><span
-          >{$activeOrg.data?.name ?? 'Unknown'}</span
+          >{activeOrg.data?.name ?? 'Unknown'}</span
         >
       </div>
       <div class="flex justify-between">
         <span class="text-muted-foreground">ID</span>
-        <span class="font-mono text-xs">{data.activeOrganizationId}</span>
+        <span class="font-mono text-xs">{activeOrg.data?.id ?? ''}</span>
       </div>
       <div class="flex justify-between">
         <span class="text-muted-foreground">Your role</span>

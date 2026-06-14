@@ -1,15 +1,16 @@
 import { createAuthClient } from 'better-auth/svelte';
-import { jwtClient, organizationClient } from 'better-auth/client/plugins';
+import { convexClient } from '@convex-dev/better-auth/client/plugins';
 import { env } from '$env/dynamic/public';
 
 /**
- * Browser auth client. `jwtClient()` exposes `authClient.token()` (the JWT
- * Convex consumes); `organizationClient()` exposes org create / setActive /
- * useActiveOrganization for multi-tenancy.
+ * Browser auth client. Auth requests go to this app's `/api/auth/*`, which the
+ * handler at `routes/api/auth/[...all]` proxies to the Convex-served Better Auth
+ * (no Postgres). The `convexClient()` plugin exposes `authClient.convex.token()`,
+ * the JWT that authenticates Convex queries.
  */
 export const authClient = createAuthClient({
   baseURL: env.PUBLIC_APP_URL ?? undefined,
-  plugins: [jwtClient(), organizationClient()],
+  plugins: [convexClient()],
 });
 
-export const { signIn, signUp, signOut, useSession, organization } = authClient;
+export const { signIn, signUp, signOut, useSession } = authClient;

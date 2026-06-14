@@ -1,50 +1,41 @@
 # Convex-only auth (no Postgres)
 
-Status of removing Postgres so Sveltry runs on Convex alone.
+Sveltry now runs auth entirely on Convex. Postgres is removed.
 
-## Proven + done
+## How it works
 
-- **Identity on Convex works.** This branch wires `@convex-dev/better-auth` in
-  COMPONENT mode (email+password + the `convex()` plugin, NO organization plugin) and it is
-  deployed + verified on the self-hosted backend: `GET /api/auth/convex/jwks` returns RS256
-  keys and `POST /api/auth/sign-up/email` + `get-session` create/return a user **in Convex,
-  no Postgres**. Files: `apps/backend/convex/convex.config.ts`, `betterauth.ts`,
-  `auth.config.ts` (getAuthConfigProvider), `http.ts` (registerRoutes), `better-auth` added to
-  the backend workspace.
-- **Organizations are Convex-native** (merged to main, PR #34): `organizations` source of
-  truth, `memberRoles` membership, `userSettings` active org; `requireOrg` resolves from
-  Convex. So the Better Auth organization plugin is no longer needed.
+- **Identity**: `@convex-dev/better-auth` in COMPONENT mode (email+password + the `convex()`
+  plugin). Auth tables (user/session/account/jwks) live in Convex. The auth handler is served by
+  Convex; the SvelteKit app proxies `/api/auth/*` to it via
+  `@mmailaender/convex-better-auth-svelte`. No `organization` plugin.
+- **Organizations**: modeled natively in Convex (`organizations` / `memberRoles` / `userSettings`);
+  `requireOrg` resolves the active org from Convex. The dashboard uses `api.organizations.*`.
+- **Gating**: client-side (`(app)/+layout.svelte` redirects to `/login` if unauthenticated and to
+  `/onboarding` if the user has no active org).
 
-## Remaining: the SvelteKit frontend rewire (needs a browser to validate)
+Verified end-to-end in a browser: sign up -> onboarding -> create org -> dashboard, with
+authenticated Convex queries (issue stats, members, roles) and the user/org/role shown in settings.
 
-The login/cookie/token flow can only be confidence-validated in a browser. Exact wiring
-(adapter `@mmailaender/convex-better-auth-svelte@0.8.0`, already installed):
+## Deployment env
 
-1. `src/lib/auth-client.ts`: `createAuthClient({ baseURL: PUBLIC_APP_URL, plugins: [convexClient()] })`
-   (`convexClient` from `@convex-dev/better-auth/client/plugins`). Drop `jwtClient`/`organizationClient`.
-   `authClient.convex.token()` replaces `authClient.token()`.
-2. `src/routes/api/auth/[...all]/+server.ts` (new):
-   `export const { GET, POST } = createSvelteKitHandler({ convexSiteUrl: PUBLIC_CONVEX_SITE_URL })`
-   (the backend HTTP origin, port 3216). This proxies /api/auth/* to Convex and sets the JWT cookie.
-3. `src/routes/+layout.svelte`: replace `setupConvex`+`setupAuth`+the manual token bridge with
-   `createSvelteAuthClient({ authClient, convexUrl: PUBLIC_CONVEX_URL })`.
-4. `src/hooks.server.ts`: drop the standalone `auth.api.getSession` (no Postgres instance); keep
-   `handleError`. Gate auth CLIENT-side (simplest, avoids SSR token plumbing).
-5. `src/routes/(app)/+layout.server.ts`: drop the `activeOrganizationId` redirect. Move gating into
-   `(app)/+layout.svelte`: `useAuth()` -> redirect `/login` if not authed; `useQuery(api.organizations.activeOrg)`
-   -> redirect `/onboarding` if null; use its `name` for the org label.
-6. `src/routes/onboarding/+page.svelte`: replace `authClient.organization.create/setActive` with
-   `client.mutation(api.organizations.createOrganization, { name })` then `goto('/dashboard')`.
-7. `settings/+page.svelte` + `teams/+page.svelte`: replace `authClient.useActiveOrganization()` /
-   `$activeOrg.data.members` with `useQuery(api.organizations.activeOrg)` and
-   `useQuery(api.organizations.listMembers)`.
-8. `src/app.d.ts`: drop `activeOrganizationId` from PageData; simplify `Locals`.
-9. Delete `src/lib/auth.ts` (the pg Pool + standalone instance). Remove `pg`/`@types/pg` and
-   `DATABASE_URL`. Add `PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3216` to the dashboard env.
-10. Remove the Postgres service from `infra/docker-compose.yml` once the migration is validated.
+Dashboard (`apps/dashboard/.env`):
+- `PUBLIC_CONVEX_URL`: the Convex websocket/data URL (e.g. host `:3215`).
+- `PUBLIC_CONVEX_SITE_URL`: the Convex HTTP origin where auth is served (e.g. host `:3216`).
+- `PUBLIC_APP_URL`: the dashboard's own origin; must match where it is served (auth Origin check).
 
-## Validate (in a browser)
+Convex backend (`npx convex env set ...`):
+- `SITE_URL`: the dashboard origin. Better Auth's `trustedOrigins` defaults to this, so it must
+  equal `PUBLIC_APP_URL` or sign-in fails with "Invalid origin".
+- `CONVEX_INTERNAL_SITE_URL`: the in-container HTTP-actions origin the backend uses to fetch its
+  own JWKS for token verification. Set this when the public `CONVEX_SITE_URL` is a host-mapped port
+  the backend container cannot reach itself (this repo's docker maps host `:3216` -> container
+  `:3211`, so set `http://localhost:3211`). Defaults to `CONVEX_SITE_URL` when unset (correct for
+  setups without port-mapping divergence). Without it, `getUserIdentity()` returns null and every
+  authenticated call is "Unauthenticated".
 
-`bun run dev`, then: sign up -> redirected to /onboarding -> create org (Convex
-`createOrganization`) -> land on /dashboard -> confirm an authenticated Convex query (e.g. issues)
-returns the org's data. Then sign out / sign in. Once green, drop Postgres and merge.
+## Remaining
+
+- One-time backfill for existing self-hosted instances that already have Better Auth (Postgres)
+  orgs: ensure an `organizations` row + owner `memberRoles` row + `userSettings` per user, keyed by
+  the existing `organizationId` slug. New instances need nothing.
+- Remove the Postgres service from `infra/docker-compose.yml` (no longer used by the app).

@@ -1,18 +1,7 @@
-import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { building } from '$app/environment';
-import { svelteKitHandler } from 'better-auth/svelte-kit';
-import { auth } from '$lib/auth';
+import type { HandleServerError } from '@sveltejs/kit';
 
-export const handle: Handle = async ({ event, resolve }) => {
-  // svelteKitHandler intercepts /api/auth/* but does NOT populate locals, so we
-  // resolve the session ourselves for SSR-protected loads.
-  const session = await auth.api.getSession({ headers: event.request.headers });
-  event.locals.user = session?.user ?? null;
-  event.locals.session = session?.session ?? null;
-
-  return svelteKitHandler({ event, resolve, auth, building });
-};
-
+// Auth is handled by the Convex Better Auth component + the /api/auth proxy route;
+// route gating happens client-side, so the server hook only formats errors.
 export const handleError: HandleServerError = ({ error, status, message }) => {
   const errorId = crypto.randomUUID();
   if (status !== 404) {

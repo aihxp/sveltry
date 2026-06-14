@@ -1,39 +1,29 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { authClient } from '$lib/auth-client';
+  import { useConvexClient } from 'convex-svelte';
+  import { api } from '$convex/_generated/api';
   import AuthShell from '$lib/components/AuthShell.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
 
+  const client = useConvexClient();
   let name = $state('');
   let error = $state('');
   let loading = $state(false);
-
-  function toSlug(s: string): string {
-    return (
-      s
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 48) || `org-${Math.floor(Math.random() * 100000)}`
-    );
-  }
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     loading = true;
     error = '';
-    const slug = toSlug(name) + '-' + Math.floor(Math.random() * 9000 + 1000);
-    const { data, error: err } = await authClient.organization.create({ name, slug });
-    if (err || !data) {
+    try {
+      // Creates the org, makes the caller its owner, and sets it active (all in Convex).
+      await client.mutation(api.organizations.createOrganization, { name });
+      await goto('/dashboard');
+    } catch (err) {
       loading = false;
-      error = err?.message ?? 'Could not create organization';
-      return;
+      error = err instanceof Error ? err.message : 'Could not create organization';
     }
-    await authClient.organization.setActive({ organizationId: data.id });
-    await goto('/dashboard');
   }
 </script>
 

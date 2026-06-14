@@ -1,33 +1,23 @@
 <script lang="ts">
   import '../app.css';
   import { ModeWatcher } from 'mode-watcher';
-  import { setupConvex, setupAuth } from 'convex-svelte';
+  import {
+    createSvelteAuthClient,
+    type AuthClient,
+  } from '@mmailaender/convex-better-auth-svelte/svelte';
   import { env } from '$env/dynamic/public';
   import { authClient } from '$lib/auth-client';
 
   let { children } = $props();
 
-  // One ConvexClient + WebSocket shared by every route.
-  setupConvex(env.PUBLIC_CONVEX_URL ?? 'http://127.0.0.1:3210');
-
-  const session = authClient.useSession();
-
-  // Bridge the Better Auth JWT into authenticated Convex queries.
-  setupAuth(() => ({
-    isLoading: $session.isPending,
-    isAuthenticated: !!$session.data,
-    fetchAccessToken: async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-      if (!$session.data) return null;
-      try {
-        const { data } = await authClient.token(
-          forceRefreshToken ? { query: { disableCache: true } } : {},
-        );
-        return data?.token ?? null;
-      } catch {
-        return null;
-      }
-    },
-  }));
+  // Sets up the shared Convex client and bridges the Better Auth session into
+  // authenticated Convex queries (calls setupConvex + setupAuth internally). The
+  // cast bridges a 0.x type mismatch between the adapter's AuthClient and the
+  // better-auth client with the convexClient plugin (compatible at runtime).
+  createSvelteAuthClient({
+    authClient: authClient as unknown as AuthClient,
+    convexUrl: env.PUBLIC_CONVEX_URL ?? 'http://127.0.0.1:3210',
+  });
 </script>
 
 <ModeWatcher />

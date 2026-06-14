@@ -8,14 +8,15 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Changed
 
-- **Organizations are now modeled natively in Convex** (step toward a Postgres-free, Convex-only
-  stack). `organizations` is the source of truth, membership lives in `memberRoles`, and each
-  user's active organization lives in a new `userSettings` table. `requireOrg` resolves the active
-  org from Convex (with a backward-compatible fallback to the legacy JWT claim, then to a sole
-  membership), so the active org no longer depends on an auth-provider claim. New `organizations`
-  functions: createOrganization, listMyOrganizations, setActiveOrganization, activeOrg, listMembers.
-  This removes the dependency on Better Auth's organization plugin; identity migration (and dropping
-  Postgres) is the remaining step.
+- **Sveltry is now Convex-only (Postgres removed).** Auth runs entirely on Convex: identity uses
+  `@convex-dev/better-auth` in component mode (email + password, served by Convex and proxied
+  through the SvelteKit app), and organizations/membership/roles are modeled natively in Convex
+  (`organizations` source of truth, `memberRoles` membership, `userSettings` active org). The
+  dashboard's Postgres Better Auth instance, the `pg` dependency, and `DATABASE_URL` are gone.
+  `requireOrg` resolves the active org from Convex. Verified end to end in a browser: sign up,
+  onboarding, create org, dashboard, sign out, sign in, with authenticated Convex queries
+  throughout. New backend env: `CONVEX_INTERNAL_SITE_URL` (the in-container origin for JWKS
+  verification when the public site URL is a host-mapped port). See CONVEX-ONLY-AUTH.md.
 
 ### Security
 

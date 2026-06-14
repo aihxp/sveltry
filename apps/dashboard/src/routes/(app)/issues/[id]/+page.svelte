@@ -4,6 +4,7 @@
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
+  import { authClient } from '$lib/auth-client';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
@@ -20,8 +21,13 @@
 
   const auth = useAuth();
   const client = useConvexClient();
+  const session = authClient.useSession();
   const issueId = $derived(page.params.id as Id<'issues'>);
-  const me = $derived((page.data as { user?: { id: string; email?: string } }).user);
+  const me = $derived(
+    $session.data?.user
+      ? { id: $session.data.user.id, email: $session.data.user.email }
+      : undefined,
+  );
 
   const issue = useQuery(api.issues.getIssue, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
