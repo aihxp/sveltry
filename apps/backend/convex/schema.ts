@@ -366,6 +366,28 @@ export default defineSchema({
     .index('by_project_version', ['projectId', 'version'])
     .index('by_project', ['projectId', 'createdAt']),
 
+  // Deploys recorded against a release (via the deploy API).
+  deploys: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    release: v.string(),
+    environment: v.string(),
+    name: v.optional(v.string()),
+    url: v.optional(v.string()),
+    deployedAt: v.number(),
+  }).index('by_project', ['projectId', 'deployedAt']),
+
+  // Per-project, per-day usage counters (events/transactions accepted, plus
+  // client-side drops reported via client_report). One write per ingest batch.
+  usageDaily: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    day: v.number(),
+    eventCount: v.number(),
+    transactionCount: v.number(),
+    droppedCount: v.number(),
+  }).index('by_project_day', ['projectId', 'day']),
+
   // Uploaded build artifacts (minified bundles and their source maps) used to
   // resolve minified production stack frames back to original source. Bytes live
   // in Convex file storage; this table is the index of names per release.

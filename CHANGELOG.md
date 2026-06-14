@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Usage accounting and deploy tracking.** Per-project, per-day event/transaction counters
+  (plus client-side drops from `client_report`), shown as 30-day totals on the project page;
+  and a DSN-authenticated deploy API (`POST /deploys`) recording deploys per release.
 - **Web Vitals and distributed tracing.** LCP/INP/CLS/FCP/FID/TTFB p75 are read from transaction
   `measurements` and shown on the Performance page; transactions sharing a trace id are stitched
   into a single cross-service trace waterfall (a new trace view).

@@ -30,6 +30,7 @@ import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as sourcemaps from "../sourcemaps.js";
 import type * as transactions from "../transactions.js";
+import type * as usage from "../usage.js";
 
 import type {
   ApiFromModules,
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   sessions: typeof sessions;
   sourcemaps: typeof sourcemaps;
   transactions: typeof transactions;
+  usage: typeof usage;
 }>;
 
 /**

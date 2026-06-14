@@ -311,6 +311,27 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Usage totals + deploy count for a project, for verification. */
+export const debugUsage = internalQuery({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    const usage = await ctx.db
+      .query('usageDaily')
+      .withIndex('by_project_day', (q) => q.eq('projectId', projectId))
+      .collect();
+    const deploys = await ctx.db
+      .query('deploys')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect();
+    return {
+      events: usage.reduce((s, r) => s + r.eventCount, 0),
+      transactions: usage.reduce((s, r) => s + r.transactionCount, 0),
+      dropped: usage.reduce((s, r) => s + r.droppedCount, 0),
+      deploys: deploys.map((d) => ({ release: d.release, environment: d.environment })),
+    };
+  },
+});
+
 /** Web Vitals p75 + trace size, for verification (mirrors the auth'd queries). */
 export const debugVitalsAndTrace = internalQuery({
   args: { organizationId: v.string(), traceId: v.string() },

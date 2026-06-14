@@ -22,6 +22,7 @@ import {
 import type {
   EnvelopeItem,
   SentryCheckIn,
+  SentryClientReport,
   SentryEventPayload,
   SentryProfile,
   SentryReplayEvent,
@@ -114,6 +115,7 @@ export const ingest = httpAction(async (ctx, request) => {
   const attachmentItems: EnvelopeItem[] = [];
   const userReports: SentryUserReport[] = [];
   const feedbacks: SentryEventPayload[] = [];
+  const clientReports: SentryClientReport[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -188,8 +190,13 @@ export const ingest = httpAction(async (ctx, request) => {
           } catch {
             // Skip an unparseable feedback event.
           }
+        } else if (item.type === 'client_report') {
+          try {
+            clientReports.push(JSON.parse(decoder.decode(item.payload)) as SentryClientReport);
+          } catch {
+            // Skip an unparseable client report.
+          }
         }
-        // client_report items are accepted but not stored (see ROADMAP.md).
       }
     } catch (err) {
       return ingestError(400, 'invalid envelope', [String(err)], cors);
@@ -393,6 +400,21 @@ export const ingest = httpAction(async (ctx, request) => {
       name: fb.name,
       email: fb.contact_email,
       message: fb.message,
+    });
+  }
+
+  // One usage write per ingest batch (not per event), with client-side drops.
+  let dropped = 0;
+  for (const r of clientReports) {
+    for (const d of r.discarded_events ?? []) dropped += d.quantity ?? 0;
+  }
+  if (events.length || transactions.length || dropped) {
+    await ctx.runMutation(internal.usage.recordUsage, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      events: events.length,
+      transactions: transactions.length,
+      dropped,
     });
   }
 

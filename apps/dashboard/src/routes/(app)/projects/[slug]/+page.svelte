@@ -32,6 +32,12 @@
   const metricAlerts = useQuery(api.metricAlerts.listMetricAlerts, () =>
     projectId ? { projectId } : ('skip' as const),
   );
+  const usage = useQuery(api.usage.projectUsage, () =>
+    projectId ? { projectId } : ('skip' as const),
+  );
+  const deploys = useQuery(api.usage.listDeploys, () =>
+    projectId ? { projectId } : ('skip' as const),
+  );
 
   // New metric alert form
   let maMetric = $state<'p95_latency' | 'error_count' | 'crash_free_rate'>('p95_latency');
@@ -148,6 +154,57 @@
         {/each}
       </Card.Content>
     </Card.Root>
+
+    {#if usage.data}
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Usage (last 30 days)</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <div class="text-xs uppercase tracking-wide text-muted-foreground">Events</div>
+              <div class="text-2xl font-bold tabular-nums">
+                {usage.data.totals.events.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide text-muted-foreground">Transactions</div>
+              <div class="text-2xl font-bold tabular-nums">
+                {usage.data.totals.transactions.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide text-muted-foreground">
+                Dropped (client)
+              </div>
+              <div class="text-2xl font-bold tabular-nums text-muted-foreground">
+                {usage.data.totals.dropped.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </Card.Content>
+      </Card.Root>
+    {/if}
+
+    {#if deploys.data && deploys.data.length > 0}
+      <Card.Root>
+        <Card.Header><Card.Title>Deploys</Card.Title></Card.Header>
+        <Card.Content class="px-0">
+          <div class="divide-y border-t">
+            {#each deploys.data as d (d._id)}
+              <div class="flex items-center gap-3 px-6 py-2.5 text-sm">
+                <Badge variant="muted" class="shrink-0">{d.environment}</Badge>
+                <span class="min-w-0 flex-1 truncate font-mono text-xs">{d.release}</span>
+                <span class="shrink-0 text-xs text-muted-foreground"
+                  >{relativeTime(d.deployedAt)}</span
+                >
+              </div>
+            {/each}
+          </div>
+        </Card.Content>
+      </Card.Root>
+    {/if}
 
     <Card.Root>
       <Card.Header>
