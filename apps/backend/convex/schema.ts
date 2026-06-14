@@ -51,6 +51,23 @@ export const alertTriggerValidator = v.union(
   v.literal('event_frequency'),
 );
 
+/** Per-project issue-tracker integration config (credentials are self-hoster supplied). */
+export const trackerConfigValidator = v.union(
+  v.object({
+    type: v.literal('jira'),
+    siteUrl: v.string(),
+    projectKey: v.string(),
+    email: v.string(),
+    apiToken: v.string(),
+    issueTypeName: v.optional(v.string()),
+  }),
+  v.object({
+    type: v.literal('linear'),
+    apiKey: v.string(),
+    teamId: v.string(),
+  }),
+);
+
 export const alertChannelValidator = v.object({
   type: v.union(
     v.literal('webhook'),
@@ -98,6 +115,18 @@ export default defineSchema({
     .index('by_org', ['organizationId'])
     .index('by_publicId', ['publicId'])
     .index('by_org_slug', ['organizationId', 'slug']),
+
+  // Per-project issue-tracker integration (Jira / Linear). Credentials are supplied
+  // by the self-hoster and stored here; queries never return the raw secrets.
+  projectIntegrations: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    config: trackerConfigValidator,
+    isEnabled: v.boolean(),
+    /** Create a tracker ticket automatically when a new issue appears. */
+    autoCreate: v.boolean(),
+    createdAt: v.number(),
+  }).index('by_project', ['projectId']),
 
   // Custom dashboards: named, org-shared collections of saved Discover queries.
   dashboards: defineTable({
@@ -203,6 +232,10 @@ export default defineSchema({
     snoozeUntil: v.optional(v.number()),
     assigneeId: v.optional(v.string()),
     errorType: v.optional(v.string()),
+    /** A linked tracker ticket (Jira/Linear), set once created from this issue. */
+    trackerProvider: v.optional(v.string()),
+    trackerKey: v.optional(v.string()),
+    trackerUrl: v.optional(v.string()),
   })
     .index('by_project_fingerprint', ['projectId', 'fingerprint'])
     .index('by_project_status_lastSeen', ['projectId', 'status', 'lastSeen'])

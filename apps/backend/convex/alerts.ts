@@ -9,6 +9,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrg, requireRole } from './lib/auth';
+import { safeFetch } from './lib/net';
 import { alertChannelValidator, alertTriggerValidator, levelValidator } from './schema';
 
 const LEVEL_RANK: Record<string, number> = { debug: 0, info: 1, warning: 2, error: 3, fatal: 4 };
@@ -156,6 +157,15 @@ export const dispatchForEvent = internalAction({
     const now = Date.now();
     if (issue.status === 'ignored' && issue.snoozeUntil && issue.snoozeUntil > now) return;
 
+    // Auto-create a tracker ticket for brand-new issues when the project opted in
+    // (the action no-ops when there is no integration or auto-create is off).
+    if (isNew) {
+      await ctx.scheduler.runAfter(0, internal.integrations.runTrackerCreate, {
+        issueId,
+        requireAuto: true,
+      });
+    }
+
     const siteUrl = (process.env.SITE_URL ?? '').replace(/\/$/, '');
     const issueUrl = siteUrl ? `${siteUrl}/issues/${issueId}` : undefined;
 
@@ -261,62 +271,46 @@ function alertBody(content: AlertContent): string {
 
 const WEBHOOK_TIMEOUT_MS = 8000;
 
-// Cloud instance-metadata endpoints: the highest-value SSRF target. Blocked for
-// every outbound alert regardless of channel. Private-network targets are left
-// reachable on purpose: self-hosters routinely point alerts at internal Slack
-// proxies or chat relays on the same network.
-const BLOCKED_HOSTS = new Set(['169.254.169.254', 'metadata.google.internal', '[fd00:ec2::254]']);
-
-/** Reject non-http(s) schemes and known cloud-metadata hosts before fetching. */
-function assertSafeWebhookTarget(target: string): void {
-  let url: URL;
-  try {
-    url = new URL(target);
-  } catch {
-    throw new Error('invalid webhook url');
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(`unsupported webhook scheme: ${url.protocol}`);
-  }
-  if (BLOCKED_HOSTS.has(url.hostname.toLowerCase())) {
-    throw new Error('webhook target is not allowed');
-  }
-}
-
 /** Deliver a single notification to a channel. Returns true on a 2xx response. */
 async function deliver(
   channel: { type: string; target: string },
   content: AlertContent,
 ): Promise<boolean> {
-  assertSafeWebhookTarget(channel.target);
   const headline = `[${content.projectName}] ${content.issueTitle}`;
   const lines = alertBody(content);
-
-  if (channel.type === 'webhook') {
-    const res = await fetch(channel.target, {
+  // `safeFetch` validates the target and re-validates every redirect hop, so the
+  // SSRF guard cannot be bypassed by a redirect to a blocked host.
+  const post = (url: string, headers: Record<string, string>, body: string) =>
+    safeFetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...content, source: 'sveltry' }),
+      headers,
+      body,
       signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
+
+  if (channel.type === 'webhook') {
+    const res = await post(
+      channel.target,
+      { 'content-type': 'application/json' },
+      JSON.stringify({ ...content, source: 'sveltry' }),
+    );
     return res.ok;
   }
 
   if (channel.type === 'slack') {
-    const res = await fetch(channel.target, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: lines }),
-      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
-    });
+    const res = await post(
+      channel.target,
+      { 'content-type': 'application/json' },
+      JSON.stringify({ text: lines }),
+    );
     return res.ok;
   }
 
   if (channel.type === 'discord') {
-    const res = await fetch(channel.target, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
+    const res = await post(
+      channel.target,
+      { 'content-type': 'application/json' },
+      JSON.stringify({
         content: content.issueUrl ?? headline,
         embeds: [
           {
@@ -327,8 +321,7 @@ async function deliver(
           },
         ],
       }),
-      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
-    });
+    );
     return res.ok;
   }
 
@@ -340,12 +333,7 @@ async function deliver(
     url: content.issueUrl,
   });
   if (req) {
-    const res = await fetch(req.url, {
-      method: 'POST',
-      headers: req.headers,
-      body: req.body,
-      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
-    });
+    const res = await post(req.url, req.headers, req.body);
     return res.ok;
   }
 

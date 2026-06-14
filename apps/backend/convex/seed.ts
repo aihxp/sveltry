@@ -1108,6 +1108,67 @@ export const debugDiscover = internalMutation({
 
 const HOUR_MS = 3_600_000;
 
+/** Insert a Jira tracker integration + a throwaway issue, for the delivery roundtrip. */
+export const seedTrackerScenario = internalMutation({
+  args: { organizationId: v.string(), projectId: v.id('projects'), siteUrl: v.string() },
+  handler: async (ctx, { organizationId, projectId, siteUrl }) => {
+    const now = Date.now();
+    const integrationId = await ctx.db.insert('projectIntegrations', {
+      organizationId,
+      projectId,
+      config: {
+        type: 'jira',
+        siteUrl,
+        projectKey: 'OPS',
+        email: 'dev@x.io',
+        apiToken: 'tok',
+        issueTypeName: 'Bug',
+      },
+      isEnabled: true,
+      autoCreate: false,
+      createdAt: now,
+    });
+    const issueId = await ctx.db.insert('issues', {
+      organizationId,
+      projectId,
+      fingerprint: `tracker-${now}`,
+      groupingConfig: 'debug',
+      title: 'Boom',
+      culprit: 'app.js',
+      level: 'error',
+      platform: 'javascript',
+      status: 'unresolved',
+      substatus: 'new',
+      count: 3,
+      userCount: 0,
+      firstSeen: now,
+      lastSeen: now,
+    });
+    return { integrationId, issueId };
+  },
+});
+
+export const readIssueTracker = internalQuery({
+  args: { issueId: v.id('issues') },
+  handler: async (ctx, { issueId }) => {
+    const issue = await ctx.db.get(issueId);
+    if (!issue) return null;
+    return {
+      provider: issue.trackerProvider ?? null,
+      key: issue.trackerKey ?? null,
+      url: issue.trackerUrl ?? null,
+    };
+  },
+});
+
+export const cleanupTrackerScenario = internalMutation({
+  args: { integrationId: v.id('projectIntegrations'), issueId: v.id('issues') },
+  handler: async (ctx, { integrationId, issueId }) => {
+    await ctx.db.delete(integrationId);
+    await ctx.db.delete(issueId);
+  },
+});
+
 /** Exercise the dashboards CRUD: create, add widgets (ordering), remove, cascade-delete. */
 export const debugDashboards = internalMutation({
   args: { organizationId: v.string() },

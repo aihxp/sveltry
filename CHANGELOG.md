@@ -6,8 +6,22 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- **Hardened the outbound-request SSRF guard.** Every server-side fetch to a user-influenced
+  target (alert webhooks, tracker `siteUrl`) now follows redirects manually and re-validates the
+  host on every hop, so a target that passes the denylist can no longer redirect the credentialed
+  request to a cloud-metadata endpoint. The host check also now blocks the whole link-local range
+  in any encoding (including IPv4-mapped IPv6 like `::ffff:169.254.169.254`), closing a denylist
+  bypass. The guard is now a unit-tested helper shared by the alert and tracker delivery paths.
+
 ### Added
 
+- **Jira and Linear integrations.** Connect a project to Jira (REST v3) or Linear (GraphQL) and
+  create a tracker ticket from a Sveltry issue, either on demand from the issue page or
+  automatically when a new issue appears. Credentials are configured per project by the
+  self-hoster, stored on the instance, and never returned to the browser; the outbound request is
+  built by a shared, unit-tested formatter and guarded against SSRF.
 - **Custom dashboards.** Build named, org-shared dashboards from saved Discover queries. Each
   widget stores its dataset, group-by, aggregate, time range, and project, and renders as a chart;
   add or remove widgets from the dashboard page. Built on the Discover query engine.
