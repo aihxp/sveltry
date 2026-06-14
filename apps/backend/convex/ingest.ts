@@ -1,13 +1,16 @@
 import { v } from 'convex/values';
 import {
   coerceEventId,
+  compileInboundFilters,
   computeGrouping,
   debugMetaImages,
   decompressBody,
   DecodeError,
   extractAuth,
+  inboundFilterInput,
   ingestError,
   ingestSuccess,
+  matchCompiledFilter,
   normalizeCheckIn,
   normalizeEvent,
   normalizeProfile,
@@ -236,6 +239,25 @@ export const ingest = httpAction(async (ctx, request) => {
     }
   }
 
+  // Inbound data filters: drop error events matching the project's filter rules
+  // before they are stored, grouped, or counted (still 200, so the SDK does not
+  // retry). Compile the globs once for the whole batch. Filtered drops are tracked
+  // separately from quota/spike/client drops so nothing silently vanishes.
+  let eventsFiltered = 0;
+  if (events.length > 0 && resolved.ingestFilters) {
+    const compiled = compileInboundFilters(resolved.ingestFilters);
+    if (compiled.active) {
+      const kept: SentryEventPayload[] = [];
+      for (const payload of events) {
+        const n = normalizeEvent(payload, { receivedAt });
+        const reason = matchCompiledFilter(inboundFilterInput(payload, n), compiled);
+        if (reason) eventsFiltered++;
+        else kept.push(payload);
+      }
+      events = kept;
+    }
+  }
+
   for (const payload of events) {
     const normalized = normalizeEvent(payload, { receivedAt });
     const grouping = computeGrouping(payload, normalized);
@@ -431,18 +453,20 @@ export const ingest = httpAction(async (ctx, request) => {
   }
 
   // One usage write per ingest batch (not per event), with client-side and
-  // server-side (quota/spike) drops folded in.
+  // server-side (quota/spike) drops folded in, and inbound-filter drops tracked
+  // under their own counter.
   let dropped = eventsDropped;
   for (const r of clientReports) {
     for (const d of r.discarded_events ?? []) dropped += d.quantity ?? 0;
   }
-  if (events.length || transactions.length || dropped) {
+  if (events.length || transactions.length || dropped || eventsFiltered) {
     await ctx.runMutation(internal.usage.recordUsage, {
       projectId: resolved.projectId,
       organizationId: resolved.organizationId,
       events: events.length,
       transactions: transactions.length,
       dropped,
+      filtered: eventsFiltered,
     });
   }
 

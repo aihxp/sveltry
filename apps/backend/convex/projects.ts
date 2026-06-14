@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { internalQuery, mutation, query } from './_generated/server';
+import { ingestFiltersValidator } from './schema';
 import { requireOrg, requireRole } from './lib/auth';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
@@ -23,6 +24,7 @@ export const resolveIngestKey = internalQuery({
       rateLimitWindowSeconds: v.optional(v.number()),
       monthlyEventQuota: v.optional(v.number()),
       spikeThresholdPerMinute: v.optional(v.number()),
+      ingestFilters: v.optional(ingestFiltersValidator),
     }),
   ),
   handler: async (ctx, { publicId, publicKey }) => {
@@ -44,6 +46,7 @@ export const resolveIngestKey = internalQuery({
       rateLimitWindowSeconds: key.rateLimitWindowSeconds,
       monthlyEventQuota: project.monthlyEventQuota,
       spikeThresholdPerMinute: project.spikeThresholdPerMinute,
+      ingestFilters: project.ingestFilters,
     };
   },
 });
@@ -203,7 +206,7 @@ export const setProjectKeyActive = mutation({
   },
 });
 
-/** Update per-project settings (retention, PII scrubbing). */
+/** Update per-project settings (retention, PII scrubbing, limits, inbound filters). */
 export const updateProjectSettings = mutation({
   args: {
     projectId: v.id('projects'),
@@ -211,6 +214,7 @@ export const updateProjectSettings = mutation({
     scrubPii: v.optional(v.boolean()),
     monthlyEventQuota: v.optional(v.union(v.number(), v.null())),
     spikeThresholdPerMinute: v.optional(v.union(v.number(), v.null())),
+    ingestFilters: v.optional(v.union(ingestFiltersValidator, v.null())),
   },
   handler: async (ctx, args) => {
     const { activeOrganizationId } = await requireRole(ctx, 'admin');
@@ -226,6 +230,8 @@ export const updateProjectSettings = mutation({
       patch.monthlyEventQuota = args.monthlyEventQuota ?? undefined;
     if (args.spikeThresholdPerMinute !== undefined)
       patch.spikeThresholdPerMinute = args.spikeThresholdPerMinute ?? undefined;
+    // null clears all filters; an object replaces them wholesale.
+    if (args.ingestFilters !== undefined) patch.ingestFilters = args.ingestFilters ?? undefined;
     await ctx.db.patch(args.projectId, patch);
   },
 });

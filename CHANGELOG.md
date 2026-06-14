@@ -29,6 +29,13 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Inbound data filters.** Per-project rules that drop matching error events at ingest, before
+  they are stored, grouped, or counted against a quota (still HTTP 200, so SDKs do not retry).
+  Filter by error message/type, release, environment, or stack-frame path (case-insensitive globs,
+  `*`/`?` wildcards), and by known web-crawler user-agent. The matcher is a pure, unit-tested module
+  in `@sveltry/protocol`; rules are configured on the project page and are a clean no-op when unset.
+  Dropped events are counted under a new `filtered` usage reason, shown alongside dropped on the
+  project's Usage card.
 - **S3 / R2 storage offload.** Large blobs (source maps today) can be offloaded to an S3-compatible
   bucket instead of living inline in Convex, configured entirely by env vars (`S3_BUCKET`, ...). It
   is a clean no-op when unconfigured, so existing instances are unaffected; stack-trace resolution
