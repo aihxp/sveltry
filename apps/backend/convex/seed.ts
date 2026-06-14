@@ -160,6 +160,37 @@ export const debugSessions = internalQuery({
   },
 });
 
+/** Combined release health (individual sessions + aggregate buckets) for verification. */
+export const debugReleaseHealth = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const out = new Map<string, { sessions: number; crashed: number }>();
+    const add = (release: string, sessions: number, crashed: number) => {
+      const g = out.get(release) ?? { sessions: 0, crashed: 0 };
+      g.sessions += sessions;
+      g.crashed += crashed;
+      out.set(release, g);
+    };
+    const sessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .take(5000);
+    for (const s of sessions) add(s.release || '(none)', 1, s.status === 'crashed' ? 1 : 0);
+    const buckets = await ctx.db
+      .query('sessionBuckets')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .take(5000);
+    for (const b of buckets)
+      add(b.release || '(none)', b.exited + b.errored + b.crashed + b.abnormal, b.crashed);
+    return [...out.entries()].map(([release, g]) => ({
+      release,
+      sessions: g.sessions,
+      crashed: g.crashed,
+      crashFree: g.sessions > 0 ? (g.sessions - g.crashed) / g.sessions : 1,
+    }));
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

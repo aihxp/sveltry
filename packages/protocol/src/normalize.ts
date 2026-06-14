@@ -7,6 +7,7 @@ import type {
   SentryEventPayload,
   SentryException,
   SentrySession,
+  SentrySessionAggregates,
   SentryStackFrame,
 } from '@sveltry/types';
 
@@ -196,5 +197,46 @@ export function normalizeSession(
     errors: typeof payload.errors === 'number' ? payload.errors : 0,
     startedAt: timestampToMs(payload.started, now),
     timestamp: timestampToMs(payload.timestamp, now),
+  };
+}
+
+/** A normalized aggregate session bucket. */
+export interface NormalizedSessionBucket {
+  bucketStart: number;
+  exited: number;
+  errored: number;
+  crashed: number;
+  abnormal: number;
+}
+
+/**
+ * Distill a `sessions` (aggregate) item into per-bucket counts plus the release
+ * and environment they belong to. Empty buckets are dropped.
+ */
+export function normalizeSessionAggregates(
+  payload: SentrySessionAggregates,
+  opts: { receivedAt?: number } = {},
+): { release: string; environment: string; buckets: NormalizedSessionBucket[] } {
+  const now = opts.receivedAt ?? DEFAULT_TimestampNow();
+  const attrs = payload.attrs ?? {};
+  const buckets: NormalizedSessionBucket[] = [];
+  for (const agg of payload.aggregates ?? []) {
+    const exited = agg.exited ?? 0;
+    const errored = agg.errored ?? 0;
+    const crashed = agg.crashed ?? 0;
+    const abnormal = agg.abnormal ?? 0;
+    if (exited + errored + crashed + abnormal === 0) continue;
+    buckets.push({
+      bucketStart: timestampToMs(agg.started, now),
+      exited,
+      errored,
+      crashed,
+      abnormal,
+    });
+  }
+  return {
+    release: attrs.release ?? '',
+    environment: attrs.environment ?? 'production',
+    buckets,
   };
 }

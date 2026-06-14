@@ -8,6 +8,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Email alerts.** The `email` alert channel now delivers over SMTP via a Convex Node
+  action, configured by `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/
+  `SMTP_FROM`. It is a clean no-op until `SMTP_HOST` is set.
+- **Aggregated session buckets.** `sessions` (aggregate) envelope items are now persisted
+  and folded into release-health crash-free rates alongside individual sessions.
 - **Release health.** Individual `session` envelope items are now persisted (upserted by
   sid, so the final status wins) and aggregated into crash-free sessions and crash-free
   users per release. A new Releases page surfaces the rates. Aggregated `sessions` buckets

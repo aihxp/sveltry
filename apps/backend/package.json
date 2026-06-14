@@ -15,10 +15,12 @@
     "@sveltry/protocol": "workspace:*",
     "@sveltry/types": "workspace:*",
     "convex": "catalog:",
-    "convex-helpers": "catalog:"
+    "convex-helpers": "catalog:",
+    "nodemailer": "^8.0.11"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
+    "@types/nodemailer": "^8.0.1",
     "typescript": "catalog:"
   }
 }

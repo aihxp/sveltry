@@ -156,6 +156,21 @@ export default defineSchema({
     .index('by_org', ['organizationId', 'lastUpdate'])
     .index('by_project_release', ['projectId', 'release']),
 
+  // Pre-aggregated session counts from `sessions` (aggregate) items, folded into
+  // release health alongside individual sessions.
+  sessionBuckets: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    release: v.string(),
+    environment: v.string(),
+    bucketStart: v.number(),
+    exited: v.number(),
+    errored: v.number(),
+    crashed: v.number(),
+    abnormal: v.number(),
+    receivedAt: v.number(),
+  }).index('by_org', ['organizationId', 'bucketStart']),
+
   // Performance transactions (envelope items with `type: "transaction"`). The
   // full payload (including spans) is kept in `payload`; the columns are the
   // searchable/aggregatable summary.

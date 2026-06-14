@@ -53,7 +53,44 @@ export const recordSession = internalMutation({
   },
 });
 
+/** Insert pre-aggregated session buckets from a `sessions` (aggregate) item. */
+export const recordSessionBuckets = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    organizationId: v.string(),
+    release: v.string(),
+    environment: v.string(),
+    buckets: v.array(
+      v.object({
+        bucketStart: v.number(),
+        exited: v.number(),
+        errored: v.number(),
+        crashed: v.number(),
+        abnormal: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    for (const b of args.buckets) {
+      await ctx.db.insert('sessionBuckets', {
+        organizationId: args.organizationId,
+        projectId: args.projectId,
+        release: args.release,
+        environment: args.environment,
+        bucketStart: b.bucketStart,
+        exited: b.exited,
+        errored: b.errored,
+        crashed: b.crashed,
+        abnormal: b.abnormal,
+        receivedAt: now,
+      });
+    }
+  },
+});
+
 const HEALTH_SAMPLE = 5000;
+const BUCKET_SAMPLE = 5000;
 
 /**
  * Per-release health over the most recent {@link HEALTH_SAMPLE} sessions in the
@@ -109,6 +146,39 @@ export const releaseHealth = query({
       } else if (s.status === 'errored' || s.errors > 0) {
         g.errored += 1;
       }
+    }
+
+    // Fold in pre-aggregated buckets from `sessions` items. These carry no user
+    // ids, so they contribute to session counts but not crash-free-users.
+    const ensureGroup = (release: string): Agg => {
+      let g = groups.get(release);
+      if (!g) {
+        g = {
+          release,
+          sessions: 0,
+          crashed: 0,
+          abnormal: 0,
+          errored: 0,
+          users: new Set(),
+          crashedUsers: new Set(),
+          lastSeen: 0,
+        };
+        groups.set(release, g);
+      }
+      return g;
+    };
+    const buckets = await ctx.db
+      .query('sessionBuckets')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .order('desc')
+      .take(BUCKET_SAMPLE);
+    for (const b of buckets) {
+      const g = ensureGroup(b.release || '(none)');
+      g.sessions += b.exited + b.errored + b.crashed + b.abnormal;
+      g.crashed += b.crashed;
+      g.abnormal += b.abnormal;
+      g.errored += b.errored;
+      g.lastSeen = Math.max(g.lastSeen, b.bucketStart);
     }
 
     const rows = [...groups.values()].map((g) => {

@@ -83,7 +83,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Discord delivery | Done | Via webhook. |
 | Slack delivery | Done | Via webhook. |
 | Delivery logging | Done | Each attempt recorded in `alertDeliveries`. |
-| Email alerts | Partial | The `email` channel exists but is a no-op logged as undelivered; no SMTP / transactional transport is wired. |
+| Email alerts | Done | The `email` channel sends over SMTP via a Convex Node action (`SMTP_HOST` etc.); a clean no-op until configured. |
 | Metric / threshold alerts over aggregates | Planned | Needs an analytics tier (error rate, latency, crash rate). |
 | Microsoft Teams / PagerDuty / Opsgenie | Planned | Additional alert integrations. |
 | Issue-tracker actions (Jira / Linear) | Planned | Not yet implemented. |
@@ -93,7 +93,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Basic releases | Done | Release upserted per event into the `releases` table. |
-| Release health (crash-free rates) | Done | Individual `session` items are persisted (upserted by sid, latest status wins) and aggregated into crash-free sessions/users per release. Aggregated `sessions` buckets are accepted but not yet folded in. |
+| Release health (crash-free rates) | Done | Individual `session` items (upserted by sid, latest status wins) and aggregated `sessions` buckets are both folded into crash-free sessions/users per release. |
 | Resolve in next release | Planned | Not yet implemented. |
 | Suspect commits / commit association | Planned | Not yet implemented. |
 | Deploy tracking | Planned | Not yet implemented. |
