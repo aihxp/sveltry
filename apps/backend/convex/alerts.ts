@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { channelRequest } from '@sveltry/protocol';
 import { internal } from './_generated/api';
 import {
   internalAction,
@@ -326,6 +327,23 @@ async function deliver(
           },
         ],
       }),
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+    });
+    return res.ok;
+  }
+
+  // MS Teams / PagerDuty / Opsgenie share a generic payload builder.
+  const req = channelRequest(channel, {
+    title: headline,
+    text: `${content.culprit} · ${content.level} · ${content.count} events · ${content.trigger}`,
+    severity: content.level === 'fatal' || content.level === 'error' ? 'error' : 'warning',
+    url: content.issueUrl,
+  });
+  if (req) {
+    const res = await fetch(req.url, {
+      method: 'POST',
+      headers: req.headers,
+      body: req.body,
       signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
     return res.ok;

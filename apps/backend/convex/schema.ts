@@ -32,7 +32,15 @@ export const alertTriggerValidator = v.union(
 );
 
 export const alertChannelValidator = v.object({
-  type: v.union(v.literal('webhook'), v.literal('discord'), v.literal('slack'), v.literal('email')),
+  type: v.union(
+    v.literal('webhook'),
+    v.literal('discord'),
+    v.literal('slack'),
+    v.literal('email'),
+    v.literal('msteams'),
+    v.literal('pagerduty'),
+    v.literal('opsgenie'),
+  ),
   target: v.string(),
 });
 

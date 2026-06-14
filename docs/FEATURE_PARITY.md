@@ -91,7 +91,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Delivery logging | Done | Each attempt recorded in `alertDeliveries`. |
 | Email alerts | Done | The `email` channel sends over SMTP via a Convex Node action (`SMTP_HOST` etc.); a clean no-op until configured. |
 | Metric / threshold alerts | Done | A cron evaluates p95-latency, error-count, and crash-free-rate thresholds over a window and fires to webhook/Slack/Discord/email. |
-| Microsoft Teams / PagerDuty / Opsgenie | Planned | Additional alert integrations. |
+| Microsoft Teams / PagerDuty / Opsgenie | Done | Provider-specific channels (MessageCard, Events API v2, GenieKey) for issue and metric alerts. |
 | Issue-tracker actions (Jira / Linear) | Planned | Not yet implemented. |
 
 ## Releases and deploys
