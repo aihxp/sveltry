@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import {
   coerceEventId,
   computeGrouping,
+  debugMetaImages,
   decompressBody,
   DecodeError,
   extractAuth,
@@ -586,9 +587,10 @@ export const recordEvent = internalMutation({
       payload: args.payload,
     });
 
-    // If this event carries a release and minified-looking frames, resolve its
-    // stack trace against any uploaded source maps, off the ingest hot path.
-    if (args.release && hasMinifiedFrames(args.payload)) {
+    // Resolve minified frames against uploaded source maps, off the ingest hot
+    // path. A release lets us match maps by name; a debug id (debug_meta) matches
+    // them independent of release, so either is enough to attempt resolution.
+    if (hasMinifiedFrames(args.payload) && (args.release || hasDebugIds(args.payload))) {
       await ctx.scheduler.runAfter(0, internal.sourcemaps.resolveEvent, { eventDocId });
     }
 
@@ -636,6 +638,11 @@ function hasMinifiedFrames(payload: SentryEventPayload): boolean {
       (f) => typeof f.lineno === 'number' && typeof f.colno === 'number',
     ),
   );
+}
+
+/** Whether the event carries any debug_meta image with a debug id. */
+function hasDebugIds(payload: SentryEventPayload): boolean {
+  return debugMetaImages(payload.debug_meta?.images).length > 0;
 }
 
 /**

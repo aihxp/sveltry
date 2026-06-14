@@ -1,6 +1,8 @@
 import { v } from 'convex/values';
 import { buildFlamegraph, mergeHistograms, percentileFromHistogram } from '@sveltry/protocol';
-import { internalMutation, internalQuery } from './_generated/server';
+import { internal } from './_generated/api';
+import type { Id } from './_generated/dataModel';
+import { internalAction, internalMutation, internalQuery } from './_generated/server';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
 /**
@@ -469,6 +471,183 @@ export const debugSavedViews = internalMutation({
       roundtrip: found ? { name: found.name, level: found.level, query: found.query } : null,
       deletedOk: (await ctx.db.get(id)) === null,
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Debug-ID source map resolution: end-to-end runtime check. Stores a real source
+// map (with a `debugId`), records it with NO release, ingests an event whose
+// `debug_meta` references that debug id, runs the resolver, and reports whether
+// the minified frame was rewritten to original source. Proves debug-id matching
+// works independent of release name.
+// ---------------------------------------------------------------------------
+
+const DEBUG_ID_SCENARIO = '11111111-2222-3333-4444-555566667777';
+
+// A minimal valid source map. `mappings: 'AACA'` maps generated line 1 col 0 to
+// original source 0, line 2 (the `throw`), col 0.
+const DEBUG_SOURCEMAP = {
+  version: 3,
+  sources: ['src/app.ts'],
+  sourcesContent: ["export function boom() {\n  throw new Error('boom');\n}\nboom();\n"],
+  names: [],
+  mappings: 'AACA',
+  debugId: DEBUG_ID_SCENARIO,
+};
+
+export const seedDebugIdScenario = internalMutation({
+  args: {
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    storageId: v.id('_storage'),
+  },
+  handler: async (ctx, { organizationId, projectId, storageId }) => {
+    const now = Date.now();
+    const artifactId = await ctx.db.insert('releaseArtifacts', {
+      organizationId,
+      projectId,
+      release: '', // deliberately no release: debug id must match on its own
+      name: 'app.min.js.map',
+      kind: 'sourcemap',
+      storageId,
+      size: 256,
+      debugId: DEBUG_ID_SCENARIO,
+      createdAt: now,
+    });
+    const issueId = await ctx.db.insert('issues', {
+      organizationId,
+      projectId,
+      fingerprint: `debugid-${now}`,
+      groupingConfig: 'debug',
+      title: 'Error: boom',
+      culprit: 'app.min.js',
+      level: 'error',
+      platform: 'javascript',
+      status: 'unresolved',
+      substatus: 'new',
+      count: 1,
+      userCount: 0,
+      firstSeen: now,
+      lastSeen: now,
+    });
+    const eventDocId = await ctx.db.insert('events', {
+      organizationId,
+      projectId,
+      issueId,
+      eventId: `${now}`,
+      timestamp: now,
+      receivedAt: now,
+      level: 'error',
+      platform: 'javascript',
+      environment: 'production',
+      // release intentionally omitted
+      message: 'Error: boom',
+      culprit: 'app.min.js',
+      tags: {},
+      payload: {
+        platform: 'javascript',
+        exception: {
+          values: [
+            {
+              type: 'Error',
+              value: 'boom',
+              stacktrace: {
+                frames: [{ abs_path: 'https://cdn.example.com/app.min.js', lineno: 1, colno: 42 }],
+              },
+            },
+          ],
+        },
+        debug_meta: {
+          images: [
+            {
+              type: 'sourcemap',
+              code_file: 'https://cdn.example.com/app.min.js',
+              debug_id: DEBUG_ID_SCENARIO,
+            },
+          ],
+        },
+      },
+    });
+    return { artifactId, issueId, eventDocId };
+  },
+});
+
+export const debugEventResolved = internalQuery({
+  args: { eventDocId: v.id('events') },
+  handler: async (ctx, { eventDocId }) => {
+    const event = await ctx.db.get(eventDocId);
+    if (!event) return null;
+    const payload = event.payload as {
+      exception?: { values?: { stacktrace?: { frames?: Record<string, unknown>[] } }[] };
+    };
+    const frame = payload.exception?.values?.[0]?.stacktrace?.frames?.[0] ?? null;
+    return {
+      resolved: event.resolved === true,
+      frame: frame
+        ? {
+            filename: frame.filename,
+            lineno: frame.lineno,
+            context_line: frame.context_line,
+            sveltry_resolved: frame.sveltry_resolved,
+          }
+        : null,
+    };
+  },
+});
+
+export const cleanupDebugIdScenario = internalMutation({
+  args: {
+    artifactId: v.id('releaseArtifacts'),
+    issueId: v.id('issues'),
+    eventDocId: v.id('events'),
+    storageId: v.id('_storage'),
+  },
+  handler: async (ctx, { artifactId, issueId, eventDocId, storageId }) => {
+    await ctx.db.delete(eventDocId);
+    await ctx.db.delete(issueId);
+    await ctx.db.delete(artifactId);
+    await ctx.storage.delete(storageId);
+  },
+});
+
+/** Orchestrate the debug-id resolution roundtrip and return the resolved frame. */
+export const debugResolveByDebugId = internalAction({
+  args: { organizationId: v.string(), projectId: v.id('projects') },
+  handler: async (
+    ctx,
+    { organizationId, projectId },
+  ): Promise<{
+    resolved: boolean;
+    frame: Record<string, unknown> | null;
+  }> => {
+    const storageId = await ctx.storage.store(
+      new Blob([JSON.stringify(DEBUG_SOURCEMAP)], { type: 'application/json' }),
+    );
+    const { artifactId, issueId, eventDocId } = await ctx.runMutation(
+      internal.seed.seedDebugIdScenario,
+      { organizationId, projectId, storageId },
+    );
+    await ctx.runAction(internal.sourcemaps.resolveEvent, { eventDocId });
+    const result = await ctx.runQuery(internal.seed.debugEventResolved, { eventDocId });
+    await ctx.runMutation(internal.seed.cleanupDebugIdScenario, {
+      artifactId,
+      issueId,
+      eventDocId,
+      storageId,
+    });
+    return result ?? { resolved: false, frame: null };
+  },
+});
+
+/** Find the first project for an org, for debug helpers that need a project id. */
+export const debugFirstProject = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const project = await ctx.db
+      .query('projects')
+      .filter((q) => q.eq(q.field('organizationId'), organizationId))
+      .first();
+    return project ? { projectId: project._id as Id<'projects'>, slug: project.slug } : null;
   },
 });
 
