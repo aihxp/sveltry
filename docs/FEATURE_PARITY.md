@@ -130,7 +130,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Live issues dashboard | Done | Reactive SvelteKit UI over Convex (WebSockets). |
-| Custom dashboards / widgets | Planned | Composable widgets over a query engine. |
+| Custom dashboards / widgets | Done | Named, org-shared dashboards of saved Discover queries; each widget renders a grouped aggregate as a chart. Add/remove widgets from the dashboard page. |
 | Discover-style query builder | Done | A Discover page queries errors or transactions over a time window: group by a field, aggregate (count / unique users / avg / p50-p99), filter and scope by project, rendered as a ranked bar chart. |
 
 ## Session replay

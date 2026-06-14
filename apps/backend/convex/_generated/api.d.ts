@@ -11,6 +11,7 @@
 import type * as alerts from "../alerts.js";
 import type * as commits from "../commits.js";
 import type * as crons from "../crons.js";
+import type * as dashboards from "../dashboards.js";
 import type * as discover from "../discover.js";
 import type * as email from "../email.js";
 import type * as events from "../events.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
   commits: typeof commits;
   crons: typeof crons;
+  dashboards: typeof dashboards;
   discover: typeof discover;
   email: typeof email;
   events: typeof events;

@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Custom dashboards.** Build named, org-shared dashboards from saved Discover queries. Each
+  widget stores its dataset, group-by, aggregate, time range, and project, and renders as a chart;
+  add or remove widgets from the dashboard page. Built on the Discover query engine.
 - **Discover.** A new analytics page queries errors or transactions over a time window: group
   by a field (level, environment, release, transaction, op, status, ...), aggregate (event count,
   unique users, avg / p50-p99 duration), optionally scope to a project, and see the result as a

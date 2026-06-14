@@ -1108,6 +1108,74 @@ export const debugDiscover = internalMutation({
 
 const HOUR_MS = 3_600_000;
 
+/** Exercise the dashboards CRUD: create, add widgets (ordering), remove, cascade-delete. */
+export const debugDashboards = internalMutation({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const now = Date.now();
+    const dashboardId = await ctx.db.insert('dashboards', {
+      organizationId,
+      name: 'Ops',
+      createdBy: 'debug-user',
+      createdAt: now,
+    });
+    const addWidget = async (title: string) => {
+      const existing = await ctx.db
+        .query('dashboardWidgets')
+        .withIndex('by_dashboard', (q) => q.eq('dashboardId', dashboardId))
+        .collect();
+      const order = existing.reduce((max, w) => Math.max(max, w.order), -1) + 1;
+      return ctx.db.insert('dashboardWidgets', {
+        organizationId,
+        dashboardId,
+        title,
+        dataset: 'errors' as const,
+        groupBy: 'level',
+        aggregate: 'count' as const,
+        hours: 24,
+        order,
+      });
+    };
+    const w0 = await addWidget('A');
+    const w1 = await addWidget('B');
+
+    const ordered = (
+      await ctx.db
+        .query('dashboardWidgets')
+        .withIndex('by_dashboard', (q) => q.eq('dashboardId', dashboardId))
+        .collect()
+    ).sort((a, b) => a.order - b.order);
+    const orderingOk = ordered.length === 2 && ordered[0]!._id === w0 && ordered[1]!._id === w1;
+
+    // Remove the first widget; the second remains.
+    await ctx.db.delete(w0);
+    const afterRemove = await ctx.db
+      .query('dashboardWidgets')
+      .withIndex('by_dashboard', (q) => q.eq('dashboardId', dashboardId))
+      .collect();
+
+    // Cascade-delete the dashboard.
+    for (const w of afterRemove) await ctx.db.delete(w._id);
+    await ctx.db.delete(dashboardId);
+    const widgetsLeft = await ctx.db
+      .query('dashboardWidgets')
+      .withIndex('by_dashboard', (q) => q.eq('dashboardId', dashboardId))
+      .collect();
+
+    return {
+      orderingOk,
+      remainingAfterRemove: afterRemove.length,
+      remainingAfterRemoveIsB: afterRemove.length === 1 && afterRemove[0]!._id === w1,
+      cascadeClean: widgetsLeft.length === 0 && (await ctx.db.get(dashboardId)) === null,
+      ok:
+        orderingOk &&
+        afterRemove.length === 1 &&
+        afterRemove[0]!._id === w1 &&
+        widgetsLeft.length === 0,
+    };
+  },
+});
+
 /** Run suspect-commit matching against stored release commits, for verification. */
 export const debugSuspectCommits = internalQuery({
   args: { projectId: v.id('projects'), release: v.string(), files: v.array(v.string()) },
