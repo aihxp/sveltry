@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { buildFlamegraph } from '@sveltry/protocol';
 import { internalMutation, internalQuery } from './_generated/server';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
@@ -240,6 +241,31 @@ export const debugReplays = internalQuery({
       });
     }
     return out;
+  },
+});
+
+/** Profiles + computed flamegraph tops for an org, for profiling verification. */
+export const debugProfiles = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const profs = await ctx.db
+      .query('profiles')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .take(5);
+    return profs.map((p) => {
+      const flame = buildFlamegraph((p.payload as { profile?: unknown }).profile as never, {
+        minFraction: 0,
+      });
+      return {
+        transactionName: p.transactionName,
+        sampleCount: p.sampleCount,
+        durationMs: p.durationMs,
+        flameValue: flame.value,
+        topChild: flame.children[0]
+          ? { name: flame.children[0].name, value: flame.children[0].value }
+          : null,
+      };
+    });
   },
 });
 

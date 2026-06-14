@@ -264,6 +264,31 @@ export interface SentrySessionAggregates {
   [key: string]: unknown;
 }
 
+/** A sampled profile (envelope item `type: "profile"`, transaction profiling v1). */
+export interface SentryProfile {
+  event_id?: string;
+  platform?: string;
+  release?: string;
+  environment?: string;
+  timestamp?: number | string;
+  transaction?: { name?: string; id?: string; trace_id?: string; active_thread_id?: string };
+  transactions?: Array<{ name?: string; id?: string; active_thread_id?: string }>;
+  profile?: {
+    samples?: Array<{ stack_id: number; thread_id?: string; elapsed_since_start_ns?: number }>;
+    stacks?: number[][];
+    frames?: Array<{
+      function?: string;
+      filename?: string;
+      module?: string;
+      lineno?: number;
+      in_app?: boolean;
+      [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 /** Replay metadata (envelope item `type: "replay_event"`). */
 export interface SentryReplayEvent {
   replay_id?: string;

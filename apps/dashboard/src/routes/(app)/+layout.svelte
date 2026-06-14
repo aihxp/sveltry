@@ -11,6 +11,7 @@
   import RocketIcon from '@lucide/svelte/icons/rocket';
   import TimerIcon from '@lucide/svelte/icons/timer';
   import PlayCircleIcon from '@lucide/svelte/icons/play-circle';
+  import FlameIcon from '@lucide/svelte/icons/flame';
   import BoxesIcon from '@lucide/svelte/icons/boxes';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -25,6 +26,7 @@
     { href: '/releases', label: 'Releases', icon: RocketIcon },
     { href: '/monitors', label: 'Monitors', icon: TimerIcon },
     { href: '/replays', label: 'Replays', icon: PlayCircleIcon },
+    { href: '/profiles', label: 'Profiles', icon: FlameIcon },
     { href: '/projects', label: 'Projects', icon: BoxesIcon },
     { href: '/settings', label: 'Settings', icon: SettingsIcon },
   ];

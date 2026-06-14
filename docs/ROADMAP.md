@@ -21,6 +21,7 @@ The error-tracking vertical slice, end to end:
 - Release health: individual `session` items persisted (upsert by sid) and aggregated `sessions` buckets, folded into crash-free sessions/users per release
 - Cron monitors: `check_in` items persisted (upsert by id), with a Monitors page for per-monitor status and recent check-ins
 - Session replay: `replay_event` + `replay_recording` items persisted (metadata + rrweb stream in file storage) with rrweb-player playback
+- Profiling: `profile` items persisted and aggregated into a flamegraph on the Profiles page
 - Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack / email (SMTP)
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest
