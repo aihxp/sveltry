@@ -251,6 +251,25 @@ export interface NormalizedCheckIn {
   environment: string;
   release?: string;
   timestamp: number;
+  /** Expected seconds between check-ins, from an interval schedule (if any). */
+  expectedIntervalSeconds?: number;
+}
+
+const UNIT_SECONDS: Record<string, number> = {
+  second: 1,
+  minute: 60,
+  hour: 3600,
+  day: 86400,
+  week: 604800,
+};
+
+/** Seconds between runs for a Sentry interval schedule, or undefined for crontab. */
+function scheduleIntervalSeconds(config: SentryCheckIn['monitor_config']): number | undefined {
+  const schedule = config?.schedule as { type?: string; value?: number; unit?: string } | undefined;
+  if (!schedule || schedule.type !== 'interval') return undefined;
+  const unit = UNIT_SECONDS[(schedule.unit ?? 'minute').replace(/s$/, '')];
+  if (!unit || typeof schedule.value !== 'number') return undefined;
+  return schedule.value * unit;
 }
 
 /** Distill a `check_in` item. Check-ins carry no timestamp, so `receivedAt` is used. */
@@ -267,5 +286,6 @@ export function normalizeCheckIn(
     environment: payload.environment ?? 'production',
     release: payload.release,
     timestamp: opts.receivedAt ?? DEFAULT_TimestampNow(),
+    expectedIntervalSeconds: scheduleIntervalSeconds(payload.monitor_config),
   };
 }

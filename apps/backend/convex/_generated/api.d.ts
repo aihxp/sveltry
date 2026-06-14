@@ -20,6 +20,7 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_scrub from "../lib/scrub.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as maintenance from "../maintenance.js";
+import type * as metricAlerts from "../metricAlerts.js";
 import type * as monitors from "../monitors.js";
 import type * as profiles from "../profiles.js";
 import type * as projects from "../projects.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   "lib/scrub": typeof lib_scrub;
   "lib/slug": typeof lib_slug;
   maintenance: typeof maintenance;
+  metricAlerts: typeof metricAlerts;
   monitors: typeof monitors;
   profiles: typeof profiles;
   projects: typeof projects;

@@ -209,4 +209,20 @@ describe('normalizeCheckIn', () => {
     expect(c.status).toBe('unknown');
     expect(c.durationMs).toBeUndefined();
   });
+
+  test('extracts an interval schedule, ignores crontab', () => {
+    const interval = normalizeCheckIn(
+      {
+        monitor_slug: 'm',
+        monitor_config: { schedule: { type: 'interval', value: 5, unit: 'minute' } },
+      },
+      { receivedAt: 1 },
+    );
+    expect(interval.expectedIntervalSeconds).toBe(300);
+    const crontab = normalizeCheckIn(
+      { monitor_slug: 'm', monitor_config: { schedule: { type: 'crontab', value: '0 * * * *' } } },
+      { receivedAt: 1 },
+    );
+    expect(crontab.expectedIntervalSeconds).toBeUndefined();
+  });
 });

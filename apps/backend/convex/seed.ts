@@ -311,6 +311,52 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Insert a metric alert bypassing auth, for verification. */
+export const seedMetricAlert = internalMutation({
+  args: {
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    metric: v.union(
+      v.literal('p95_latency'),
+      v.literal('error_count'),
+      v.literal('crash_free_rate'),
+    ),
+    threshold: v.number(),
+    transactionName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return ctx.db.insert('metricAlerts', {
+      organizationId: args.organizationId,
+      projectId: args.projectId,
+      name: 'Test alert',
+      metric: args.metric,
+      transactionName: args.transactionName,
+      windowMinutes: 60,
+      threshold: args.threshold,
+      channels: [{ type: 'webhook', target: 'http://localhost:59999/unreachable' }],
+      enabled: true,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/** Metric alerts for an org, for metric-alert verification. */
+export const debugMetricAlerts = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const rows = await ctx.db
+      .query('metricAlerts')
+      .filter((q) => q.eq(q.field('organizationId'), organizationId))
+      .take(20);
+    return rows.map((a) => ({
+      metric: a.metric,
+      threshold: a.threshold,
+      lastValue: a.lastValue,
+      fired: a.lastFiredAt != null,
+    }));
+  },
+});
+
 /** Insert an uptime monitor bypassing auth, for verification. */
 export const seedUptimeMonitor = internalMutation({
   args: {

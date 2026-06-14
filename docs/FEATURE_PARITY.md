@@ -89,7 +89,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Slack delivery | Done | Via webhook. |
 | Delivery logging | Done | Each attempt recorded in `alertDeliveries`. |
 | Email alerts | Done | The `email` channel sends over SMTP via a Convex Node action (`SMTP_HOST` etc.); a clean no-op until configured. |
-| Metric / threshold alerts over aggregates | Planned | Needs an analytics tier (error rate, latency, crash rate). |
+| Metric / threshold alerts | Done | A cron evaluates p95-latency, error-count, and crash-free-rate thresholds over a window and fires to webhook/Slack/Discord/email. |
 | Microsoft Teams / PagerDuty / Opsgenie | Planned | Additional alert integrations. |
 | Issue-tracker actions (Jira / Linear) | Planned | Not yet implemented. |
 
@@ -144,7 +144,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Cron / check-in monitors | Done | `check_in` items are persisted (upserted by id, so in-progress + terminal are one run); a Monitors page shows each monitor's status and recent check-ins. |
-| Missed check-in detection | Planned | The schedule-based "didn't run" alert is not yet implemented. |
+| Missed check-in detection | Done | Monitors with an interval schedule are flagged "missed" by a cron when overdue (20% grace). |
 | HTTP uptime monitors | Done | Configurable URL probes run by a per-minute cron; each result is recorded as a check-in so uptime history shows on the Monitors page. |
 | Backend maintenance crons | Done | Daily `sweepRetention` and hourly `sweepOngoing` (Sveltry's own crons, not user-facing monitors). |
 
