@@ -656,6 +656,165 @@ export const debugFirstProject = internalQuery({
   },
 });
 
+/**
+ * Set up two issues with events, merge them, then unmerge, and report the state at
+ * each step. Mirrors the mergeIssues/unmergeIssue mutation bodies (which require a
+ * JWT) so the merge arithmetic and event reassignment can be verified end to end.
+ */
+export const debugMergeUnmerge = internalMutation({
+  args: { organizationId: v.string(), projectId: v.id('projects') },
+  handler: async (ctx, { organizationId, projectId }) => {
+    const now = Date.now();
+    const mkIssue = (fp: string, title: string) =>
+      ctx.db.insert('issues', {
+        organizationId,
+        projectId,
+        fingerprint: fp,
+        groupingConfig: 'debug',
+        title,
+        culprit: 'x',
+        level: 'error' as const,
+        platform: 'javascript',
+        status: 'unresolved' as const,
+        substatus: 'new' as const,
+        count: 0,
+        userCount: 0,
+        firstSeen: now,
+        lastSeen: now,
+      });
+    const mkEvent = (issueId: Id<'issues'>, ts: number) =>
+      ctx.db.insert('events', {
+        organizationId,
+        projectId,
+        issueId,
+        eventId: `${ts}-${Math.floor(ts % 1000)}`,
+        timestamp: ts,
+        receivedAt: ts,
+        level: 'error' as const,
+        platform: 'javascript',
+        environment: 'production',
+        message: 'x',
+        culprit: 'x',
+        tags: {},
+        payload: {},
+      });
+
+    const targetId = await mkIssue(`t-${now}`, 'Target');
+    const sourceId = await mkIssue(`s-${now}`, 'Source');
+    for (let i = 0; i < 3; i++) await mkEvent(targetId, now + i);
+    for (let i = 0; i < 2; i++) await mkEvent(sourceId, now + 10 + i);
+    await ctx.db.patch(targetId, { count: 3 });
+    await ctx.db.patch(sourceId, { count: 2 });
+
+    // --- merge (mirror mergeIssues) ---
+    const source = (await ctx.db.get(sourceId))!;
+    const target = (await ctx.db.get(targetId))!;
+    const moved = await ctx.db
+      .query('events')
+      .withIndex('by_issue', (q) => q.eq('issueId', sourceId))
+      .collect();
+    for (const e of moved) await ctx.db.patch(e._id, { issueId: targetId });
+    await ctx.db.patch(targetId, { count: target.count + source.count });
+    const mergeId = await ctx.db.insert('issueMerges', {
+      organizationId,
+      projectId,
+      targetIssueId: targetId,
+      source: {
+        fingerprint: source.fingerprint,
+        groupingConfig: source.groupingConfig,
+        title: source.title,
+        culprit: source.culprit,
+        level: source.level,
+        platform: source.platform,
+        errorType: source.errorType,
+        firstSeen: source.firstSeen,
+        count: source.count,
+        userCount: source.userCount,
+      },
+      movedEventIds: moved.map((e) => e._id),
+      mergedAt: now,
+    });
+    await ctx.db.delete(sourceId);
+    const afterMerge = {
+      targetCount: (await ctx.db.get(targetId))!.count,
+      sourceDeleted: (await ctx.db.get(sourceId)) === null,
+      targetEventCount: (
+        await ctx.db
+          .query('events')
+          .withIndex('by_issue', (q) => q.eq('issueId', targetId))
+          .collect()
+      ).length,
+    };
+
+    // --- unmerge (mirror unmergeIssue) ---
+    const m = (await ctx.db.get(mergeId))!;
+    const s = m.source;
+    const newIssueId = await ctx.db.insert('issues', {
+      organizationId,
+      projectId,
+      fingerprint: s.fingerprint,
+      groupingConfig: s.groupingConfig,
+      title: s.title,
+      culprit: s.culprit,
+      level: s.level,
+      platform: s.platform,
+      status: 'unresolved',
+      substatus: 'ongoing',
+      count: 0,
+      userCount: 0,
+      firstSeen: s.firstSeen,
+      lastSeen: s.firstSeen,
+      errorType: s.errorType,
+    });
+    let movedBack = 0;
+    for (const eid of m.movedEventIds) {
+      const ev = await ctx.db.get(eid);
+      if (!ev || ev.issueId !== m.targetIssueId) continue;
+      await ctx.db.patch(eid, { issueId: newIssueId });
+      movedBack += 1;
+    }
+    await ctx.db.patch(newIssueId, { count: movedBack });
+    const tnow = await ctx.db.get(targetId);
+    if (tnow) await ctx.db.patch(targetId, { count: Math.max(0, tnow.count - movedBack) });
+    await ctx.db.delete(mergeId);
+
+    const afterUnmerge = {
+      newIssueCount: (await ctx.db.get(newIssueId))!.count,
+      targetCount: (await ctx.db.get(targetId))!.count,
+      newIssueEventCount: (
+        await ctx.db
+          .query('events')
+          .withIndex('by_issue', (q) => q.eq('issueId', newIssueId))
+          .collect()
+      ).length,
+    };
+
+    // --- cleanup ---
+    for (const id of [targetId, newIssueId]) {
+      const evs = await ctx.db
+        .query('events')
+        .withIndex('by_issue', (q) => q.eq('issueId', id))
+        .collect();
+      for (const e of evs) await ctx.db.delete(e._id);
+      await ctx.db.delete(id);
+    }
+
+    return {
+      afterMerge,
+      afterUnmerge,
+      movedBack,
+      ok:
+        afterMerge.targetCount === 5 &&
+        afterMerge.sourceDeleted &&
+        afterMerge.targetEventCount === 5 &&
+        movedBack === 2 &&
+        afterUnmerge.newIssueCount === 2 &&
+        afterUnmerge.targetCount === 3 &&
+        afterUnmerge.newIssueEventCount === 2,
+    };
+  },
+});
+
 /** Run suspect-commit matching against stored release commits, for verification. */
 export const debugSuspectCommits = internalQuery({
   args: { projectId: v.id('projects'), release: v.string(), files: v.array(v.string()) },

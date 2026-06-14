@@ -28,7 +28,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Issue search | Done | Full-text search over issue titles (Convex search index) with status/level filters. |
 | Saved views | Done | Named, org-shared issue-list presets (query, status, level) you can save and one-click apply. |
 | Merge issues | Done | Merge a duplicate issue into another from the issue detail page (events and counts move). |
-| Unmerge issues | Planned | Re-splitting a merged issue is not yet implemented. |
+| Unmerge issues | Done | A merge is recorded (source snapshot + moved events); the issue page can undo it, recreating the issue and moving its events back. Reversible for merges performed after this shipped. |
 | Issue assignment | Done | Assign/unassign to the current user from the issue detail page. |
 | Issue comments | Done | Threaded comments per issue, authored from the Better Auth identity. |
 

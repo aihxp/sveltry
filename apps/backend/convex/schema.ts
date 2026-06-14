@@ -490,6 +490,30 @@ export default defineSchema({
     deliveredAt: v.number(),
   }).index('by_issue', ['issueId']),
 
+  // History of issue merges, so a merge can be undone. Captures the merged-away
+  // (source) issue's identifying snapshot and the events that moved into the target,
+  // which `unmergeIssue` recreates and moves back. Only merges recorded here (i.e.
+  // performed after this feature) are reversible.
+  issueMerges: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    targetIssueId: v.id('issues'),
+    source: v.object({
+      fingerprint: v.string(),
+      groupingConfig: v.string(),
+      title: v.string(),
+      culprit: v.string(),
+      level: levelValidator,
+      platform: v.string(),
+      errorType: v.optional(v.string()),
+      firstSeen: v.number(),
+      count: v.number(),
+      userCount: v.number(),
+    }),
+    movedEventIds: v.array(v.id('events')),
+    mergedAt: v.number(),
+  }).index('by_target', ['targetIssueId']),
+
   // Commit metadata uploaded with a release (Sentry's `set-commits`). Used to find
   // an issue's "suspect commit": the most recent commit that changed a file in the
   // issue's stack trace. `files` is the commit's changed paths.

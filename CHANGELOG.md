@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Unmerge issues.** Merges are now recorded (the merged-away issue's snapshot plus the
+  events that moved), so the issue page can undo one: it recreates the original issue, moves
+  its events back, and reverses the count changes. Reversible for merges performed from now on.
 - **Suspect commits.** Upload a release's commits and their changed files via
   `POST /releases/commits` (DSN-key auth, mirrors `sentry-cli releases set-commits`,
   accepts `files` or `patch_set`). The issue page then shows the commits that changed
