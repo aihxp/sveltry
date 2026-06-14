@@ -137,6 +137,18 @@ bunx convex env set SVELTRY_JWT_AUDIENCE "convex"
 bunx convex env set SVELTRY_JWKS_URL "http://localhost:5173/api/auth/jwks"
 ```
 
+To deliver **email alerts**, also set the SMTP env vars (email is a clean no-op until
+`SMTP_HOST` is set, so this is optional):
+
+```sh
+bunx convex env set SMTP_HOST "smtp.example.com"
+bunx convex env set SMTP_PORT "587"          # 465 for implicit TLS
+bunx convex env set SMTP_SECURE "false"      # "true" for port 465
+bunx convex env set SMTP_USER "apikey"       # optional
+bunx convex env set SMTP_PASS "..."          # optional
+bunx convex env set SMTP_FROM "alerts@example.com"
+```
+
 `SITE_URL` is the dashboard origin and JWT issuer; it must equal `PUBLIC_APP_URL`.
 `SVELTRY_JWT_AUDIENCE` is the JWT `aud` claim (`convex`). `SVELTRY_JWKS_URL` is
 where the backend fetches signing keys to verify JWTs statelessly. In production,

@@ -4,6 +4,7 @@ import {
   normalizeEvent,
   normalizeTags,
   normalizeSession,
+  normalizeSessionAggregates,
   normalizeTransaction,
   timestampToMs,
 } from '../src/normalize.js';
@@ -161,5 +162,24 @@ describe('normalizeSession', () => {
     expect(s.environment).toBe('production');
     expect(s.errors).toBe(0);
     expect(s.release).toBe('');
+  });
+});
+
+describe('normalizeSessionAggregates', () => {
+  test('parses buckets and drops empty ones', () => {
+    const r = normalizeSessionAggregates(
+      {
+        attrs: { release: 'v3', environment: 'staging' },
+        aggregates: [
+          { started: 1781705760, exited: 100, errored: 5, crashed: 2, abnormal: 1 },
+          { started: 1781705820 }, // all zero -> dropped
+        ],
+      },
+      { receivedAt: 1 },
+    );
+    expect(r.release).toBe('v3');
+    expect(r.environment).toBe('staging');
+    expect(r.buckets).toHaveLength(1);
+    expect(r.buckets[0]).toMatchObject({ bucketStart: 1781705760000, exited: 100, crashed: 2 });
   });
 });

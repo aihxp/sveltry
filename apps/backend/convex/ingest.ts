@@ -9,13 +9,14 @@ import {
   ingestSuccess,
   normalizeEvent,
   normalizeSession,
+  normalizeSessionAggregates,
   normalizeTransaction,
   parseEnvelope,
   projectIdFromPath,
   rateLimited,
   corsHeaders,
 } from '@sveltry/protocol';
-import type { SentryEventPayload, SentrySession } from '@sveltry/types';
+import type { SentryEventPayload, SentrySession, SentrySessionAggregates } from '@sveltry/types';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
@@ -93,6 +94,7 @@ export const ingest = httpAction(async (ctx, request) => {
   let events: SentryEventPayload[] = [];
   const transactions: SentryEventPayload[] = [];
   const sessions: SentrySession[] = [];
+  const sessionAggregates: SentrySessionAggregates[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -124,9 +126,17 @@ export const ingest = httpAction(async (ctx, request) => {
           } catch {
             // Skip an unparseable session; do not fail the whole envelope.
           }
+        } else if (item.type === 'sessions') {
+          try {
+            sessionAggregates.push(
+              JSON.parse(decoder.decode(item.payload)) as SentrySessionAggregates,
+            );
+          } catch {
+            // Skip an unparseable aggregate; do not fail the whole envelope.
+          }
         }
-        // sessions (aggregate) / replay / attachment items are accepted but not
-        // yet persisted (see ROADMAP.md). They are silently tolerated.
+        // replay / attachment / profile items are accepted but not yet persisted
+        // (see ROADMAP.md). They are silently tolerated.
       }
     } catch (err) {
       return ingestError(400, 'invalid envelope', [String(err)], cors);
@@ -205,6 +215,18 @@ export const ingest = httpAction(async (ctx, request) => {
       errors: s.errors,
       startedAt: s.startedAt,
       timestamp: s.timestamp,
+    });
+  }
+
+  for (const payload of sessionAggregates) {
+    const agg = normalizeSessionAggregates(payload, { receivedAt });
+    if (agg.buckets.length === 0) continue;
+    await ctx.runMutation(internal.sessions.recordSessionBuckets, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      release: agg.release,
+      environment: agg.environment,
+      buckets: agg.buckets,
     });
   }
 

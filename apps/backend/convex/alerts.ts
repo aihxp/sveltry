@@ -188,21 +188,34 @@ export const dispatchForEvent = internalAction({
       }
       if (!fires) continue;
 
+      const content: AlertContent = {
+        trigger: rule.trigger,
+        ruleName: rule.name,
+        projectName: project.name,
+        issueTitle: issue.title,
+        culprit: issue.culprit,
+        level: issue.level,
+        count: issue.count,
+        issueUrl,
+      };
+
       for (const channel of rule.channels) {
         let ok = false;
         let detail: string | undefined;
         try {
-          ok = await deliver(channel, {
-            trigger: rule.trigger,
-            ruleName: rule.name,
-            projectName: project.name,
-            issueTitle: issue.title,
-            culprit: issue.culprit,
-            level: issue.level,
-            count: issue.count,
-            issueUrl,
-          });
-          if (!ok) detail = 'non-2xx response';
+          if (channel.type === 'email') {
+            // Email runs in the Node runtime over SMTP; the others are fetch-based.
+            const res = await ctx.runAction(internal.email.sendEmail, {
+              to: channel.target,
+              subject: `[${content.projectName}] ${content.issueTitle}`,
+              text: alertBody(content),
+            });
+            ok = res.ok;
+            if (!ok) detail = res.skipped ? 'SMTP not configured' : (res.detail ?? 'send failed');
+          } else {
+            ok = await deliver(channel, content);
+            if (!ok) detail = 'non-2xx response';
+          }
         } catch (err) {
           detail = err instanceof Error ? err.message : String(err);
         }
@@ -231,6 +244,18 @@ interface AlertContent {
   level: string;
   count: number;
   issueUrl?: string;
+}
+
+/** The plain-text body shared by the Slack and email notifications. */
+function alertBody(content: AlertContent): string {
+  return [
+    `[${content.projectName}] ${content.issueTitle}`,
+    `Culprit: ${content.culprit}`,
+    `Level: ${content.level} · Events: ${content.count} · Trigger: ${content.trigger}`,
+    content.issueUrl ? `View: ${content.issueUrl}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 const WEBHOOK_TIMEOUT_MS = 8000;
@@ -264,14 +289,7 @@ async function deliver(
 ): Promise<boolean> {
   assertSafeWebhookTarget(channel.target);
   const headline = `[${content.projectName}] ${content.issueTitle}`;
-  const lines = [
-    headline,
-    `Culprit: ${content.culprit}`,
-    `Level: ${content.level} · Events: ${content.count} · Trigger: ${content.trigger}`,
-    content.issueUrl ? `View: ${content.issueUrl}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const lines = alertBody(content);
 
   if (channel.type === 'webhook') {
     const res = await fetch(channel.target, {
@@ -313,6 +331,6 @@ async function deliver(
     return res.ok;
   }
 
-  // email: not yet wired to an SMTP/transport provider (see ROADMAP.md).
+  // email is handled in dispatchForEvent via the Node SMTP action, not here.
   return false;
 }

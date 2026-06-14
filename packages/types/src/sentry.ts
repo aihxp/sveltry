@@ -245,6 +245,25 @@ export interface SentrySession {
   [key: string]: unknown;
 }
 
+/** One time-bucketed aggregate within a `sessions` (aggregate) envelope item. */
+export interface SentrySessionAggregate {
+  /** Bucket start (RFC 3339 string or Unix epoch seconds). */
+  started?: number | string;
+  did?: string;
+  exited?: number;
+  errored?: number;
+  crashed?: number;
+  abnormal?: number;
+  [key: string]: unknown;
+}
+
+/** A `sessions` (aggregate) envelope item: pre-bucketed session counts. */
+export interface SentrySessionAggregates {
+  attrs?: { release?: string; environment?: string; [key: string]: unknown };
+  aggregates?: SentrySessionAggregate[];
+  [key: string]: unknown;
+}
+
 /** A client report (SDK-side dropped-event accounting). */
 export interface SentryClientReport {
   timestamp?: string;
