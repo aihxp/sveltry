@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Teams.** Group an organization's members into teams and assign projects to a team. A new
+  Teams page creates teams, adds/removes members (picked from the org's member list), and shows
+  each team's projects; projects gain an owning-team selector. Modeled in Convex alongside the
+  rest of the data.
 - **Unmerge issues.** Merges are now recorded (the merged-away issue's snapshot plus the
   events that moved), so the issue page can undo one: it recreates the original issue, moves
   its events back, and reverses the count changes. Reversible for merges performed from now on.

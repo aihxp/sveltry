@@ -38,6 +38,24 @@
   const deploys = useQuery(api.usage.listDeploys, () =>
     projectId ? { projectId } : ('skip' as const),
   );
+  const teams = useQuery(api.teams.listTeams, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+
+  // Owning team assignment.
+  let assigningTeam = $state(false);
+  async function assignTeam(value: string) {
+    if (!projectId) return;
+    assigningTeam = true;
+    try {
+      await client.mutation(api.teams.assignProjectTeam, {
+        projectId,
+        teamId: value ? (value as Id<'teams'>) : null,
+      });
+    } finally {
+      assigningTeam = false;
+    }
+  }
 
   // Project limits/settings (seeded once from the loaded project)
   let retention = $state(90);
@@ -199,6 +217,34 @@
             </div>
           </div>
         {/each}
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Team</Card.Title>
+        <Card.Description>The team that owns this project.</Card.Description>
+      </Card.Header>
+      <Card.Content>
+        {#if teams.data && teams.data.length > 0}
+          <select
+            value={proj.data?.project?.teamId ?? ''}
+            disabled={assigningTeam}
+            onchange={(e) => assignTeam(e.currentTarget.value)}
+            class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-72"
+          >
+            <option value="">No team (org-wide)</option>
+            {#each teams.data as t (t.id)}
+              <option value={t.id}>{t.name}</option>
+            {/each}
+          </select>
+        {:else}
+          <p class="text-sm text-muted-foreground">
+            No teams yet. Create one on the <a href="/teams" class="text-primary hover:underline"
+              >Teams</a
+            > page.
+          </p>
+        {/if}
       </Card.Content>
     </Card.Root>
 
