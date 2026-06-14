@@ -16,6 +16,7 @@
     "@jridgewell/trace-mapping": "^0.3.25",
     "@sveltry/protocol": "workspace:*",
     "@sveltry/types": "workspace:*",
+    "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "catalog:",
     "nodemailer": "^8.0.11"
