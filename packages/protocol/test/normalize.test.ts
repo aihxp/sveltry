@@ -3,6 +3,7 @@ import {
   messageString,
   normalizeEvent,
   normalizeTags,
+  normalizeSession,
   normalizeTransaction,
   timestampToMs,
 } from '../src/normalize.js';
@@ -128,5 +129,37 @@ describe('normalizeTransaction', () => {
     expect(t.op).toBe('default');
     expect(t.durationMs).toBe(0);
     expect(t.spanCount).toBe(0);
+  });
+});
+
+describe('normalizeSession', () => {
+  test('reads sid, status, release from attrs, and errors', () => {
+    const s = normalizeSession(
+      {
+        sid: 'sess-1',
+        did: 'user-7',
+        status: 'crashed',
+        errors: 2,
+        started: 1781705760,
+        timestamp: 1781705765,
+        attrs: { release: 'v2.0.0', environment: 'production' },
+      },
+      { receivedAt: 1 },
+    );
+    expect(s.sid).toBe('sess-1');
+    expect(s.did).toBe('user-7');
+    expect(s.status).toBe('crashed');
+    expect(s.errors).toBe(2);
+    expect(s.release).toBe('v2.0.0');
+    expect(s.environment).toBe('production');
+    expect(s.startedAt).toBe(1781705760000);
+  });
+
+  test('defaults status to ok and environment to production', () => {
+    const s = normalizeSession({ sid: 'x' }, { receivedAt: 1000 });
+    expect(s.status).toBe('ok');
+    expect(s.environment).toBe('production');
+    expect(s.errors).toBe(0);
+    expect(s.release).toBe('');
   });
 });

@@ -229,8 +229,9 @@ export interface SentrySession {
   sid?: string;
   did?: string;
   init?: boolean;
-  started?: string;
-  timestamp?: string;
+  /** RFC 3339 string or Unix epoch seconds. */
+  started?: number | string;
+  timestamp?: number | string;
   status?: 'ok' | 'exited' | 'crashed' | 'abnormal' | 'errored';
   errors?: number;
   duration?: number;

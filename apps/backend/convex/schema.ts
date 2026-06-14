@@ -138,6 +138,24 @@ export default defineSchema({
     firstSeen: v.number(),
   }).index('by_issue_user', ['issueId', 'userId']),
 
+  // Release-health sessions (envelope items with `type: "session"`). Upserted by
+  // sid so the final status wins; aggregated per release for crash-free rates.
+  sessions: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    sid: v.string(),
+    did: v.optional(v.string()),
+    release: v.string(),
+    environment: v.string(),
+    status: v.string(),
+    errors: v.number(),
+    startedAt: v.number(),
+    lastUpdate: v.number(),
+  })
+    .index('by_project_sid', ['projectId', 'sid'])
+    .index('by_org', ['organizationId', 'lastUpdate'])
+    .index('by_project_release', ['projectId', 'release']),
+
   // Performance transactions (envelope items with `type: "transaction"`). The
   // full payload (including spans) is kept in `payload`; the columns are the
   // searchable/aggregatable summary.

@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Release health.** Individual `session` envelope items are now persisted (upserted by
+  sid, so the final status wins) and aggregated into crash-free sessions and crash-free
+  users per release. A new Releases page surfaces the rates. Aggregated `sessions` buckets
+  are accepted but not yet folded in.
 - **Performance monitoring.** `transaction` envelope items are now persisted with their spans.
   A new Performance page lists transactions with per-transaction p50/p95/avg/max latency
   (computed over a recent-window sample) and failure rate, and a transaction detail page

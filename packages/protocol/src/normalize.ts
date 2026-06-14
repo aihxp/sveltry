@@ -1,10 +1,12 @@
 import type {
   IssueLevel,
   NormalizedEvent,
+  NormalizedSession,
   NormalizedTransaction,
   Platform,
   SentryEventPayload,
   SentryException,
+  SentrySession,
   SentryStackFrame,
 } from '@sveltry/types';
 
@@ -172,5 +174,27 @@ export function normalizeTransaction(
     tags,
     spanCount: spans.length,
     raw: payload,
+  };
+}
+
+/**
+ * Distill a Sentry `session` envelope item into the normalized shape used for
+ * release health. Release and environment come from `attrs`.
+ */
+export function normalizeSession(
+  payload: SentrySession,
+  opts: { receivedAt?: number } = {},
+): NormalizedSession {
+  const now = opts.receivedAt ?? DEFAULT_TimestampNow();
+  const attrs = payload.attrs ?? {};
+  return {
+    sid: payload.sid ?? '',
+    did: payload.did,
+    release: attrs.release ?? '',
+    environment: attrs.environment ?? 'production',
+    status: payload.status ?? 'ok',
+    errors: typeof payload.errors === 'number' ? payload.errors : 0,
+    startedAt: timestampToMs(payload.started, now),
+    timestamp: timestampToMs(payload.timestamp, now),
   };
 }

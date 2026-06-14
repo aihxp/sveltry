@@ -8,13 +8,14 @@ import {
   ingestError,
   ingestSuccess,
   normalizeEvent,
+  normalizeSession,
   normalizeTransaction,
   parseEnvelope,
   projectIdFromPath,
   rateLimited,
   corsHeaders,
 } from '@sveltry/protocol';
-import type { SentryEventPayload } from '@sveltry/types';
+import type { SentryEventPayload, SentrySession } from '@sveltry/types';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
@@ -88,9 +89,10 @@ export const ingest = httpAction(async (ctx, request) => {
     return ingestError(400, 'failed to read request body', [String(err)], cors);
   }
 
-  // Collect the error/default events and transactions from the request.
+  // Collect the error/default events, transactions, and sessions from the request.
   let events: SentryEventPayload[] = [];
   const transactions: SentryEventPayload[] = [];
+  const sessions: SentrySession[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -116,9 +118,15 @@ export const ingest = httpAction(async (ctx, request) => {
           } catch {
             // Skip an unparseable transaction; do not fail the whole envelope.
           }
+        } else if (item.type === 'session') {
+          try {
+            sessions.push(JSON.parse(decoder.decode(item.payload)) as SentrySession);
+          } catch {
+            // Skip an unparseable session; do not fail the whole envelope.
+          }
         }
-        // session / replay / attachment items are accepted but not yet
-        // persisted (see ROADMAP.md). They are silently tolerated.
+        // sessions (aggregate) / replay / attachment items are accepted but not
+        // yet persisted (see ROADMAP.md). They are silently tolerated.
       }
     } catch (err) {
       return ingestError(400, 'invalid envelope', [String(err)], cors);
@@ -180,6 +188,23 @@ export const ingest = httpAction(async (ctx, request) => {
       tags: t.tags,
       spanCount: t.spanCount,
       payload: storedPayload,
+    });
+  }
+
+  for (const payload of sessions) {
+    const s = normalizeSession(payload, { receivedAt });
+    if (!s.sid) continue;
+    await ctx.runMutation(internal.sessions.recordSession, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      sid: s.sid,
+      did: s.did,
+      release: s.release,
+      environment: s.environment,
+      status: s.status,
+      errors: s.errors,
+      startedAt: s.startedAt,
+      timestamp: s.timestamp,
     });
   }
 

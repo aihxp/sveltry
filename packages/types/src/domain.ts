@@ -211,6 +211,22 @@ export interface NormalizedTransaction {
   raw: unknown;
 }
 
+/** The normalized session update Sveltry stores, for release health. */
+export interface NormalizedSession {
+  /** Session id. */
+  sid: string;
+  /** Distinct user/device id, for crash-free-users. */
+  did?: string;
+  release: string;
+  environment: string;
+  /** ok | exited | crashed | abnormal | errored. */
+  status: string;
+  errors: number;
+  startedAt: number;
+  /** Last-update time (epoch ms). */
+  timestamp: number;
+}
+
 /** The normalized event Sveltry stores, distilled from a raw Sentry payload. */
 export interface NormalizedEvent {
   eventId: string;
