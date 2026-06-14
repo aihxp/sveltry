@@ -40,6 +40,30 @@ export function dsnFromEnvelopeHeader(raw: Uint8Array | string): string | null {
   }
 }
 
+/** The pieces of a DSN an uploader needs: the origin, public key, and project id. */
+export interface ParsedDsn {
+  /** Scheme + host, e.g. `https://ingest.sveltry.example.com`. */
+  origin: string;
+  publicKey: string;
+  projectId: string;
+}
+
+/** Parse a DSN string into its origin, public key, and project id. */
+export function parseDsn(dsn: string): ParsedDsn | null {
+  let u: URL;
+  try {
+    u = new URL(dsn);
+  } catch {
+    return null;
+  }
+  const publicKey = u.username;
+  if (!publicKey) return null;
+  const rawPath = u.pathname.replace(/\/+$/, '');
+  const projectId = rawPath.slice(rawPath.lastIndexOf('/') + 1);
+  if (!projectId) return null;
+  return { origin: `${u.protocol.replace(/:$/, '')}://${u.host}`, publicKey, projectId };
+}
+
 /** Derive the upstream envelope ingest URL from a DSN string. */
 export function ingestUrlFromDsn(dsn: string): string | null {
   let u: URL;

@@ -17,6 +17,7 @@
       "name": "@sveltry/backend",
       "version": "0.1.0",
       "dependencies": {
+        "@jridgewell/trace-mapping": "^0.3.25",
         "@sveltry/protocol": "workspace:*",
         "@sveltry/types": "workspace:*",
         "convex": "catalog:",

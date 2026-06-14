@@ -11,6 +11,7 @@
     "check": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.25",
     "@sveltry/protocol": "workspace:*",
     "@sveltry/types": "workspace:*",
     "convex": "catalog:",

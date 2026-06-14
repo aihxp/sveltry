@@ -16,6 +16,7 @@ The error-tracking vertical slice, end to end:
 - Full event storage (stack frames, breadcrumbs, tags, contexts, request)
 - Multi-tenant organizations, projects, and DSN keys
 - Basic releases (recorded per event)
+- Source-map symbolication: per-release `.map` upload (`POST /artifacts/upload`) and on-ingest resolution of minified JavaScript frames to original source
 - Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest
@@ -26,8 +27,8 @@ The error-tracking vertical slice, end to end:
 
 Highest-value additions that build on the existing tables:
 
-- **Source-map symbolication.** Debug-ID and release-artifact upload endpoint, server-side
-  symbolication of minified JavaScript stack traces.
+- **Debug-ID artifact bundles.** Match source maps by debug ID (in addition to the current
+  name-based matching) so bundler plugins that emit debug IDs work without naming conventions.
 - **Release health.** Aggregate the `session` / `sessions` envelope items already accepted at
   ingest into crash-free rates; resolve-in-next-release and suspect commits.
 - **Email alerts.** Wire an SMTP / transactional-email transport to the existing alert pipeline.

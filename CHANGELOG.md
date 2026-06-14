@@ -4,6 +4,16 @@ All notable changes to Sveltry are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Source-map symbolication.** Per-release artifact upload at `POST /artifacts/upload`
+  (DSN-key authenticated) and on-ingest resolution of minified JavaScript stack frames to
+  original file, line, function, and source context. The dashboard shows resolved frames with
+  a `source-mapped` badge and a per-project Source maps panel. The `@aihxp/sveltry-sdk`
+  gains `uploadSourceMaps()` (for CI) and `parseDsn()`.
+
 ## [0.1.0] - 2026-06-13
 
 The first release: a complete, Sentry-wire-compatible error-tracking vertical slice.

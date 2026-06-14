@@ -12,6 +12,7 @@
     context_line?: string;
     pre_context?: string[];
     post_context?: string[];
+    sveltry_resolved?: boolean;
   };
   type ExceptionValue = {
     type?: string;
@@ -79,13 +80,23 @@
                   <span class="text-foreground">{frame.function ?? '?'}</span>
                   <span class="text-muted-foreground"> in {frameLocation(frame)}</span>
                 </span>
-                {#if frame.in_app}
-                  <span
-                    class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
-                  >
-                    in-app
-                  </span>
-                {/if}
+                <div class="flex shrink-0 items-center gap-1.5">
+                  {#if frame.sveltry_resolved}
+                    <span
+                      class="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400"
+                      title="Resolved from an uploaded source map"
+                    >
+                      source-mapped
+                    </span>
+                  {/if}
+                  {#if frame.in_app}
+                    <span
+                      class="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                    >
+                      in-app
+                    </span>
+                  {/if}
+                </div>
               </div>
               {#if ctx.length > 0}
                 <div
