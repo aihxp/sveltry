@@ -6,6 +6,17 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Organizations are now modeled natively in Convex** (step toward a Postgres-free, Convex-only
+  stack). `organizations` is the source of truth, membership lives in `memberRoles`, and each
+  user's active organization lives in a new `userSettings` table. `requireOrg` resolves the active
+  org from Convex (with a backward-compatible fallback to the legacy JWT claim, then to a sole
+  membership), so the active org no longer depends on an auth-provider claim. New `organizations`
+  functions: createOrganization, listMyOrganizations, setActiveOrganization, activeOrg, listMembers.
+  This removes the dependency on Better Auth's organization plugin; identity migration (and dropping
+  Postgres) is the remaining step.
+
 ### Security
 
 - **Hardened the outbound-request SSRF guard.** Every server-side fetch to a user-influenced
