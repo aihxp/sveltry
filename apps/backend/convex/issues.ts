@@ -218,6 +218,45 @@ export const snoozeIssue = mutation({
   },
 });
 
+/**
+ * Merge one issue into another: re-point the source issue's events to the target,
+ * fold the counts together, and delete the source. Bounded per call; very large
+ * issues move up to 2000 events here (a follow-up could batch the tail).
+ */
+export const mergeIssues = mutation({
+  args: { sourceIssueId: v.id('issues'), targetIssueId: v.id('issues') },
+  returns: v.object({ movedEvents: v.number() }),
+  handler: async (ctx, { sourceIssueId, targetIssueId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    if (sourceIssueId === targetIssueId) throw new Error('Cannot merge an issue into itself');
+    const source = await ctx.db.get(sourceIssueId);
+    const target = await ctx.db.get(targetIssueId);
+    if (
+      !source ||
+      !target ||
+      source.organizationId !== activeOrganizationId ||
+      target.organizationId !== activeOrganizationId
+    ) {
+      throw new Error('Issue not found');
+    }
+
+    const events = await ctx.db
+      .query('events')
+      .withIndex('by_issue', (q) => q.eq('issueId', sourceIssueId))
+      .take(2000);
+    for (const e of events) await ctx.db.patch(e._id, { issueId: targetIssueId });
+
+    await ctx.db.patch(targetIssueId, {
+      count: target.count + source.count,
+      userCount: target.userCount + source.userCount,
+      firstSeen: Math.min(target.firstSeen, source.firstSeen),
+      lastSeen: Math.max(target.lastSeen, source.lastSeen),
+    });
+    await ctx.db.delete(sourceIssueId);
+    return { movedEvents: events.length };
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Comments
 // ---------------------------------------------------------------------------

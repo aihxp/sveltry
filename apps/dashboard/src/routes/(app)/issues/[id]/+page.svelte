@@ -68,6 +68,27 @@
     });
   }
 
+  // Merge another (duplicate) issue into this one.
+  let mergeTerm = $state('');
+  let merging = $state(false);
+  const mergeCandidates = useQuery(api.issues.searchIssues, () =>
+    auth.isAuthenticated && mergeTerm.trim().length > 1
+      ? { query: mergeTerm, limit: 8 }
+      : ('skip' as const),
+  );
+  async function mergeInto(sourceId: Id<'issues'>) {
+    merging = true;
+    try {
+      await client.mutation(api.issues.mergeIssues, {
+        sourceIssueId: sourceId,
+        targetIssueId: issueId,
+      });
+      mergeTerm = '';
+    } finally {
+      merging = false;
+    }
+  }
+
   let commentBody = $state('');
   let posting = $state(false);
   async function postComment(e: SubmitEvent) {
@@ -264,6 +285,33 @@
         </Card.Content>
       </Card.Root>
     {/if}
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Merge duplicates</Card.Title>
+        <Card.Description>
+          Search for a duplicate issue to merge into this one. Its events and counts move here.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content class="space-y-2">
+        <Input bind:value={mergeTerm} placeholder="Search issues to merge…" disabled={merging} />
+        {#if mergeCandidates.data && mergeCandidates.data.length > 0}
+          <div class="divide-y rounded-lg border">
+            {#each mergeCandidates.data.filter((c) => c._id !== issueId) as c (c._id)}
+              <button
+                onclick={() => mergeInto(c._id)}
+                disabled={merging}
+                class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/30 disabled:opacity-50"
+              >
+                <LevelBadge level={c.level} />
+                <span class="min-w-0 flex-1 truncate">{c.title}</span>
+                <span class="shrink-0 text-xs text-muted-foreground">merge in</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
 
     <Card.Root>
       <Card.Header><Card.Title>Comments</Card.Title></Card.Header>

@@ -27,7 +27,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Triage aging | Done | Hourly `sweepOngoing` cron ages `new` issues older than 7 days to `ongoing`. |
 | Issue search | Done | Full-text search over issue titles (Convex search index) with status/level filters. |
 | Saved views | Planned | Persisted search/filter presets are not yet implemented. |
-| Merge / unmerge issues | Planned | Not yet implemented. |
+| Merge issues | Done | Merge a duplicate issue into another from the issue detail page (events and counts move). |
+| Unmerge issues | Planned | Re-splitting a merged issue is not yet implemented. |
 | Issue assignment | Done | Assign/unassign to the current user from the issue detail page. |
 | Issue comments | Done | Threaded comments per issue, authored from the Better Auth identity. |
 
