@@ -423,10 +423,17 @@ export default defineSchema({
     size: v.number(),
     /** For a minified artifact, the `sourceMappingURL` annotation it carries, if any. */
     sourceMappingURL: v.optional(v.string()),
+    /**
+     * The artifact's debug id (from a `//# debugId=` comment on a minified file, or
+     * the `debugId` field of a source map). Lets resolution match a frame to its map
+     * by stable identity instead of path/release. See {@link parseDebugId}.
+     */
+    debugId: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index('by_project_release', ['projectId', 'release'])
-    .index('by_project_release_name', ['projectId', 'release', 'name']),
+    .index('by_project_release_name', ['projectId', 'release', 'name'])
+    .index('by_project_debugid', ['projectId', 'debugId']),
 
   alertRules: defineTable({
     organizationId: v.string(),

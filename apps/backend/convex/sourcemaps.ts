@@ -3,11 +3,16 @@ import { originalPositionFor, sourceContentFor, TraceMap } from '@jridgewell/tra
 import {
   applyOriginalPosition,
   corsHeaders,
+  debugIdForRef,
+  debugIdFromSourceMap,
+  debugMetaImages,
   extractAuth,
   frameRef,
   ingestError,
   matchSourcemap,
+  parseDebugId,
   parseSourceMappingURL,
+  type DebugMetaImage,
   type OriginalPosition,
 } from '@sveltry/protocol';
 import type { SentryEventPayload, SentryException, SentryStackFrame } from '@sveltry/types';
@@ -54,9 +59,20 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
   });
   const storageId = await ctx.storage.store(blob);
 
+  // Extract the artifact's debug id (and, for minified files, its sourceMappingURL)
+  // so the resolver can match frames by stable identity, not just path/release.
   let sourceMappingURL: string | undefined;
+  let debugId: string | undefined;
   if (kind === 'minified') {
-    sourceMappingURL = parseSourceMappingURL(new TextDecoder().decode(buf)) ?? undefined;
+    const text = new TextDecoder().decode(buf);
+    sourceMappingURL = parseSourceMappingURL(text) ?? undefined;
+    debugId = parseDebugId(text) ?? undefined;
+  } else {
+    try {
+      debugId = debugIdFromSourceMap(JSON.parse(new TextDecoder().decode(buf))) ?? undefined;
+    } catch {
+      // Not JSON (or truncated): leave the debug id unset, name matching still works.
+    }
   }
 
   await ctx.runMutation(internal.sourcemaps.recordArtifact, {
@@ -68,6 +84,7 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
     storageId,
     size: buf.byteLength,
     sourceMappingURL,
+    debugId,
   });
 
   return new Response(JSON.stringify({ ok: true, name, kind, release }), {
@@ -87,6 +104,7 @@ export const recordArtifact = internalMutation({
     storageId: v.id('_storage'),
     size: v.number(),
     sourceMappingURL: v.optional(v.string()),
+    debugId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -102,6 +120,7 @@ export const recordArtifact = internalMutation({
         storageId: args.storageId,
         size: args.size,
         sourceMappingURL: args.sourceMappingURL,
+        debugId: args.debugId,
         createdAt: Date.now(),
       });
       return;
@@ -142,6 +161,26 @@ export const sourcemapsForRelease = internalQuery({
   },
 });
 
+/** Source maps whose embedded debug id is in `debugIds`, across any release. */
+export const sourcemapsByDebugId = internalQuery({
+  args: { projectId: v.id('projects'), debugIds: v.array(v.string()) },
+  handler: async (ctx, { projectId, debugIds }) => {
+    const out: { debugId: string; storageId: Id<'_storage'> }[] = [];
+    const seen = new Set<string>();
+    for (const debugId of debugIds) {
+      if (seen.has(debugId)) continue;
+      seen.add(debugId);
+      const rows = await ctx.db
+        .query('releaseArtifacts')
+        .withIndex('by_project_debugid', (q) => q.eq('projectId', projectId).eq('debugId', debugId))
+        .collect();
+      const map = rows.find((r) => r.kind === 'sourcemap');
+      if (map) out.push({ debugId, storageId: map.storageId });
+    }
+    return out;
+  },
+});
+
 function exceptionValues(payload: SentryEventPayload): SentryException[] {
   const ex = payload.exception;
   if (!ex) return [];
@@ -164,7 +203,7 @@ export const resolveEvent = internalAction({
   args: { eventDocId: v.id('events') },
   handler: async (ctx, { eventDocId }) => {
     const event = await ctx.runQuery(internal.sourcemaps.getEventForResolve, { eventDocId });
-    if (!event || !event.release) return;
+    if (!event) return;
 
     const values = exceptionValues(event.payload);
     const hasMinified = values.some((ex) =>
@@ -174,28 +213,59 @@ export const resolveEvent = internalAction({
     );
     if (!hasMinified) return;
 
-    const maps = await ctx.runQuery(internal.sourcemaps.sourcemapsForRelease, {
-      projectId: event.projectId,
-      release: event.release,
-    });
-    if (maps.length === 0) return;
-    const mapNames = maps.map((m) => m.name);
+    // Debug-id maps (matched by the event's debug_meta images, release-independent)
+    // take precedence; release+name maps are the fallback for SDKs without debug ids.
+    const images: DebugMetaImage[] = debugMetaImages(
+      (event.payload.debug_meta as { images?: unknown[] } | undefined)?.images,
+    );
+    const referencedDebugIds = [
+      ...new Set(images.map((i) => i.debug_id).filter((d): d is string => !!d)),
+    ];
 
-    // Lazily load + parse each map at most once per run. `@jridgewell/trace-mapping`
-    // is pure JS (no `eval`/`new Function`), so it runs in the Convex isolate.
+    const debugIdMaps = referencedDebugIds.length
+      ? await ctx.runQuery(internal.sourcemaps.sourcemapsByDebugId, {
+          projectId: event.projectId,
+          debugIds: referencedDebugIds,
+        })
+      : [];
+
+    const releaseMaps = event.release
+      ? await ctx.runQuery(internal.sourcemaps.sourcemapsForRelease, {
+          projectId: event.projectId,
+          release: event.release,
+        })
+      : [];
+
+    if (debugIdMaps.length === 0 && releaseMaps.length === 0) return;
+
+    const mapNames = releaseMaps.map((m) => m.name);
+    const storageByName = new Map(releaseMaps.map((m) => [m.name, m.storageId]));
+    const storageByDebugId = new Map(debugIdMaps.map((m) => [m.debugId, m.storageId]));
+
+    // Lazily load + parse each map at most once per run, keyed by storage id (a map
+    // may be reached by either debug id or name). `@jridgewell/trace-mapping` is pure
+    // JS (no `eval`/`new Function`), so it runs in the Convex isolate.
     const tracers = new Map<string, TraceMap | null>();
-    const tracerFor = async (name: string): Promise<TraceMap | null> => {
-      if (tracers.has(name)) return tracers.get(name) ?? null;
-      const entry = maps.find((m) => m.name === name);
+    const tracerFor = async (storageId: Id<'_storage'>): Promise<TraceMap | null> => {
+      const key = storageId as unknown as string;
+      if (tracers.has(key)) return tracers.get(key) ?? null;
       let tracer: TraceMap | null = null;
       try {
-        const blob = entry ? await ctx.storage.get(entry.storageId) : null;
+        const blob = await ctx.storage.get(storageId);
         if (blob) tracer = new TraceMap(JSON.parse(await blob.text()));
       } catch {
         tracer = null;
       }
-      tracers.set(name, tracer);
+      tracers.set(key, tracer);
       return tracer;
+    };
+
+    // Pick the storage id of the source map that resolves this frame, debug id first.
+    const mapForFrame = (ref: string): Id<'_storage'> | null => {
+      const debugId = debugIdForRef(ref, images);
+      if (debugId && storageByDebugId.has(debugId)) return storageByDebugId.get(debugId)!;
+      const name = mapNames.length ? matchSourcemap(ref, mapNames) : null;
+      return name ? (storageByName.get(name) ?? null) : null;
     };
 
     let anyResolved = false;
@@ -207,9 +277,9 @@ export const resolveEvent = internalAction({
         if (typeof frame.lineno !== 'number' || typeof frame.colno !== 'number') continue;
         const ref = frameRef(frame);
         if (!ref) continue;
-        const mapName = matchSourcemap(ref, mapNames);
-        if (!mapName) continue;
-        const tracer = await tracerFor(mapName);
+        const storageId = mapForFrame(ref);
+        if (!storageId) continue;
+        const tracer = await tracerFor(storageId);
         if (!tracer) continue;
         const pos = originalPositionFor(tracer, {
           line: frame.lineno,
@@ -277,6 +347,7 @@ export const listProjectArtifacts = query({
       name: a.name,
       kind: a.kind,
       size: a.size,
+      debugId: a.debugId ?? null,
       createdAt: a.createdAt,
     }));
   },

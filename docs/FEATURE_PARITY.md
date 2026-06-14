@@ -110,7 +110,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | --- | --- | --- |
 | Source-map / artifact upload | Done | `POST /artifacts/upload` (DSN-key auth) per release; `uploadSourceMaps()` in the SDK and the project Source maps panel. |
 | Server-side symbolication | Done | Minified JavaScript frames are resolved to original source (file, line, function, context) against uploaded maps, on ingest. |
-| Debug-ID artifact bundles | Planned | Name-based matching today; debug-ID bundle matching is not yet implemented. |
+| Debug-ID artifact bundles | Done | Frames resolve by debug id (from `//# debugId=` / source map `debugId`, matched via `debug_meta`), independent of release or path; name+release matching remains the fallback. |
 | Native symbolication (debug files) | Not planned | Out of scope for now. |
 
 ## Performance and tracing

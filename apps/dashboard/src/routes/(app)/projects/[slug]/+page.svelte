@@ -481,8 +481,15 @@
                 <Badge variant={artifact.kind === 'sourcemap' ? 'success' : 'muted'}
                   >{artifact.kind}</Badge
                 >
+                {#if artifact.debugId}
+                  <Badge
+                    variant="outline"
+                    class="shrink-0 font-mono"
+                    title={`debug id ${artifact.debugId}`}>{artifact.debugId.slice(0, 8)}</Badge
+                  >
+                {/if}
                 <span class="shrink-0 font-mono text-xs text-muted-foreground"
-                  >{artifact.release}</span
+                  >{artifact.release || 'no release'}</span
                 >
                 <span class="hidden shrink-0 text-xs text-muted-foreground sm:inline"
                   >{formatBytes(artifact.size)} · {relativeTime(artifact.createdAt)}</span

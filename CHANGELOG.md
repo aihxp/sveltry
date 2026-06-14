@@ -8,6 +8,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Debug-ID source maps.** Artifacts now carry a debug id (parsed from a minified file's
+  `//# debugId=` comment or a source map's `debugId` field). Stack frames resolve by matching
+  the event's `debug_meta` images to that id, independent of release name or file path, so
+  symbolication works even for events without a release. Name+release matching stays as the
+  fallback. The project Source maps panel shows each artifact's debug id.
 - **Saved views.** Save the current issues-list filters (search text, status, level) as a named,
   org-shared preset and apply it again in one click. Presets appear as removable chips above the
   list.

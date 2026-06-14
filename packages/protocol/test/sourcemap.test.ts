@@ -3,11 +3,58 @@ import {
   applyOriginalPosition,
   basename,
   cleanSourceName,
+  debugIdForRef,
+  debugIdFromSourceMap,
+  debugMetaImages,
   isInAppSource,
   matchSourcemap,
   normalizeRef,
+  parseDebugId,
   parseSourceMappingURL,
 } from '../src/sourcemap.js';
+
+describe('debug ids', () => {
+  test('parseDebugId reads the last debugId annotation', () => {
+    expect(parseDebugId('a=1\n//# debugId=1a2b3c4d-0000-1111-2222-333344445555\n')).toBe(
+      '1a2b3c4d-0000-1111-2222-333344445555',
+    );
+    expect(parseDebugId('//@ debugId=abcdef01')).toBe('abcdef01');
+    expect(parseDebugId('no annotation here')).toBeNull();
+  });
+
+  test('debugIdFromSourceMap reads debugId or debug_id', () => {
+    expect(debugIdFromSourceMap({ version: 3, debugId: 'dd' })).toBe('dd');
+    expect(debugIdFromSourceMap({ version: 3, debug_id: 'ee' })).toBe('ee');
+    expect(debugIdFromSourceMap({ version: 3 })).toBeNull();
+    expect(debugIdFromSourceMap('not an object')).toBeNull();
+  });
+
+  test('debugMetaImages keeps only entries with a debug_id', () => {
+    const imgs = debugMetaImages([
+      { type: 'sourcemap', code_file: 'app:///main.js', debug_id: 'x' },
+      { type: 'other' },
+      null,
+    ]);
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0]!.debug_id).toBe('x');
+  });
+
+  test('debugIdForRef matches a frame to its image by code_file then basename', () => {
+    const images = [
+      { type: 'sourcemap', code_file: 'app:///main.js', debug_id: 'main-id' },
+      { type: 'sourcemap', code_file: 'https://cdn/x/vendor.js', debug_id: 'vendor-id' },
+    ];
+    expect(debugIdForRef('app:///main.js', images)).toBe('main-id');
+    expect(debugIdForRef('https://host/main.js', images)).toBe('main-id');
+    expect(debugIdForRef('https://cdn/x/vendor.js', images)).toBe('vendor-id');
+    expect(debugIdForRef('unrelated.js', images)).toBeNull();
+  });
+
+  test('debugIdForRef falls back to the sole image without a code_file', () => {
+    expect(debugIdForRef('whatever.js', [{ debug_id: 'only' }])).toBe('only');
+    expect(debugIdForRef('whatever.js', [{ debug_id: 'a' }, { debug_id: 'b' }])).toBeNull();
+  });
+});
 
 describe('reference normalization', () => {
   test('basename handles urls, posix and windows paths', () => {
