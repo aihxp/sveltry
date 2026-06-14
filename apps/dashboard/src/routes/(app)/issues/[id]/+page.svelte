@@ -8,19 +8,26 @@
   import { Badge } from '$lib/components/ui/badge';
   import LevelBadge from '$lib/components/LevelBadge.svelte';
   import StackTrace from '$lib/components/StackTrace.svelte';
+  import { Input } from '$lib/components/ui/input';
   import { relativeTime } from '$lib/utils';
   import CheckIcon from '@lucide/svelte/icons/check';
   import BellOffIcon from '@lucide/svelte/icons/bell-off';
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
+  import UserIcon from '@lucide/svelte/icons/user';
+  import Trash2Icon from '@lucide/svelte/icons/trash-2';
 
   const auth = useAuth();
   const client = useConvexClient();
   const issueId = $derived(page.params.id as Id<'issues'>);
+  const me = $derived((page.data as { user?: { id: string; email?: string } }).user);
 
   const issue = useQuery(api.issues.getIssue, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
   );
   const event = useQuery(api.events.latestEventForIssue, () =>
+    auth.isAuthenticated ? { issueId } : ('skip' as const),
+  );
+  const comments = useQuery(api.issues.listComments, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
   );
 
@@ -32,6 +39,45 @@
     } finally {
       busy = false;
     }
+  }
+  // Resolve, but reopen only when a release later than the current one appears.
+  async function resolveInRelease() {
+    busy = true;
+    try {
+      await client.mutation(api.issues.setIssueStatus, {
+        issueId,
+        status: 'resolved',
+        resolvedInRelease: event.data?.release,
+      });
+    } finally {
+      busy = false;
+    }
+  }
+
+  const assignedToMe = $derived(!!me && issue.data?.assigneeId === me.id);
+  async function toggleAssign() {
+    if (!me) return;
+    await client.mutation(api.issues.assignIssue, {
+      issueId,
+      assigneeId: assignedToMe ? undefined : me.id,
+    });
+  }
+
+  let commentBody = $state('');
+  let posting = $state(false);
+  async function postComment(e: SubmitEvent) {
+    e.preventDefault();
+    if (!commentBody.trim()) return;
+    posting = true;
+    try {
+      await client.mutation(api.issues.addComment, { issueId, body: commentBody });
+      commentBody = '';
+    } finally {
+      posting = false;
+    }
+  }
+  async function deleteComment(commentId: Id<'issueComments'>) {
+    await client.mutation(api.issues.deleteComment, { commentId });
   }
 
   function breadcrumbs(payload: any): any[] {
@@ -78,11 +124,25 @@
         <h1 class="text-xl font-bold tracking-tight">{i.title}</h1>
         <p class="font-mono text-sm text-muted-foreground">{i.culprit}</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
+        <Button
+          variant={assignedToMe ? 'default' : 'outline'}
+          size="sm"
+          onclick={toggleAssign}
+          disabled={!me}
+        >
+          <UserIcon class="size-4" />
+          {assignedToMe ? 'Assigned to you' : 'Assign to me'}
+        </Button>
         {#if i.status === 'unresolved'}
           <Button variant="outline" size="sm" disabled={busy} onclick={() => setStatus('resolved')}>
             <CheckIcon class="size-4" /> Resolve
           </Button>
+          {#if event.data?.release}
+            <Button variant="outline" size="sm" disabled={busy} onclick={resolveInRelease}>
+              <CheckIcon class="size-4" /> Resolve in next release
+            </Button>
+          {/if}
           <Button variant="outline" size="sm" disabled={busy} onclick={() => setStatus('ignored')}>
             <BellOffIcon class="size-4" /> Ignore
           </Button>
@@ -98,6 +158,13 @@
         {/if}
       </div>
     </div>
+
+    {#if i.status === 'resolved' && i.resolvedInRelease}
+      <p class="text-xs text-muted-foreground">
+        Resolved in <span class="font-mono">{i.resolvedInRelease}</span>; reopens if it recurs in a
+        later release.
+      </p>
+    {/if}
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       {#each metaCards as m (m.label)}
@@ -170,5 +237,42 @@
         </Card.Root>
       {/if}
     {/if}
+
+    <Card.Root>
+      <Card.Header><Card.Title>Comments</Card.Title></Card.Header>
+      <Card.Content class="space-y-4">
+        {#if comments.data && comments.data.length > 0}
+          <div class="space-y-3">
+            {#each comments.data as c (c._id)}
+              <div class="rounded-lg border p-3">
+                <div class="flex items-center justify-between text-xs text-muted-foreground">
+                  <span class="font-medium text-foreground">{c.authorEmail ?? 'Someone'}</span>
+                  <span class="flex items-center gap-2">
+                    {relativeTime(c.createdAt)}
+                    {#if me && c.authorId === me.id}
+                      <button
+                        onclick={() => deleteComment(c._id)}
+                        aria-label="Delete comment"
+                        class="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2Icon class="size-3.5" />
+                      </button>
+                    {/if}
+                  </span>
+                </div>
+                <p class="mt-1.5 whitespace-pre-wrap text-sm">{c.body}</p>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-sm text-muted-foreground">No comments yet.</p>
+        {/if}
+
+        <form class="flex items-start gap-2" onsubmit={postComment}>
+          <Input bind:value={commentBody} placeholder="Add a comment…" class="flex-1" />
+          <Button type="submit" size="sm" disabled={posting || !commentBody.trim()}>Post</Button>
+        </form>
+      </Card.Content>
+    </Card.Root>
   {/if}
 </div>

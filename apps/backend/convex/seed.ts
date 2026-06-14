@@ -297,6 +297,20 @@ export const debugTrend = internalQuery({
   },
 });
 
+/** Full-text issue search, for verifying the search index. */
+export const debugSearch = internalQuery({
+  args: { organizationId: v.string(), term: v.string() },
+  handler: async (ctx, { organizationId, term }) => {
+    const issues = await ctx.db
+      .query('issues')
+      .withSearchIndex('search_title', (s) =>
+        s.search('title', term).eq('organizationId', organizationId),
+      )
+      .take(10);
+    return issues.map((i) => ({ title: i.title, level: i.level, status: i.status }));
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

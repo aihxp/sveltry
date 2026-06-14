@@ -25,9 +25,11 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Regression detection | Done | A resolved issue that recurs reopens with substatus `regressed`. |
 | Event and user counts | Done | `count` and `userCount` tracked per issue; `firstSeen` / `lastSeen` maintained. |
 | Triage aging | Done | Hourly `sweepOngoing` cron ages `new` issues older than 7 days to `ongoing`. |
-| Issue search and saved views | Planned | Tag and full-text filtering over the `tags` index. |
+| Issue search | Done | Full-text search over issue titles (Convex search index) with status/level filters. |
+| Saved views | Planned | Persisted search/filter presets are not yet implemented. |
 | Merge / unmerge issues | Planned | Not yet implemented. |
-| Issue assignment and comments | Planned | Not yet implemented. |
+| Issue assignment | Done | Assign/unassign to the current user from the issue detail page. |
+| Issue comments | Done | Threaded comments per issue, authored from the Better Auth identity. |
 
 ## Events and payloads
 
@@ -96,7 +98,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | --- | --- | --- |
 | Basic releases | Done | Release upserted per event into the `releases` table. |
 | Release health (crash-free rates) | Done | Individual `session` items (upserted by sid, latest status wins) and aggregated `sessions` buckets are both folded into crash-free sessions/users per release. |
-| Resolve in next release | Planned | Not yet implemented. |
+| Resolve in next release | Done | Resolve and stay resolved while the same release recurs; reopen on a later release. |
 | Suspect commits / commit association | Planned | Not yet implemented. |
 | Deploy tracking | Planned | Not yet implemented. |
 
