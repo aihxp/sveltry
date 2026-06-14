@@ -60,10 +60,23 @@ export default defineSchema({
     createdAt: v.number(),
     eventRetentionDays: v.number(),
     scrubPii: v.boolean(),
+    /** Optional hard cap on events accepted per calendar month (drops excess). */
+    monthlyEventQuota: v.optional(v.number()),
+    /** Optional automatic spike protection: max events accepted per minute. */
+    spikeThresholdPerMinute: v.optional(v.number()),
   })
     .index('by_org', ['organizationId'])
     .index('by_publicId', ['publicId'])
     .index('by_org_slug', ['organizationId', 'slug']),
+
+  // Per-project fixed one-minute windows for automatic spike protection.
+  spikeWindows: defineTable({
+    projectId: v.id('projects'),
+    windowStart: v.number(),
+    count: v.number(),
+  })
+    .index('by_project_window', ['projectId', 'windowStart'])
+    .index('by_window', ['windowStart']),
 
   projectKeys: defineTable({
     projectId: v.id('projects'),

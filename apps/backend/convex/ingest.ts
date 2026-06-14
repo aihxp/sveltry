@@ -209,6 +209,32 @@ export const ingest = httpAction(async (ctx, request) => {
   const receivedAt = Date.now();
   let firstId: string | undefined;
 
+  // Hard quota + automatic spike protection: drop error events (still 200, so the
+  // SDK does not retry) when the project's monthly quota or per-minute spike
+  // threshold is exceeded. Transactions/sessions are unaffected.
+  let eventsDropped = 0;
+  if (events.length > 0 && (resolved.monthlyEventQuota || resolved.spikeThresholdPerMinute)) {
+    let accept = true;
+    if (resolved.monthlyEventQuota) {
+      const used = await ctx.runQuery(internal.usage.monthEventUsage, {
+        projectId: resolved.projectId,
+      });
+      if (used >= resolved.monthlyEventQuota) accept = false;
+    }
+    if (accept && resolved.spikeThresholdPerMinute) {
+      const exceeded = await ctx.runMutation(internal.usage.checkSpike, {
+        projectId: resolved.projectId,
+        increment: events.length,
+        threshold: resolved.spikeThresholdPerMinute,
+      });
+      if (exceeded) accept = false;
+    }
+    if (!accept) {
+      eventsDropped = events.length;
+      events = [];
+    }
+  }
+
   for (const payload of events) {
     const normalized = normalizeEvent(payload, { receivedAt });
     const grouping = computeGrouping(payload, normalized);
@@ -403,8 +429,9 @@ export const ingest = httpAction(async (ctx, request) => {
     });
   }
 
-  // One usage write per ingest batch (not per event), with client-side drops.
-  let dropped = 0;
+  // One usage write per ingest batch (not per event), with client-side and
+  // server-side (quota/spike) drops folded in.
+  let dropped = eventsDropped;
   for (const r of clientReports) {
     for (const d of r.discarded_events ?? []) dropped += d.quantity ?? 0;
   }

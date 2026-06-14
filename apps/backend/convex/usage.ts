@@ -1,10 +1,11 @@
 import { v } from 'convex/values';
 import { corsHeaders, extractAuth, ingestError } from '@sveltry/protocol';
 import { internal } from './_generated/api';
-import { httpAction, internalMutation, query } from './_generated/server';
+import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
 import { requireOrg } from './lib/auth';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 /** Increment the per-project, per-day usage counters for one ingest batch. */
 export const recordUsage = internalMutation({
@@ -70,6 +71,43 @@ export const projectUsage = query({
         }))
         .sort((a, b) => a.day - b.day),
     };
+  },
+});
+
+/** Events accepted so far this calendar month for a project (for hard quotas). */
+export const monthEventUsage = internalQuery({
+  args: { projectId: v.id('projects') },
+  returns: v.number(),
+  handler: async (ctx, { projectId }) => {
+    const now = new Date();
+    const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+    const rows = await ctx.db
+      .query('usageDaily')
+      .withIndex('by_project_day', (q) => q.eq('projectId', projectId).gte('day', monthStart))
+      .collect();
+    return rows.reduce((s, r) => s + r.eventCount, 0);
+  },
+});
+
+/**
+ * Increment the project's current one-minute spike window and report whether it
+ * has exceeded the threshold (automatic spike protection).
+ */
+export const checkSpike = internalMutation({
+  args: { projectId: v.id('projects'), increment: v.number(), threshold: v.number() },
+  returns: v.boolean(),
+  handler: async (ctx, { projectId, increment, threshold }) => {
+    const windowStart = Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS;
+    const existing = await ctx.db
+      .query('spikeWindows')
+      .withIndex('by_project_window', (q) =>
+        q.eq('projectId', projectId).eq('windowStart', windowStart),
+      )
+      .first();
+    const before = existing?.count ?? 0;
+    if (existing) await ctx.db.patch(existing._id, { count: before + increment });
+    else await ctx.db.insert('spikeWindows', { projectId, windowStart, count: increment });
+    return before >= threshold;
   },
 });
 

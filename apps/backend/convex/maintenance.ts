@@ -190,6 +190,12 @@ export const sweepRateLimitWindows = internalMutation({
     for (const window of stale) {
       await ctx.db.delete(window._id);
     }
-    return { deleted: stale.length };
+    // Spike-protection minute windows are dead after a day too.
+    const staleSpikes = await ctx.db
+      .query('spikeWindows')
+      .withIndex('by_window', (q) => q.lt('windowStart', cutoff))
+      .take(4000);
+    for (const w of staleSpikes) await ctx.db.delete(w._id);
+    return { deleted: stale.length + staleSpikes.length };
   },
 });
