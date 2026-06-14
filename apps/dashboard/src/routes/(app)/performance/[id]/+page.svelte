@@ -99,6 +99,12 @@
       <p class="text-sm text-muted-foreground">
         {formatDuration(t.durationMs)} · {t.spanCount} spans · {relativeTime(t.timestamp)}
       </p>
+      {#if t.traceId}
+        <a
+          href={`/performance/trace/${t.traceId}`}
+          class="text-sm font-medium text-primary hover:underline">View full trace</a
+        >
+      {/if}
     </div>
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">

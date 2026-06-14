@@ -17,7 +17,27 @@
   const trend = useQuery(api.transactions.transactionTrend, () =>
     auth.isAuthenticated ? { hours: 24 } : ('skip' as const),
   );
+  const vitals = useQuery(api.transactions.webVitals, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
   const maxP95 = $derived(Math.max(1, ...(trend.data ?? []).map((d) => d.p95Ms)));
+
+  // Web Vitals thresholds (good / needs-improvement / poor) per Google.
+  const VITAL_META: Record<string, { label: string; unit: string; good: number; poor: number }> = {
+    lcp: { label: 'LCP', unit: 'ms', good: 2500, poor: 4000 },
+    inp: { label: 'INP', unit: 'ms', good: 200, poor: 500 },
+    fid: { label: 'FID', unit: 'ms', good: 100, poor: 300 },
+    cls: { label: 'CLS', unit: '', good: 0.1, poor: 0.25 },
+    fcp: { label: 'FCP', unit: 'ms', good: 1800, poor: 3000 },
+    ttfb: { label: 'TTFB', unit: 'ms', good: 800, poor: 1800 },
+  };
+  function vitalClass(vital: string, value: number): string {
+    const m = VITAL_META[vital];
+    if (!m) return 'text-foreground';
+    if (value <= m.good) return 'text-emerald-600 dark:text-emerald-400';
+    if (value <= m.poor) return 'text-amber-600 dark:text-amber-400';
+    return 'text-destructive';
+  }
 
   // Color a p95 cell by latency band for an at-a-glance read.
   function latencyClass(ms: number): string {
@@ -49,6 +69,28 @@
       {/if}
     </p>
   </div>
+
+  {#if vitals.data && vitals.data.length > 0}
+    <Card.Root>
+      <Card.Header><Card.Title>Web Vitals (p75)</Card.Title></Card.Header>
+      <Card.Content>
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          {#each vitals.data as v (v.vital)}
+            {@const meta = VITAL_META[v.vital]}
+            <div>
+              <div class="text-xs uppercase tracking-wide text-muted-foreground">
+                {meta?.label ?? v.vital}
+              </div>
+              <div class={cn('text-lg font-semibold tabular-nums', vitalClass(v.vital, v.p75))}>
+                {v.vital === 'cls' ? (v.p75 / 1).toFixed(0) : v.p75}{meta?.unit ?? ''}
+              </div>
+              <div class="text-[10px] text-muted-foreground">{v.count} samples</div>
+            </div>
+          {/each}
+        </div>
+      </Card.Content>
+    </Card.Root>
+  {/if}
 
   <Card.Root>
     <Card.Header><Card.Title>Latency over time (24h, p95)</Card.Title></Card.Header>

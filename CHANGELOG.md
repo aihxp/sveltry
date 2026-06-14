@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Web Vitals and distributed tracing.** LCP/INP/CLS/FCP/FID/TTFB p75 are read from transaction
+  `measurements` and shown on the Performance page; transactions sharing a trace id are stitched
+  into a single cross-service trace waterfall (a new trace view).
 - **Metric/threshold alerts.** Per-project alerts on p95 latency, error count, or crash-free rate
   over a window, evaluated by a cron and delivered to webhook/Slack/Discord/email. Plus
   missed-check-in detection: cron monitors with an interval schedule are flagged "missed" when

@@ -135,6 +135,78 @@ export const transactionTrend = query({
   },
 });
 
+/** Nearest-rank p75 of a sorted-ascending array. */
+function p75(sortedAsc: number[]): number {
+  const n = sortedAsc.length;
+  if (n === 0) return 0;
+  return sortedAsc[Math.min(n - 1, Math.max(0, Math.ceil(0.75 * n) - 1))]!;
+}
+
+const WEB_VITALS = ['lcp', 'fcp', 'cls', 'inp', 'fid', 'ttfb'] as const;
+
+/**
+ * Web Vitals (p75) over recent transactions. The browser SDK reports them as
+ * `measurements` on pageload/navigation transactions; we read them from the
+ * stored payload (no extra columns).
+ */
+export const webVitals = query({
+  args: {},
+  handler: async (ctx) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const recent = await ctx.db
+      .query('transactions')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .order('desc')
+      .take(1000);
+
+    const samples: Record<string, number[]> = {};
+    for (const t of recent) {
+      const m = (t.payload as { measurements?: Record<string, { value?: number }> }).measurements;
+      if (!m) continue;
+      for (const vital of WEB_VITALS) {
+        const v = m[vital]?.value;
+        if (typeof v === 'number') (samples[vital] ??= []).push(v);
+      }
+    }
+
+    return WEB_VITALS.map((vital) => {
+      const arr = (samples[vital] ?? []).sort((a, b) => a - b);
+      return { vital, p75: Math.round(p75(arr)), count: arr.length };
+    }).filter((v) => v.count > 0);
+  },
+});
+
+/** All transactions sharing a trace id, for the distributed trace view. */
+export const getTrace = query({
+  args: { traceId: v.string() },
+  handler: async (ctx, { traceId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const rows = await ctx.db
+      .query('transactions')
+      .withIndex('by_trace', (q) => q.eq('traceId', traceId))
+      .take(200);
+    const mine = rows.filter((t) => t.organizationId === activeOrganizationId);
+    mine.sort((a, b) => a.timestamp - b.timestamp);
+    if (mine.length === 0) return null;
+    const traceStart = Math.min(...mine.map((t) => t.timestamp));
+    const traceEnd = Math.max(...mine.map((t) => t.endTimestamp));
+    return {
+      traceId,
+      startedAt: traceStart,
+      durationMs: Math.max(0, traceEnd - traceStart),
+      transactions: mine.map((t) => ({
+        _id: t._id,
+        name: t.name,
+        op: t.op,
+        status: t.status,
+        durationMs: t.durationMs,
+        offsetMs: t.timestamp - traceStart,
+        platform: t.platform,
+      })),
+    };
+  },
+});
+
 /** A single transaction with its full payload (spans) for the trace view. */
 export const getTransaction = query({
   args: { transactionId: v.id('transactions') },

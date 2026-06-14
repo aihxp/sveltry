@@ -311,6 +311,38 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Web Vitals p75 + trace size, for verification (mirrors the auth'd queries). */
+export const debugVitalsAndTrace = internalQuery({
+  args: { organizationId: v.string(), traceId: v.string() },
+  handler: async (ctx, { organizationId, traceId }) => {
+    const recent = await ctx.db
+      .query('transactions')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .take(1000);
+    const samples: Record<string, number[]> = {};
+    for (const t of recent) {
+      const m = (t.payload as { measurements?: Record<string, { value?: number }> }).measurements;
+      if (!m) continue;
+      for (const k of ['lcp', 'cls', 'inp']) {
+        const v = m[k]?.value;
+        if (typeof v === 'number') (samples[k] ??= []).push(v);
+      }
+    }
+    const p75 = (a: number[]) => {
+      a.sort((x, y) => x - y);
+      return a.length ? a[Math.min(a.length - 1, Math.ceil(0.75 * a.length) - 1)] : 0;
+    };
+    const traceTxns = await ctx.db
+      .query('transactions')
+      .withIndex('by_trace', (q) => q.eq('traceId', traceId))
+      .take(50);
+    return {
+      vitals: Object.fromEntries(Object.entries(samples).map(([k, a]) => [k, p75(a)])),
+      traceCount: traceTxns.length,
+    };
+  },
+});
+
 /** Insert a metric alert bypassing auth, for verification. */
 export const seedMetricAlert = internalMutation({
   args: {
