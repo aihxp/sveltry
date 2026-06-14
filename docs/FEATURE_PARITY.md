@@ -121,8 +121,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Latency trend over time | Done | An hourly p95 chart on the Performance page, backed by precomputed duration-histogram rollups (a cron aggregates raw transactions). |
 | Trace view (span waterfall) | Done | The transaction detail page renders the span waterfall. |
 | Profiling (flamegraph) | Done | `profile` items are persisted; samples/stacks/frames are aggregated into a flamegraph on the Profiles page. |
-| Web vitals | Planned | Needs a columnar / time-series store. |
-| Distributed tracing across services | Planned | Transactions carry their trace id, but cross-service trace stitching is not yet built. |
+| Web vitals | Done | LCP/INP/CLS/FCP/FID/TTFB p75 from transaction `measurements`, on the Performance page. |
+| Distributed tracing | Done | Transactions sharing a trace id are stitched into one waterfall (the trace view). |
 
 ## Dashboards and Discover
 
