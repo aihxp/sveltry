@@ -490,6 +490,23 @@ export default defineSchema({
     deliveredAt: v.number(),
   }).index('by_issue', ['issueId']),
 
+  // Commit metadata uploaded with a release (Sentry's `set-commits`). Used to find
+  // an issue's "suspect commit": the most recent commit that changed a file in the
+  // issue's stack trace. `files` is the commit's changed paths.
+  releaseCommits: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    release: v.string(),
+    commitId: v.string(),
+    message: v.optional(v.string()),
+    author: v.optional(v.string()),
+    authorEmail: v.optional(v.string()),
+    url: v.optional(v.string()),
+    timestamp: v.number(),
+    files: v.array(v.string()),
+    createdAt: v.number(),
+  }).index('by_project_release', ['projectId', 'release']),
+
   // Named issue-list filter presets (Sentry's "saved searches"). Org-shared so a
   // team converges on the same triage views; `userId` records the author. The
   // fields mirror the issues list filter state.

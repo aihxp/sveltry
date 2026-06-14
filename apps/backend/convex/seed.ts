@@ -1,5 +1,10 @@
 import { v } from 'convex/values';
-import { buildFlamegraph, mergeHistograms, percentileFromHistogram } from '@sveltry/protocol';
+import {
+  buildFlamegraph,
+  mergeHistograms,
+  percentileFromHistogram,
+  suspectCommits,
+} from '@sveltry/protocol';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { internalAction, internalMutation, internalQuery } from './_generated/server';
@@ -648,6 +653,27 @@ export const debugFirstProject = internalQuery({
       .filter((q) => q.eq(q.field('organizationId'), organizationId))
       .first();
     return project ? { projectId: project._id as Id<'projects'>, slug: project.slug } : null;
+  },
+});
+
+/** Run suspect-commit matching against stored release commits, for verification. */
+export const debugSuspectCommits = internalQuery({
+  args: { projectId: v.id('projects'), release: v.string(), files: v.array(v.string()) },
+  handler: async (ctx, { projectId, release, files }) => {
+    const commits = await ctx.db
+      .query('releaseCommits')
+      .withIndex('by_project_release', (q) => q.eq('projectId', projectId).eq('release', release))
+      .collect();
+    const suspects = suspectCommits(
+      files,
+      commits.map((c) => ({ commitId: c.commitId, timestamp: c.timestamp, files: c.files })),
+    );
+    const byId = new Map(commits.map((c) => [c.commitId, c.message]));
+    return suspects.map((s) => ({
+      commitId: s.commitId,
+      file: s.file,
+      message: byId.get(s.commitId),
+    }));
   },
 });
 

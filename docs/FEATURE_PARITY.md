@@ -101,7 +101,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Basic releases | Done | Release upserted per event into the `releases` table. |
 | Release health (crash-free rates) | Done | Individual `session` items (upserted by sid, latest status wins) and aggregated `sessions` buckets are both folded into crash-free sessions/users per release. |
 | Resolve in next release | Done | Resolve and stay resolved while the same release recurs; reopen on a later release. |
-| Suspect commits / commit association | Planned | Not yet implemented. |
+| Suspect commits / commit association | Done | `POST /releases/commits` (DSN-key auth) uploads a release's commits and changed files (`set-commits`); the issue page surfaces the commits that touched a file in the stack trace, most recent first. |
 | Deploy tracking | Done | `POST /deploys` (DSN-key auth) records deploys per release; shown on the project page. |
 
 ## Source maps and symbolication

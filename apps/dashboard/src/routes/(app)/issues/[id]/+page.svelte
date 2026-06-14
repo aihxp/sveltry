@@ -15,6 +15,7 @@
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
   import UserIcon from '@lucide/svelte/icons/user';
   import Trash2Icon from '@lucide/svelte/icons/trash-2';
+  import GitCommitHorizontalIcon from '@lucide/svelte/icons/git-commit-horizontal';
 
   const auth = useAuth();
   const client = useConvexClient();
@@ -25,6 +26,9 @@
     auth.isAuthenticated ? { issueId } : ('skip' as const),
   );
   const event = useQuery(api.events.latestEventForIssue, () =>
+    auth.isAuthenticated ? { issueId } : ('skip' as const),
+  );
+  const suspects = useQuery(api.commits.suspectCommitsForIssue, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
   );
   const comments = useQuery(api.issues.listComments, () =>
@@ -202,6 +206,43 @@
         </Card.Root>
       {/each}
     </div>
+
+    {#if suspects.data && suspects.data.length > 0}
+      <Card.Root>
+        <Card.Header>
+          <Card.Title class="flex items-center gap-2">
+            <GitCommitHorizontalIcon class="size-4" /> Suspect commits
+          </Card.Title>
+          <Card.Description
+            >Commits in this release that changed a file in the stack trace.</Card.Description
+          >
+        </Card.Header>
+        <Card.Content class="space-y-2">
+          {#each suspects.data as c (c.commitId)}
+            <div class="flex items-start gap-3 rounded-lg border px-3 py-2">
+              <GitCommitHorizontalIcon class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium">{c.message ?? c.shortId}</p>
+                <p class="mt-0.5 text-xs text-muted-foreground">
+                  {#if c.url}
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      class="font-mono hover:underline">{c.shortId}</a
+                    >
+                  {:else}
+                    <span class="font-mono">{c.shortId}</span>
+                  {/if}
+                  {#if c.author}· {c.author}{/if} · touched
+                  <span class="font-mono">{c.file}</span>
+                </p>
+              </div>
+            </div>
+          {/each}
+        </Card.Content>
+      </Card.Root>
+    {/if}
 
     <Card.Root>
       <Card.Header><Card.Title>Stack trace</Card.Title></Card.Header>

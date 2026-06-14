@@ -280,24 +280,33 @@ await uploadSourceMaps({
 });
 ```
 
-On ingest, any event whose `release` has matching maps has its minified JavaScript frames
-resolved to original file, line, function, and surrounding source context. Resolution runs
-off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
+On ingest, any event with matching maps has its minified JavaScript frames resolved to
+original file, line, function, and surrounding source context. Resolution runs off the
+ingest hot path and matches a frame to a map by **debug ID** first (from a `//# debugId=`
+comment / the map's `debugId` field, via the event's `debug_meta`, independent of release),
+falling back to **name + release** matching. Debug-ID matching means events without a
+release still symbolicate.
+
+To associate the commits that may have caused an issue, upload a release's commits and their
+changed files (DSN-key authenticated, mirrors `sentry-cli releases set-commits`):
+
+```
+POST /releases/commits?sentry_key=<publicKey>&o=<projectId>
+{ "release": "<version>", "commits": [{ "id": "<sha>", "message": "...", "author": "...",
+  "timestamp": "2026-06-12T00:00:00Z", "files": ["src/app.ts"] }] }
+```
+
+`files` may instead be given as a `patch_set` of `{ path, type }` entries. The issue page then
+shows the commits that changed a file appearing in the stack trace, most recent first.
 
 ## Known limitations
 
 - `br` (Brotli) and `zstd` request compression are not supported and return `400`. Send
   the body uncompressed or gzip/deflate.
 - `event`, `transaction`, and individual `session` items are persisted (errors,
-  performance, and release health, including aggregated `sessions` buckets) and `check_in`
-  items (cron monitors), and `replay_event` + `replay_recording` items (session replay).
-  `replay_event` + `replay_recording` items (session replay), and `profile` items (flamegraphs).
-  `client_report` is accepted with `200` but not yet surfaced (SDK-dropped-event accounting).
-- Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
-  uploaded for the same release), not by debug ID. Upload maps per release via
-  `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to
-  original source on ingest.
+  performance, and release health, including aggregated `sessions` buckets), along with
+  `check_in` items (cron monitors), `replay_event` + `replay_recording` items (session
+  replay), and `profile` items (flamegraphs). `client_report` is accepted with `200` but
+  not yet surfaced (SDK-dropped-event accounting).
 - Minidumps are not processed. The `minidump` route is recognized and tolerated (`200`)
   but the payload is discarded, so native crash reports are not decoded.
-- Email alerts are not delivered. Alert channels `webhook`, `discord`, and `slack` work;
-  email is a no-op pending SMTP wiring.

@@ -13,6 +13,7 @@ export * from './histogram.js';
 export * from './dsn.js';
 export * from './auth.js';
 export * from './channels.js';
+export * from './commits.js';
 export * from './decompress.js';
 export * from './envelope.js';
 export * from './normalize.js';
