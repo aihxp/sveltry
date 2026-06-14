@@ -40,7 +40,7 @@
     <div
       class="h-[22px] cursor-default truncate rounded-sm px-1.5 text-[11px] leading-[22px] text-black/80"
       style={barStyle(node)}
-      title={`${node.name}${node.file ? ' (' + node.file + ')' : ''} — ${node.value} samples (${((node.value / total) * 100).toFixed(1)}%)`}
+      title={`${node.name}${node.file ? ' (' + node.file + ')' : ''}: ${node.value} samples (${((node.value / total) * 100).toFixed(1)}%)`}
     >
       {node.name}
     </div>
