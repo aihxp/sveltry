@@ -17,8 +17,8 @@ apps, shared packages, and infrastructure.
 ```
 apps/
   dashboard/   SvelteKit 2 + Svelte 5 (runes) + Tailwind v4 + shadcn-svelte UI.
-               Better Auth owns identity. Renders the reactive dashboard and
-               serves the JWKS the backend trusts.
+               Renders the reactive dashboard and proxies /api/auth/* to the
+               Convex-served Better Auth handler.
   backend/     Self-hosted Convex backend. All functions live in
                apps/backend/convex/ (ingest, issues, events, alerts, crons, schema).
 
@@ -53,7 +53,7 @@ session here; authentication is the DSN public key, scoped to a single project.
 **Query path (read, reactive, authenticated).** The SvelteKit dashboard opens a WebSocket to Convex
 and subscribes to queries. Convex pushes new results whenever underlying tables change, so an issue
 list updates live as events arrive on the ingest path. Every query is authenticated by a Better Auth
-JWT and scoped to the caller's active organization.
+JWT (issued by the Convex-hosted auth handler) and scoped to the caller's active organization.
 
 ```
    INGEST PATH (write)                          QUERY PATH (read)
@@ -64,9 +64,9 @@ JWT and scoped to the caller's active organization.
         | HTTPS POST                                   | HTTPS (page load)
         | /api/<projectPublicId>/envelope/             v
         | X-Sentry-Auth or ?sentry_key           SvelteKit (apps/dashboard)
-        v                                          - Better Auth: identity in Postgres
-   Convex HTTP action  (.site origin)             - issues RS256 JWT + JWKS
-   apps/backend/convex/http.ts -> ingest.ts             |
+        v                                          - proxies /api/auth/* to Convex
+   Convex HTTP action  (.site origin)             - Better Auth runs on Convex:
+   apps/backend/convex/http.ts -> ingest.ts         identity + RS256 JWT + JWKS
      - projectIdFromPath / auth extract                 | WebSocket subscribe
      - decompress (gzip/deflate)                        | (JWT in connection)
      - envelope parse + normalize                       v
@@ -153,21 +153,26 @@ dispatch is scheduled.
 
 Identity and data live in different systems, joined only by a signed token.
 
-- **Better Auth owns identity in Postgres** (the `sveltry` database): users, sessions, accounts,
-  organizations, and JWKS. Its `organization` plugin provides multi-tenancy; its `jwt` plugin issues
-  RS256 JWTs and publishes a JWKS at `/api/auth/jwks` on the dashboard origin.
-- The active organization id is folded into the JWT via `jwt.definePayload`, under the
-  `activeOrganizationId` claim. Switching the active org reissues the token with a new claim.
+- **Better Auth runs on Convex via the `@convex-dev/better-auth` component** (email + password). Its
+  tables (user, session, account, jwks) live inside Convex, not Postgres. The SvelteKit app simply
+  proxies `/api/auth/*` to the Convex-served auth handler. Convex publishes the JWKS at
+  `{CONVEX_SITE_URL}/api/auth/convex/jwks` and issues RS256 JWTs.
+- **Organizations are modeled natively in Convex**, not via a Better Auth plugin: the
+  `organizations`, `memberRoles`, and `userSettings` tables provide multi-tenancy. The active
+  organization id rides on the JWT under the `activeOrganizationId` claim. Switching the active org
+  reissues the token with a new claim.
 - **Convex verifies these JWTs statelessly.** `apps/backend/convex/auth.config.ts` registers a
   Custom JWT provider (`type: 'customJwt'`, `applicationID: 'convex'` matching the JWT `aud`,
-  `issuer` = the dashboard origin = `SITE_URL`, `jwks` = `SITE_URL + /api/auth/jwks`, `algorithm`
-  RS256). Convex stores no auth data of its own; it fetches the JWKS and validates the signature.
+  `issuer` = `SITE_URL` (which must equal `PUBLIC_APP_URL`), `jwks` =
+  `{CONVEX_SITE_URL}/api/auth/convex/jwks`, `algorithm` RS256). The backend fetches the JWKS from its
+  own HTTP-actions origin (see `CONVEX_INTERNAL_SITE_URL`) and validates the signature.
 - Every dashboard query calls `requireOrg(ctx)`, which reads `identity.activeOrganizationId` and
   scopes all data by `organizationId`. Tenancy is enforced server-side on every read, not in the UI.
 
-This is why the JWKS endpoint matters: the dashboard is the issuer and key publisher, and the backend
-is a stateless verifier that trusts whatever the configured JWKS endpoint serves. The trust boundary
-is the signature, so the `issuer`, `aud`, and JWKS URL must line up exactly across the two services.
+This is why the JWKS endpoint matters: Convex is both the issuer/key publisher and the verifier. The
+trust boundary is the signature, so the `issuer`, `aud`, and JWKS URL must line up exactly: `SITE_URL`
+must equal `PUBLIC_APP_URL`, or Better Auth's trusted-origin check rejects sign-in with "Invalid
+origin".
 
 **`.cloud` versus `.site` again, from the auth angle.** The authenticated WebSocket query path uses
 the `.cloud` client-API origin, which is where JWT verification and `requireOrg` run. The public
@@ -193,20 +198,18 @@ unbounded:
 - `sweepOngoing` (hourly) ages `new` issues older than 7 days to `ongoing`, so triage state reflects
   reality without manual upkeep.
 
-## 7. Why one Postgres server backs two databases
+## 7. Why Postgres backs only the Convex backend
 
-There is a single Postgres 17 server, but two logical databases with different owners:
+There is a single Postgres 17 server, and it has exactly one owner: the self-hosted Convex backend.
+The Sveltry app never connects to Postgres directly.
 
 - `convex_self_hosted` - the self-hosted Convex backend's own internal store. Convex derives this
   name from the instance name (`convex-self-hosted` -> `convex_self_hosted`); the database must
-  pre-exist. All Sveltry domain data (issues, events, etc.) lives inside Convex and therefore inside
-  this database.
-- `sveltry` - Better Auth's identity store (users, sessions, accounts, organizations, JWKS).
+  pre-exist. All Sveltry domain data (issues, events, etc.) and all auth data (users, sessions,
+  accounts, jwks, organizations) live inside Convex and therefore inside this database.
 
-Keeping them on one server keeps self-hosting to a single stateful dependency to back up, monitor,
-and operate, while the logical separation respects the ownership boundary: Convex manages its
-database through its own migrations and you must never hand-edit it, whereas the `sveltry` database
-has a normal relational schema managed by `bunx @better-auth/cli migrate`. Note that
+This keeps self-hosting to a single stateful dependency to back up, monitor, and operate. Convex
+manages this database through its own migrations and you must never hand-edit it. Note that
 `POSTGRES_URL` for the Convex backend must be host-only (no database name, no query parameters);
 Convex appends the derived name itself. See [SELF_HOSTING.md](./SELF_HOSTING.md) for the full setup.
 

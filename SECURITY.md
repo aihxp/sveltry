@@ -76,8 +76,9 @@ Sveltry's trust boundaries and the areas we consider most security-sensitive:
   reads and writes by `organizationId`. Any path that lets one organization read
   or modify another organization's issues, events, projects, keys, or alerts is
   a high-severity issue.
-- The Better Auth to Convex JWT/JWKS boundary. Better Auth issues RS256 JWTs and
-  publishes a JWKS at `/api/auth/jwks`. Convex verifies them statelessly via a
+- The auth JWT/JWKS boundary. Better Auth runs as the `@convex-dev/better-auth`
+  component on Convex and issues RS256 JWTs. Convex serves the JWKS at
+  `{CONVEX_SITE_URL}/api/auth/convex/jwks` and verifies tokens statelessly via a
   Custom JWT provider (audience `convex`, issuer = `SITE_URL`, RS256). Token
   forgery, signature-verification bypass, audience or issuer confusion, and
   JWKS-fetch attacks are in scope.

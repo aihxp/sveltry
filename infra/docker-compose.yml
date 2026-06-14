@@ -1,12 +1,13 @@
 # Self-hosted Sveltry infrastructure: Postgres + open-source Convex backend +
-# the Convex admin dashboard. The SvelteKit app (apps/dashboard) and Better Auth
-# run separately (see README) and connect to the backend over its public origin.
+# the Convex admin dashboard. The SvelteKit app (apps/dashboard) runs separately
+# (see README) and connects to the backend over its public origin.
 #
 # Run from the repo root:
 #   docker compose --env-file infra/.env -f infra/docker-compose.yml up -d
 #
-# One Postgres server backs two logical databases: `convex_self_hosted` (the
-# Convex backend's own store) and `sveltry` (Better Auth's identity store).
+# Postgres is the Convex backend's own store only (the `convex_self_hosted`
+# database). Auth runs entirely on Convex (the Better Auth component), so there
+# is no separate identity database; the app never connects to Postgres.
 
 services:
   postgres:
@@ -70,15 +71,17 @@ services:
         condition: service_healthy
 
   # The Sveltry SvelteKit app. Opt in with `--profile app` once the backend is
-  # deployed and the Better Auth schema is migrated:
+  # deployed:
   #   docker compose --env-file infra/.env -f infra/docker-compose.yml --profile app up -d --build app
   #
-  # All-Docker auth note: the backend verifies Better Auth JWTs by fetching JWKS
-  # from the dashboard. A browser-facing loopback origin (PUBLIC_APP_URL) is not
-  # reachable from inside the backend container, so point the deployment's JWKS
-  # URL at the compose service name once, after deploy:
-  #   cd apps/backend && bunx convex env set SVELTRY_JWKS_URL http://app:3000/api/auth/jwks
-  # SITE_URL stays the browser origin (PUBLIC_APP_URL) so the issuer claim matches.
+  # All-Docker auth note: auth runs entirely on Convex (the Better Auth component);
+  # the app does not connect to Postgres. After deploy, set the deployment's
+  # `SITE_URL` to the browser origin (PUBLIC_APP_URL) for the trusted-origin check,
+  # and `CONVEX_INTERNAL_SITE_URL` to the in-container origin the backend uses to
+  # fetch its own JWKS (the host-mapped CONVEX_SITE_URL is not reachable inside the
+  # container):
+  #   cd apps/backend && bunx convex env set SITE_URL http://localhost:3000
+  #   cd apps/backend && bunx convex env set CONVEX_INTERNAL_SITE_URL http://localhost:3211
   app:
     profiles: ['app']
     build:
@@ -89,14 +92,11 @@ services:
       - '${APP_PORT:-3000}:3000'
     environment:
       - PUBLIC_CONVEX_URL=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      - PUBLIC_CONVEX_SITE_URL=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
       - PUBLIC_SVELTRY_INGEST_URL=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
       - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://localhost:3000}
-      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-sveltry_dev_password}@postgres:5432/sveltry
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in infra/.env}
     depends_on:
       backend:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
 
 volumes:
