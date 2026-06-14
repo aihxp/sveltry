@@ -78,7 +78,9 @@
   let maThreshold = $state(1000);
   let maTransaction = $state('');
   let maWindow = $state(60);
-  let maChannelType = $state<'webhook' | 'discord' | 'slack' | 'email'>('webhook');
+  let maChannelType = $state<
+    'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
+  >('webhook');
   let maTarget = $state('');
   let savingMetric = $state(false);
   const metricLabel = {
@@ -114,7 +116,18 @@
   let ruleName = $state('');
   let trigger = $state<'new_issue' | 'regression' | 'event_frequency'>('new_issue');
   let threshold = $state(10);
-  let channelType = $state<'webhook' | 'discord' | 'slack'>('webhook');
+  let channelType = $state<
+    'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
+  >('webhook');
+  const CHANNEL_OPTIONS = [
+    { value: 'webhook', label: 'Webhook' },
+    { value: 'slack', label: 'Slack' },
+    { value: 'discord', label: 'Discord' },
+    { value: 'email', label: 'Email' },
+    { value: 'msteams', label: 'MS Teams' },
+    { value: 'pagerduty', label: 'PagerDuty (routing key)' },
+    { value: 'opsgenie', label: 'Opsgenie (API key)' },
+  ];
   let channelTarget = $state('');
   let savingRule = $state(false);
 
@@ -337,9 +350,9 @@
                 bind:value={channelType}
                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="webhook">Webhook</option>
-                <option value="discord">Discord</option>
-                <option value="slack">Slack</option>
+                {#each CHANNEL_OPTIONS as o (o.value)}
+                  <option value={o.value}>{o.label}</option>
+                {/each}
               </select>
             </div>
           </div>
@@ -429,10 +442,9 @@
                 bind:value={maChannelType}
                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="webhook">Webhook</option>
-                <option value="slack">Slack</option>
-                <option value="discord">Discord</option>
-                <option value="email">Email</option>
+                {#each CHANNEL_OPTIONS as o (o.value)}
+                  <option value={o.value}>{o.label}</option>
+                {/each}
               </select>
             </div>
           </div>

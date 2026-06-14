@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mergeHistograms, percentileFromHistogram } from '@sveltry/protocol';
+import { channelRequest, mergeHistograms, percentileFromHistogram } from '@sveltry/protocol';
 import { internal } from './_generated/api';
 import {
   internalAction,
@@ -193,22 +193,19 @@ export const evaluateMetricAlerts = internalAction({
           if (channel.type === 'email') {
             await ctx.runAction(internal.email.sendEmail, { to: channel.target, subject, text });
           } else {
-            await fetch(channel.target, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body:
-                channel.type === 'slack'
-                  ? JSON.stringify({ text: `${subject}: ${text}` })
-                  : JSON.stringify({
-                      source: 'sveltry',
-                      alert: a.name,
-                      metric: a.metric,
-                      value,
-                      threshold: a.threshold,
-                      text,
-                    }),
-              signal: AbortSignal.timeout(8000),
+            const req = channelRequest(channel, {
+              title: subject,
+              text,
+              severity: a.metric === 'crash_free_rate' ? 'error' : 'warning',
             });
+            if (req) {
+              await fetch(req.url, {
+                method: 'POST',
+                headers: req.headers,
+                body: req.body,
+                signal: AbortSignal.timeout(8000),
+              });
+            }
           }
         } catch {
           // Best-effort delivery; do not block other channels/alerts.

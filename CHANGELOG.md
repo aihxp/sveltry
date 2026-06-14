@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **More alert channels.** Microsoft Teams (MessageCard), PagerDuty (Events API v2 routing key),
+  and Opsgenie (GenieKey) join webhook/Slack/Discord/email for both issue and metric alerts,
+  via a shared, unit-tested channel formatter.
 - **Hard quotas and spike protection.** Optional per-project monthly event quota and per-minute
   spike threshold; events over the limit are dropped (still HTTP 200, so SDKs do not retry).
   Configurable in a new Limits and settings card on the project page.
