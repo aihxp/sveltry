@@ -53,7 +53,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | DSN format | Done | `https://PUBLIC_KEY@INGEST_HOST/PROJECT_PUBLIC_ID`; build via the dashboard or `@aihxp/sveltry-sdk` `buildSveltryDsn`. |
 | Header auth | Done | `X-Sentry-Auth` (sentry_version=7, sentry_key, sentry_client); `sentry_secret` accepted and ignored. |
 | Query-string auth | Done | `?sentry_key=...&sentry_version=7&sentry_client=...`; the header wins when both are present. |
-| gzip / deflate decompression | Done | Transparent via `DecompressionStream`. |
+| gzip / deflate decompression | Done | Transparent via `fflate` (pure JS); `DecompressionStream` is absent from the self-hosted Convex isolate. |
 | br / zstd decompression | Not planned | Returns HTTP 400; the common JS SDKs send uncompressed or gzip. |
 | Content-Type tolerance | Done | Ignored, since browser SDKs send an empty Content-Type to dodge CORS preflight. |
 | SDK-friendly success response | Done | HTTP 200 `application/json` `{"id":"<32-hex>"}` with NO rate-limit headers, so SDKs do not back off. |
@@ -76,6 +76,9 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Authentication and identity | Done | Better Auth runs on Convex via the `@convex-dev/better-auth` component (Convex-only, no Postgres; email + password). RS256 JWTs are verified against a Convex-served JWKS at `{CONVEX_SITE_URL}/api/auth/convex/jwks`. |
 | Teams | Done | Teams group org members and own projects (assignable per project). Modeled in Convex; managed on the Teams page. |
 | Fine-grained roles / permissions | Done | owner / admin / member / billing roles, enforced in Convex via `requireRole`: admin+ manages projects/teams/alerts, member triages issues, billing is read-only. Managed on the settings page; the first user of a fresh org bootstraps as owner. |
+| Member invitations | Planned | Members self-register today; email invitations and a join flow are on the roadmap. |
+| Public REST API / API tokens | Planned | The HTTP surface is the Sentry-compatible ingest/upload endpoints (DSN-key auth). A general programmatic API with scoped tokens is not built yet. |
+| SSO / SAML / 2FA / audit log | Not planned | Out of scope for now; email + password only. |
 
 ## Alerts and integrations
 
@@ -153,12 +156,12 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| PII scrubbing at ingest | Done | Default scrubbing applied per project before storage. |
+| PII scrubbing at ingest | Done | A fixed default ruleset (credit cards, SSNs, bearer tokens, sensitive-key-named fields) applied per project before storage, with a per-project on/off toggle. Custom rules and a safe-field allowlist are not yet supported. |
 | Inbound data filters | Done | Optional per-project filters drop matching error events at ingest, before they are stored, grouped, or counted: by error message/type, release, environment, or stack-frame path (case-insensitive globs), and by known web-crawler user-agent. Pure matcher in `@sveltry/protocol`; configured on the project page; a clean no-op when unset. Filtered drops are counted separately (`filteredCount`). |
 | Per-key rate limiting | Done | Optional fixed-window limit per project key (`ingestWindows`). |
 | Data retention | Done | Daily `sweepRetention` prunes events past each project's retention, bounded per run. |
 | S3 / R2 storage offload | Done | Optional offload of large blobs (source maps) to an S3-compatible bucket, configured by env vars (no-op when unset). Resolution reads offloaded maps back transparently. Inline event payloads are not yet offloaded. |
-| Spike protection | Done | Optional per-project per-minute cap; excess error events are dropped (still HTTP 200). |
+| Spike protection | Done | Optional per-project per-minute cap; excess error events are dropped (still HTTP 200). Applies to error events only; transactions and sessions are not counted or dropped. |
 | Usage accounting | Done | Per-project, per-day event/transaction/dropped/filtered counters (30-day totals on the project page). |
 | Hard quotas | Done | Optional per-project monthly event quota; events over quota are dropped. Configurable on the project page. |
 
