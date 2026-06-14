@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Hard quotas and spike protection.** Optional per-project monthly event quota and per-minute
+  spike threshold; events over the limit are dropped (still HTTP 200, so SDKs do not retry).
+  Configurable in a new Limits and settings card on the project page.
 - **Merge issues.** Merge a duplicate issue into another from the issue detail page (search,
   pick, merge); its events are re-pointed and counts folded into the target.
 - **Usage accounting and deploy tracking.** Per-project, per-day event/transaction counters

@@ -311,6 +311,18 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Set a project's ingest limits bypassing auth, for verification. */
+export const seedProjectLimits = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    monthlyEventQuota: v.optional(v.number()),
+    spikeThresholdPerMinute: v.optional(v.number()),
+  },
+  handler: async (ctx, { projectId, monthlyEventQuota, spikeThresholdPerMinute }) => {
+    await ctx.db.patch(projectId, { monthlyEventQuota, spikeThresholdPerMinute });
+  },
+});
+
 /** Merge two issues bypassing auth, for verification (mirrors issues.mergeIssues). */
 export const debugMerge = internalMutation({
   args: { sourceIssueId: v.id('issues'), targetIssueId: v.id('issues') },

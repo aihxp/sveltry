@@ -21,6 +21,8 @@ export const resolveIngestKey = internalQuery({
       scrubPii: v.boolean(),
       rateLimitCount: v.optional(v.number()),
       rateLimitWindowSeconds: v.optional(v.number()),
+      monthlyEventQuota: v.optional(v.number()),
+      spikeThresholdPerMinute: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, { publicId, publicKey }) => {
@@ -40,6 +42,8 @@ export const resolveIngestKey = internalQuery({
       scrubPii: project.scrubPii,
       rateLimitCount: key.rateLimitCount,
       rateLimitWindowSeconds: key.rateLimitWindowSeconds,
+      monthlyEventQuota: project.monthlyEventQuota,
+      spikeThresholdPerMinute: project.spikeThresholdPerMinute,
     };
   },
 });
@@ -205,16 +209,23 @@ export const updateProjectSettings = mutation({
     projectId: v.id('projects'),
     eventRetentionDays: v.optional(v.number()),
     scrubPii: v.optional(v.boolean()),
+    monthlyEventQuota: v.optional(v.union(v.number(), v.null())),
+    spikeThresholdPerMinute: v.optional(v.union(v.number(), v.null())),
   },
-  handler: async (ctx, { projectId, eventRetentionDays, scrubPii }) => {
+  handler: async (ctx, args) => {
     const { activeOrganizationId } = await requireOrg(ctx);
-    const project = await ctx.db.get(projectId);
+    const project = await ctx.db.get(args.projectId);
     if (!project || project.organizationId !== activeOrganizationId) {
       throw new Error('Project not found');
     }
     const patch: Record<string, unknown> = {};
-    if (eventRetentionDays !== undefined) patch.eventRetentionDays = eventRetentionDays;
-    if (scrubPii !== undefined) patch.scrubPii = scrubPii;
-    await ctx.db.patch(projectId, patch);
+    if (args.eventRetentionDays !== undefined) patch.eventRetentionDays = args.eventRetentionDays;
+    if (args.scrubPii !== undefined) patch.scrubPii = args.scrubPii;
+    // null clears the limit; a number sets it.
+    if (args.monthlyEventQuota !== undefined)
+      patch.monthlyEventQuota = args.monthlyEventQuota ?? undefined;
+    if (args.spikeThresholdPerMinute !== undefined)
+      patch.spikeThresholdPerMinute = args.spikeThresholdPerMinute ?? undefined;
+    await ctx.db.patch(args.projectId, patch);
   },
 });

@@ -157,9 +157,9 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Per-key rate limiting | Done | Optional fixed-window limit per project key (`ingestWindows`). |
 | Data retention | Done | Daily `sweepRetention` prunes events past each project's retention, bounded per run. |
 | S3 / R2 storage offload | Planned | Event payloads are stored inline in Convex documents today; offloading large objects/attachments to S3/R2 is not yet wired in Sveltry. |
-| Spike protection / dynamic sampling | Planned | Not yet implemented. |
+| Spike protection | Done | Optional per-project per-minute cap; excess error events are dropped (still HTTP 200). |
 | Usage accounting | Done | Per-project, per-day event/transaction/dropped counters (30-day totals on the project page). |
-| Hard quotas | Planned | Usage is tracked; enforced per-project quotas are not yet implemented. |
+| Hard quotas | Done | Optional per-project monthly event quota; events over quota are dropped. Configurable on the project page. |
 
 ---
 

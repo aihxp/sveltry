@@ -39,6 +39,40 @@
     projectId ? { projectId } : ('skip' as const),
   );
 
+  // Project limits/settings (seeded once from the loaded project)
+  let retention = $state(90);
+  let scrub = $state(true);
+  let quota = $state<number | ''>('');
+  let spike = $state<number | ''>('');
+  let savingSettings = $state(false);
+  let seeded = false;
+  $effect(() => {
+    const p = proj.data?.project;
+    if (p && !seeded) {
+      seeded = true;
+      retention = p.eventRetentionDays;
+      scrub = p.scrubPii;
+      quota = p.monthlyEventQuota ?? '';
+      spike = p.spikeThresholdPerMinute ?? '';
+    }
+  });
+  async function saveSettings(e: SubmitEvent) {
+    e.preventDefault();
+    if (!projectId) return;
+    savingSettings = true;
+    try {
+      await client.mutation(api.projects.updateProjectSettings, {
+        projectId,
+        eventRetentionDays: Number(retention),
+        scrubPii: scrub,
+        monthlyEventQuota: quota === '' ? null : Number(quota),
+        spikeThresholdPerMinute: spike === '' ? null : Number(spike),
+      });
+    } finally {
+      savingSettings = false;
+    }
+  }
+
   // New metric alert form
   let maMetric = $state<'p95_latency' | 'error_count' | 'crash_free_rate'>('p95_latency');
   let maThreshold = $state(1000);
@@ -152,6 +186,36 @@
             </div>
           </div>
         {/each}
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Limits and settings</Card.Title>
+        <Card.Description>Retention, PII scrubbing, and ingest protection.</Card.Description>
+      </Card.Header>
+      <Card.Content>
+        <form class="space-y-3" onsubmit={saveSettings}>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="retention">Event retention (days)</Label>
+              <Input id="retention" type="number" min="1" bind:value={retention} />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="quota">Monthly event quota (blank = none)</Label>
+              <Input id="quota" type="number" min="0" bind:value={quota} placeholder="unlimited" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="spike">Spike protection (events/min, blank = off)</Label>
+              <Input id="spike" type="number" min="0" bind:value={spike} placeholder="off" />
+            </div>
+            <label class="flex items-center gap-2 pt-6 text-sm">
+              <input type="checkbox" bind:checked={scrub} class="size-4" />
+              Scrub PII at ingest
+            </label>
+          </div>
+          <Button type="submit" size="sm" disabled={savingSettings}>Save settings</Button>
+        </form>
       </Card.Content>
     </Card.Root>
 
