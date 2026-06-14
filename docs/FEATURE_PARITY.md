@@ -62,7 +62,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | transaction / session / sessions / replay / check_in items | Done | Persisted: performance, release health, cron monitors, and session replay. |
 | profile items | Done | Persisted; rendered as a flamegraph on the Profiles page. |
 | user feedback (`user_report` / `feedback`) | Done | Persisted and listed on a Feedback page. |
-| client_report items | Partial | Accepted (HTTP 200); SDK-dropped-event accounting not yet surfaced. |
+| client_report items | Done | SDK-dropped-event counts are accumulated into the project usage totals. |
 
 ## Projects, orgs, teams, and access
 
@@ -101,7 +101,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Release health (crash-free rates) | Done | Individual `session` items (upserted by sid, latest status wins) and aggregated `sessions` buckets are both folded into crash-free sessions/users per release. |
 | Resolve in next release | Done | Resolve and stay resolved while the same release recurs; reopen on a later release. |
 | Suspect commits / commit association | Planned | Not yet implemented. |
-| Deploy tracking | Planned | Not yet implemented. |
+| Deploy tracking | Done | `POST /deploys` (DSN-key auth) records deploys per release; shown on the project page. |
 
 ## Source maps and symbolication
 
@@ -157,7 +157,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Data retention | Done | Daily `sweepRetention` prunes events past each project's retention, bounded per run. |
 | S3 / R2 storage offload | Planned | Event payloads are stored inline in Convex documents today; offloading large objects/attachments to S3/R2 is not yet wired in Sveltry. |
 | Spike protection / dynamic sampling | Planned | Not yet implemented. |
-| Quota and usage accounting | Planned | Not yet implemented. |
+| Usage accounting | Done | Per-project, per-day event/transaction/dropped counters (30-day totals on the project page). |
+| Hard quotas | Planned | Usage is tracked; enforced per-project quotas are not yet implemented. |
 
 ---
 

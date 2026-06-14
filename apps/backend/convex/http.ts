@@ -3,6 +3,7 @@ import { corsPreflight } from '@sveltry/protocol';
 import { httpAction } from './_generated/server';
 import { ingest } from './ingest';
 import { uploadArtifact } from './sourcemaps';
+import { recordDeployHttp } from './usage';
 
 const http = httpRouter();
 
@@ -14,6 +15,9 @@ http.route({ pathPrefix: '/api/', method: 'POST', handler: ingest });
 // Source-map / build-artifact upload (DSN-key authenticated), used by CI and the
 // SDK uploader to publish a release's bundles + maps for stack-frame resolution.
 http.route({ path: '/artifacts/upload', method: 'POST', handler: uploadArtifact });
+
+// Deploy API (DSN-key authenticated): record a deploy against a release.
+http.route({ path: '/deploys', method: 'POST', handler: recordDeployHttp });
 
 const preflight = httpAction(async (_ctx, request) =>
   corsPreflight(request.headers.get('origin') ?? '*'),
