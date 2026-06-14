@@ -5,12 +5,14 @@ Sentry-compatible error tracker: unmodified official `@sentry/*` SDKs report to 
 
 A deployment has four moving parts:
 
-- **Postgres**: one server, two logical databases (`convex_self_hosted` for the
-  Convex backend's store, `sveltry` for Better Auth identity).
+- **Postgres**: one server, a single logical database (`convex_self_hosted`) that is
+  the Convex backend's own store. The Sveltry app does not connect to Postgres.
 - **Convex backend** (`ghcr.io/get-convex/convex-backend`): runs the app functions
-  and the `/api/` ingest HTTP actions.
-- **SvelteKit dashboard** (`apps/dashboard`): hosts Better Auth, issues the RS256
-  JWTs Convex verifies, and publishes the JWKS at `/api/auth/jwks`.
+  and the `/api/` ingest HTTP actions, and serves the Better Auth handler (Better
+  Auth runs on Convex via the `@convex-dev/better-auth` component). It publishes the
+  JWKS at `{CONVEX_SITE_URL}/api/auth/convex/jwks`.
+- **SvelteKit dashboard** (`apps/dashboard`): the web UI. It proxies `/api/auth/*` to
+  the Convex-served auth handler.
 - **Convex admin dashboard** (`ghcr.io/get-convex/convex-dashboard`): optional, for
   inspecting tables and logs.
 
@@ -19,21 +21,23 @@ Three public origins matter, and they must agree everywhere:
 | Role | Backend env var | Dashboard env var | Local default |
 | --- | --- | --- | --- |
 | Client / WebSocket API (`.cloud`) | `CONVEX_CLOUD_ORIGIN` | `PUBLIC_CONVEX_URL` | `http://127.0.0.1:3210` |
-| HTTP actions / ingest (`.site`) | `CONVEX_SITE_ORIGIN` | `PUBLIC_SVELTRY_INGEST_URL` | `http://127.0.0.1:3211` |
-| Dashboard origin = JWT issuer | (Convex `SITE_URL`) | `PUBLIC_APP_URL` | `http://localhost:5173` |
+| HTTP actions / ingest / auth (`.site`) | `CONVEX_SITE_ORIGIN` | `PUBLIC_CONVEX_SITE_URL` / `PUBLIC_SVELTRY_INGEST_URL` | `http://127.0.0.1:3211` |
+| Dashboard origin | (Convex `SITE_URL`) | `PUBLIC_APP_URL` | `http://localhost:5173` |
 
-The ingest origin (`.site`) is the host that goes into project DSNs. The dashboard
-default `http://localhost:5173` is the Vite dev server used by `bun run dev:dashboard`;
-the Docker `--profile app` path serves the built app on `http://localhost:3000` instead,
-so set `PUBLIC_APP_URL` and the Convex `SITE_URL` to match whichever you run.
+The `.site` origin is where Convex serves both the auth handler (`/api/auth/*`) and
+the ingest HTTP actions; the ingest origin is the host that goes into project DSNs.
+The dashboard default `http://localhost:5173` is the Vite dev server used by
+`bun run dev:dashboard`; the Docker `--profile app` path serves the built app on
+`http://localhost:3000` instead, so set `PUBLIC_APP_URL` and the Convex `SITE_URL`
+to match whichever you run.
 
 ## Prerequisites
 
 - **Docker** with the Compose plugin.
 - **Bun** 1.3.11 (https://bun.com). Used to install, build, and run the Convex CLI.
 - **openssl** for generating secrets.
-- A Postgres 17 server. The Compose file ships one; in production you may point at
-  managed Postgres instead.
+- A Postgres 17 server for the Convex backend's store. The Compose file ships one;
+  in production you may point at managed Postgres instead.
 - For production: a domain (or subdomains) and a TLS-terminating reverse proxy. An
   example Caddyfile is in `infra/Caddyfile`.
 
@@ -50,17 +54,19 @@ bun install
 
 1. Copies `infra/.env.example` to `infra/.env` and fills `INSTANCE_SECRET` with
    `openssl rand -hex 32`.
-2. Copies `apps/dashboard/.env.example` to `apps/dashboard/.env`, generates
-   `BETTER_AUTH_SECRET`, and points `PUBLIC_CONVEX_URL`,
-   `PUBLIC_SVELTRY_INGEST_URL`, and `DATABASE_URL` at the local backend.
+2. Copies `apps/dashboard/.env.example` to `apps/dashboard/.env`, and points
+   `PUBLIC_CONVEX_URL`, `PUBLIC_CONVEX_SITE_URL`, `PUBLIC_SVELTRY_INGEST_URL`, and
+   `PUBLIC_APP_URL` at the local backend and dashboard.
 3. Runs `bun install`, then brings up the `postgres` and `backend` services and
    waits for the backend `/version` endpoint to respond.
 4. Generates a Convex admin key inside the backend container and writes
    `apps/backend/.env.local` (`CONVEX_SELF_HOSTED_URL` + `CONVEX_SELF_HOSTED_ADMIN_KEY`).
-5. Sets the Convex env vars `SITE_URL`, `SVELTRY_JWT_AUDIENCE` (= `convex`), and
-   `SVELTRY_JWKS_URL` (= `SITE_URL` + `/api/auth/jwks`).
-6. Deploys the Convex functions with `bunx convex dev --once`.
-7. Migrates the Better Auth schema with `bunx @better-auth/cli migrate`.
+5. Sets the Convex env var `SITE_URL` (= `PUBLIC_APP_URL`), and `CONVEX_INTERNAL_SITE_URL`
+   if the backend container cannot reach its own public `.site` origin.
+6. Deploys the Convex functions with `bunx convex dev --once`. Better Auth runs on
+   Convex via the `@convex-dev/better-auth` component, so its tables
+   (user / session / account / jwks) are created by the Convex schema push; there is
+   no separate schema-migration step.
 
 When it finishes, start the dashboard:
 
@@ -85,11 +91,10 @@ cp apps/dashboard/.env.example apps/dashboard/.env
 
 ```sh
 openssl rand -hex 32   # -> INSTANCE_SECRET in infra/.env
-openssl rand -hex 32   # -> BETTER_AUTH_SECRET in apps/dashboard/.env
 ```
 
-Paste each value into the matching variable. `INSTANCE_SECRET` is the Convex
-instance signing secret; `BETTER_AUTH_SECRET` signs sessions. Never commit either.
+Paste the value into `INSTANCE_SECRET`, the Convex instance signing secret. Never
+commit it.
 
 ### 3. Bring up Postgres and the Convex backend
 
@@ -97,9 +102,8 @@ instance signing secret; `BETTER_AUTH_SECRET` signs sessions. Never commit eithe
 docker compose --env-file infra/.env -f infra/docker-compose.yml up -d postgres backend
 ```
 
-On first start, `infra/postgres/init.sql` creates both databases
-(`convex_self_hosted` and `sveltry`) before the backend connects. Wait for the
-backend to become healthy:
+On first start, `infra/postgres/init.sql` creates the `convex_self_hosted` database
+before the backend connects. Wait for the backend to become healthy:
 
 ```sh
 docker compose --env-file infra/.env -f infra/docker-compose.yml logs -f backend
@@ -133,8 +137,10 @@ Run from `apps/backend/`:
 ```sh
 cd apps/backend
 bunx convex env set SITE_URL "http://localhost:5173"
-bunx convex env set SVELTRY_JWT_AUDIENCE "convex"
-bunx convex env set SVELTRY_JWKS_URL "http://localhost:5173/api/auth/jwks"
+# Set CONVEX_INTERNAL_SITE_URL only if the backend container cannot reach its own
+# public .site origin (for example a host-mapped port). It defaults to
+# CONVEX_SITE_URL when unset.
+bunx convex env set CONVEX_INTERNAL_SITE_URL "http://localhost:3211"
 ```
 
 To deliver **email alerts**, also set the SMTP env vars (email is a clean no-op until
@@ -163,10 +169,15 @@ bunx convex env set S3_FORCE_PATH_STYLE "true"  # "true" for MinIO (fine for R2)
 bunx convex env set S3_OFFLOAD_MIN_BYTES "102400"  # only offload blobs this size or larger
 ```
 
-`SITE_URL` is the dashboard origin and JWT issuer; it must equal `PUBLIC_APP_URL`.
-`SVELTRY_JWT_AUDIENCE` is the JWT `aud` claim (`convex`). `SVELTRY_JWKS_URL` is
-where the backend fetches signing keys to verify JWTs statelessly. In production,
-use your real dashboard origin in both URLs.
+`SITE_URL` is the dashboard origin and must equal `PUBLIC_APP_URL`; it is Better
+Auth's trusted-origin check, and a mismatch fails sign-in with "Invalid origin". In
+production, use your real dashboard origin.
+
+`CONVEX_INTERNAL_SITE_URL` is the in-container HTTP-actions origin the backend uses
+to fetch its own JWKS (at `/api/auth/convex/jwks`) for token verification. Set it
+when the public `CONVEX_SITE_URL` is a host-mapped port the backend container cannot
+reach itself; otherwise `getUserIdentity()` returns null and every authenticated
+call fails "Unauthenticated". It defaults to `CONVEX_SITE_URL` when unset.
 
 ### 7. Deploy the Convex functions
 
@@ -177,19 +188,13 @@ bunx convex dev --once       # deploy once and exit
 bunx convex deploy
 ```
 
-This pushes the schema and functions; on first run it creates the indexes.
+This pushes the schema and functions; on first run it creates the indexes. Because
+Better Auth runs on Convex via the `@convex-dev/better-auth` component, this same
+push creates its tables (user / session / account / jwks) in Convex. Organizations,
+members, and roles are modeled natively in Convex (`organizations` / `memberRoles` /
+`userSettings`), so there is no separate Better Auth schema migration to run.
 
-### 8. Migrate the Better Auth schema
-
-```sh
-cd apps/dashboard
-bunx @better-auth/cli migrate
-```
-
-This creates the users / sessions / accounts / organizations / jwks tables in the
-`sveltry` database.
-
-### 9. Run the app
+### 8. Run the app
 
 For development, `bun run dev:dashboard` (http://localhost:5173). For production,
 see the next section.
@@ -198,24 +203,21 @@ see the next section.
 
 ### Managed / external Postgres
 
-You can replace the bundled `postgres` service with managed Postgres (Neon, RDS,
-Cloud SQL). Three rules:
+Postgres is used only as the Convex backend's own store. The Sveltry app does not
+connect to Postgres. You can replace the bundled `postgres` service with managed
+Postgres (Neon, RDS, Cloud SQL). Three rules:
 
 - **The backend's `POSTGRES_URL` must be host-only**: no database name, no query
   parameters. The backend derives the db name from `INSTANCE_NAME`
   (`convex-self-hosted` -> `convex_self_hosted`). Example:
   `postgres://user:pass@db.internal:5432`.
 - **Pre-create the `convex_self_hosted` database** before first boot; the backend
-  does not create it. Also create `sveltry` for Better Auth. (Locally,
-  `infra/postgres/init.sql` does both.)
+  does not create it. (Locally, `infra/postgres/init.sql` does this.)
 - **Keep SSL on**: managed Postgres uses TLS, so omit `DO_NOT_REQUIRE_SSL` (it is
   only `1` for the local non-TLS container).
 
 Co-locate the database and backend in the same region/network; cross-region
 latency is the most common cause of slow ingest and slow dashboard queries.
-
-The dashboard's `DATABASE_URL` is separate and *does* include the db name and
-options, e.g. `postgres://user:pass@db.internal:5432/sveltry?sslmode=require`.
 
 ### TLS and domains via the Caddyfile
 
@@ -250,20 +252,27 @@ In `apps/dashboard/.env` (read by the SvelteKit app):
 
 ```sh
 PUBLIC_CONVEX_URL=https://convex.example.com
+PUBLIC_CONVEX_SITE_URL=https://ingest.example.com
 PUBLIC_SVELTRY_INGEST_URL=https://ingest.example.com
 PUBLIC_APP_URL=https://app.example.com
 ```
 
-And update the Convex env vars to match the dashboard origin:
+`PUBLIC_CONVEX_SITE_URL` is the Convex HTTP origin where the auth handler
+(`/api/auth/*`) and ingest are served; `PUBLIC_SVELTRY_INGEST_URL` is the same HTTP
+origin, used in project DSNs.
+
+And update the Convex env var to match the dashboard origin:
 
 ```sh
 cd apps/backend
 bunx convex env set SITE_URL "https://app.example.com"
-bunx convex env set SVELTRY_JWKS_URL "https://app.example.com/api/auth/jwks"
+# If the public .site origin is not reachable from inside the backend container,
+# also set the internal origin the backend uses to fetch its own JWKS:
+bunx convex env set CONVEX_INTERNAL_SITE_URL "http://localhost:3211"
 ```
 
-`SITE_URL` (the JWT issuer) and `PUBLIC_APP_URL` must be identical, or Convex will
-reject every JWT.
+`SITE_URL` and `PUBLIC_APP_URL` must be identical, or Better Auth's trusted-origin
+check rejects sign-in with "Invalid origin".
 
 ### Optional S3 / R2 file storage
 
@@ -291,9 +300,9 @@ The dashboard builds with `adapter-node`. Three ways to run it:
    docker run -p 3000:3000 --env-file apps/dashboard/.env sveltry-dashboard
    ```
 
-3. **The Compose `app` profile**, after the backend is deployed and Better Auth is
-   migrated. It derives env from `infra/.env`, so set `BETTER_AUTH_SECRET` and
-   `PUBLIC_APP_URL` there:
+3. **The Compose `app` profile**, after the backend is deployed. It derives env from
+   `infra/.env`, so set `PUBLIC_APP_URL` there (and make sure the Convex `SITE_URL`
+   matches it):
 
    ```sh
    docker compose --env-file infra/.env -f infra/docker-compose.yml \
@@ -316,7 +325,6 @@ The dashboard builds with `adapter-node`. Three ways to run it:
 | `CONVEX_CLOUD_ORIGIN` | Public client / WebSocket origin |
 | `CONVEX_SITE_ORIGIN` | Public HTTP-actions / ingest origin |
 | `DO_NOT_REQUIRE_SSL` | `1` for local non-TLS Postgres; omit for managed TLS Postgres |
-| `BETTER_AUTH_SECRET` | Session signing secret (used by the `app` profile) |
 | `PUBLIC_APP_URL` | Dashboard public origin (used by the `app` profile) |
 
 ### Backend deployment (`apps/backend/.env.local` + Convex env)
@@ -325,19 +333,17 @@ The dashboard builds with `adapter-node`. Three ways to run it:
 | --- | --- | --- |
 | `CONVEX_SELF_HOSTED_URL` | `.env.local` | Deployment URL the CLI targets |
 | `CONVEX_SELF_HOSTED_ADMIN_KEY` | `.env.local` | Admin key from `generate_admin_key.sh` |
-| `SITE_URL` | `convex env set` | Dashboard origin = JWT issuer (must equal `PUBLIC_APP_URL`) |
-| `SVELTRY_JWT_AUDIENCE` | `convex env set` | JWT `aud` claim (`convex`) |
-| `SVELTRY_JWKS_URL` | `convex env set` | JWKS URL the backend fetches (`SITE_URL` + `/api/auth/jwks`) |
+| `SITE_URL` | `convex env set` | Dashboard origin; Better Auth trusted-origin check (must equal `PUBLIC_APP_URL`) |
+| `CONVEX_INTERNAL_SITE_URL` | `convex env set` | In-container HTTP-actions origin the backend uses to fetch its own JWKS; defaults to `CONVEX_SITE_URL`. Set when the public `.site` origin is unreachable from inside the container |
 
 ### Dashboard (`apps/dashboard/.env`)
 
 | Variable | Purpose |
 | --- | --- |
-| `PUBLIC_CONVEX_URL` | The `.cloud` origin (= `CONVEX_CLOUD_ORIGIN`) |
-| `PUBLIC_SVELTRY_INGEST_URL` | The `.site` origin used to build DSNs (= `CONVEX_SITE_ORIGIN`) |
-| `PUBLIC_APP_URL` | Dashboard public origin = Better Auth issuer = Convex `SITE_URL` |
-| `DATABASE_URL` | Postgres connection for the `sveltry` database (with db name + options) |
-| `BETTER_AUTH_SECRET` | Session signing secret (`openssl rand -hex 32`) |
+| `PUBLIC_CONVEX_URL` | The `.cloud` origin, Convex client / WebSocket origin (= `CONVEX_CLOUD_ORIGIN`) |
+| `PUBLIC_CONVEX_SITE_URL` | The `.site` HTTP origin where auth (`/api/auth/*`) and ingest are served (= `CONVEX_SITE_ORIGIN`) |
+| `PUBLIC_SVELTRY_INGEST_URL` | The same `.site` HTTP origin, used to build project DSNs (= `CONVEX_SITE_ORIGIN`) |
+| `PUBLIC_APP_URL` | The dashboard's own origin (must equal Convex `SITE_URL`) |
 
 ## Upgrades
 
@@ -359,17 +365,29 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml up -d backend
 Re-deploy functions if the schema changed (`bunx convex deploy`). For predictable
 upgrades, pin the image to a specific tag instead of `:latest`.
 
+### Migrating a pre-Convex-auth deployment
+
+Older Sveltry ran Better Auth on a separate Postgres `sveltry` database with
+organizations from the Better Auth org plugin. Auth and organizations now live in
+Convex. New installs need nothing. If you are upgrading an instance that already has
+data, after deploying the new backend:
+
+- Set `SITE_URL` (and `CONVEX_INTERNAL_SITE_URL` if needed) per step 6, drop
+  `DATABASE_URL` / `BETTER_AUTH_SECRET` from the dashboard env, and remove the
+  obsolete `SVELTRY_JWKS_URL` / `SVELTRY_JWT_AUDIENCE` Convex env vars.
+- Existing tenant data is keyed by the organization slug (`organizationId`). For each
+  such org, insert an `organizations` row (`slug` = that id) and an owner `memberRoles`
+  row for its owner, and a `userSettings` row per user pointing at their org, so
+  `requireOrg` resolves the same tenant. Users re-register with email + password (Better
+  Auth password hashes do not carry over). The old `sveltry` Postgres database can then
+  be dropped (the `convex_self_hosted` database stays, it is Convex's own store).
+
 ## Backups
 
-Back up both stores:
+All application data, including auth (user / session / account / jwks tables) and
+organizations, lives in Convex, so there is no separate identity database to dump.
 
-- **Better Auth identity (Postgres):**
-
-  ```sh
-  pg_dump "$DATABASE_URL" > sveltry-identity.sql
-  ```
-
-- **Convex data (events, issues, projects):**
+- **Convex data (events, issues, projects, auth, organizations):**
 
   ```sh
   cd apps/backend
@@ -377,8 +395,8 @@ Back up both stores:
   ```
 
 Also back up the Postgres volume (or take a managed snapshot) so the
-`convex_self_hosted` database is captured. Restore Convex data with
-`bunx convex import`.
+`convex_self_hosted` database, the Convex backend's own store, is captured. Restore
+Convex data with `bunx convex import`.
 
 ## Troubleshooting
 
@@ -392,10 +410,16 @@ Also back up the Postgres volume (or take a managed snapshot) so the
   `convex_self_hosted` database does not exist. Confirm `POSTGRES_URL` is host-only
   (no db name, no query params) and that the database was pre-created.
 
-- **JWTs rejected / login loops.** The backend must be able to reach
-  `SVELTRY_JWKS_URL` to fetch the signing keys. Make sure the dashboard is running,
-  `SITE_URL` exactly equals `PUBLIC_APP_URL`, and the JWKS URL returns a document
-  from the backend's network. A mismatched issuer is the most common cause.
+- **"Invalid origin" on sign-in.** Better Auth rejects requests whose origin is not
+  trusted. The Convex `SITE_URL` must exactly equal `PUBLIC_APP_URL` (the dashboard's
+  own origin); a mismatch is the most common cause.
+
+- **Authenticated calls fail "Unauthenticated" / `getUserIdentity()` is null.** The
+  backend fetches its own JWKS at `{CONVEX_SITE_URL}/api/auth/convex/jwks` to verify
+  tokens. If the public `.site` origin is a host-mapped port the backend container
+  cannot reach itself, set `CONVEX_INTERNAL_SITE_URL` (for example
+  `http://localhost:3211`) to the in-container HTTP-actions origin. It defaults to
+  `CONVEX_SITE_URL` when unset.
 
 - **SDK reports 400 on ingest.** Sveltry decompresses `gzip` and `deflate` only.
   `br` (Brotli) and `zstd` are not supported and return 400. Most JS SDKs send

@@ -3,9 +3,10 @@
 #
 #   ./scripts/setup.sh
 #
-# Brings up Postgres + the self-hosted Convex backend, generates secrets and an
-# admin key, deploys the Convex functions, and migrates the Better Auth schema.
-# Idempotent: safe to re-run.
+# Brings up Postgres (the Convex backend's own store) + the self-hosted Convex
+# backend, generates secrets and an admin key, and deploys the Convex functions.
+# Auth runs entirely on Convex (the Better Auth component), so there is no separate
+# auth database. Idempotent: safe to re-run.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,11 +23,8 @@ if [ ! -f infra/.env ]; then
   say "Creating infra/.env"
   cp infra/.env.example infra/.env
   SECRET="$(openssl rand -hex 32)"
-  AUTH_SECRET="$(openssl rand -hex 32)"
   # macOS/BSD and GNU sed compatible in-place edit
   sed -i.bak "s/^INSTANCE_SECRET=.*/INSTANCE_SECRET=${SECRET}/" infra/.env
-  # Seed the Better Auth secret too, so the Docker `--profile app` path works.
-  sed -i.bak "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=${AUTH_SECRET}/" infra/.env
   rm -f infra/.env.bak
 fi
 
@@ -34,18 +32,14 @@ fi
 set -a; source infra/.env; set +a
 BACKEND_PORT="${BACKEND_PORT:-3210}"
 SITE_PROXY_PORT="${SITE_PROXY_PORT:-3211}"
-POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-sveltry_dev_password}"
 APP_URL="http://localhost:5173"
 
 if [ ! -f apps/dashboard/.env ]; then
   say "Creating apps/dashboard/.env"
   cp apps/dashboard/.env.example apps/dashboard/.env
-  AUTH_SECRET="$(openssl rand -hex 32)"
-  sed -i.bak "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=${AUTH_SECRET}/" apps/dashboard/.env
   sed -i.bak "s|^PUBLIC_CONVEX_URL=.*|PUBLIC_CONVEX_URL=http://127.0.0.1:${BACKEND_PORT}|" apps/dashboard/.env
+  sed -i.bak "s|^PUBLIC_CONVEX_SITE_URL=.*|PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:${SITE_PROXY_PORT}|" apps/dashboard/.env
   sed -i.bak "s|^PUBLIC_SVELTRY_INGEST_URL=.*|PUBLIC_SVELTRY_INGEST_URL=http://127.0.0.1:${SITE_PROXY_PORT}|" apps/dashboard/.env
-  sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/sveltry|" apps/dashboard/.env
   rm -f apps/dashboard/.env.bak
 fi
 
@@ -74,18 +68,13 @@ fi
 
 say "Configuring Convex environment variables"
 ( cd apps/backend
+  # SITE_URL is the dashboard origin; Better Auth uses it as a trusted origin, so
+  # it must match where the dashboard is served (the Vite dev server here).
   bunx convex env set SITE_URL "${APP_URL}" >/dev/null
-  bunx convex env set SVELTRY_JWT_AUDIENCE convex >/dev/null
-  bunx convex env set SVELTRY_JWKS_URL "${APP_URL}/api/auth/jwks" >/dev/null
 )
 
 say "Deploying Convex functions"
 ( cd apps/backend && bunx convex dev --once )
-
-# --- 4. Better Auth schema --------------------------------------------------
-say "Migrating the Better Auth (Postgres) schema"
-( cd apps/dashboard && bunx @better-auth/cli migrate -y ) || \
-  say "Better Auth migrate skipped/failed - run 'cd apps/dashboard && bunx @better-auth/cli migrate' manually."
 
 cat <<EOF
 

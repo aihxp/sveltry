@@ -31,10 +31,10 @@ Sentry wire protocol, groups your errors into issues, and streams them to a live
   browser, Python, Go, and the rest) send events straight to Sveltry. No custom client to maintain.
 - **Reactive by default.** New issues appear in the dashboard the instant they are ingested, over a
   WebSocket, powered by Convex. No polling, no refresh.
-- **Self-hosted.** Your data lives on your infrastructure: Postgres, open-source Convex, and a
-  SvelteKit app, all in Docker.
+- **Self-hosted.** Your data lives on your infrastructure: open-source Convex (backed by Postgres)
+  and a SvelteKit app, all in Docker.
 - **Private.** Default PII scrubbing happens at ingest, before anything is written. Identity never
-  leaves your Postgres database.
+  leaves your Convex deployment.
 
 ## How it works
 
@@ -48,10 +48,10 @@ Sentry wire protocol, groups your errors into issues, and streams them to a live
                                                      | mutation
                                                      v
                                         +---------------------------+
-                       live WebSocket   |  Convex + Postgres         |
+                       live WebSocket   |  Convex (backed by Postgres)|
   +--------------+ <==================== |  issues, events, alerts    |
   |  SvelteKit   |                      +---------------------------+
-  |  dashboard   |   Better Auth (Postgres) issues an RS256 JWT;
+  |  dashboard   |   Better Auth runs on Convex and issues an RS256 JWT;
   +--------------+   Convex verifies it and scopes data per organization.
 ```
 
@@ -70,8 +70,9 @@ cd sveltry
 bun run dev:dashboard     # http://localhost:5173
 ```
 
-`setup.sh` brings up Postgres and the self-hosted Convex backend, generates an admin key, deploys
-the backend functions, and migrates the Better Auth schema. Then:
+`setup.sh` brings up the self-hosted Convex backend (with its Postgres store), generates an admin
+key, and deploys the backend functions. Better Auth runs on Convex, so its tables (user, session,
+account, jwks) are created as part of the Convex deployment. Then:
 
 1. Open the app, create an account and an organization.
 2. Create a project. Copy its DSN.
@@ -90,7 +91,7 @@ Sentry.init({
 The issue streams into your dashboard live. The optional [`@aihxp/sveltry-sdk`](packages/sdk)
 helper builds DSNs, sets sensible defaults, and provides an ad-blocker-proof tunnel handler.
 
-For production (TLS, domains, managed Postgres, S3), see
+For production (TLS, domains, the Convex Postgres store, S3), see
 [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).
 
 ## Project structure
@@ -116,8 +117,8 @@ sveltry/
 | Dashboard    | SvelteKit 2, Svelte 5 (runes), Tailwind CSS v4, shadcn-svelte     |
 | Live data    | Convex (`convex-svelte`)                                          |
 | Backend      | Self-hosted open-source Convex (HTTP actions, queries, crons)     |
-| Database     | PostgreSQL 17 (backs both Convex and Better Auth)                 |
-| Auth         | Better Auth (email/password, organizations, JWT bridge to Convex) |
+| Database     | PostgreSQL 17 (storage for the self-hosted Convex backend)        |
+| Auth         | Better Auth on Convex (email/password); orgs modeled in Convex; RS256 JWT |
 | Compatibility| `@sveltry/protocol` (envelope parser, DSN, fingerprinting)        |
 
 ## Status

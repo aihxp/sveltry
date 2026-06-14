@@ -16,7 +16,7 @@ All notable changes to Sveltry are documented here. The format is based on
   `requireOrg` resolves the active org from Convex. Verified end to end in a browser: sign up,
   onboarding, create org, dashboard, sign out, sign in, with authenticated Convex queries
   throughout. New backend env: `CONVEX_INTERNAL_SITE_URL` (the in-container origin for JWKS
-  verification when the public site URL is a host-mapped port). See CONVEX-ONLY-AUTH.md.
+  verification when the public site URL is a host-mapped port). Postgres remains only as the Convex backend's own store; the app no longer connects to it.
 
 ### Security
 
