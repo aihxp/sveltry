@@ -6,6 +6,7 @@
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { cn } from '$lib/utils';
   import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+  import CompassIcon from '@lucide/svelte/icons/compass';
   import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
   import GaugeIcon from '@lucide/svelte/icons/gauge';
   import RocketIcon from '@lucide/svelte/icons/rocket';
@@ -25,6 +26,7 @@
     { href: '/dashboard', label: 'Overview', icon: LayoutDashboardIcon },
     { href: '/issues', label: 'Issues', icon: CircleAlertIcon },
     { href: '/performance', label: 'Performance', icon: GaugeIcon },
+    { href: '/discover', label: 'Discover', icon: CompassIcon },
     { href: '/releases', label: 'Releases', icon: RocketIcon },
     { href: '/monitors', label: 'Monitors', icon: TimerIcon },
     { href: '/replays', label: 'Replays', icon: PlayCircleIcon },

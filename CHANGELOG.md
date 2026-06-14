@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Discover.** A new analytics page queries errors or transactions over a time window: group
+  by a field (level, environment, release, transaction, op, status, ...), aggregate (event count,
+  unique users, avg / p50-p99 duration), optionally scope to a project, and see the result as a
+  ranked bar chart. Aggregation runs over a bounded scan (capped at 10k rows, disclosed when hit).
 - **Fine-grained roles.** Members now have a Sveltry role (owner / admin / member / billing),
   enforced in Convex with a `requireRole` helper: admin and owner manage projects, teams, alerts,
   and monitors; member can triage issues (resolve/ignore/assign/merge/comment); billing is

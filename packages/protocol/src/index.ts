@@ -15,6 +15,7 @@ export * from './auth.js';
 export * from './channels.js';
 export * from './commits.js';
 export * from './decompress.js';
+export * from './discover.js';
 export * from './envelope.js';
 export * from './normalize.js';
 export * from './profile.js';
