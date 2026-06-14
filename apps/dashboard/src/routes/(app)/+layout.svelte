@@ -9,6 +9,7 @@
   import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
   import GaugeIcon from '@lucide/svelte/icons/gauge';
   import RocketIcon from '@lucide/svelte/icons/rocket';
+  import TimerIcon from '@lucide/svelte/icons/timer';
   import BoxesIcon from '@lucide/svelte/icons/boxes';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -21,6 +22,7 @@
     { href: '/issues', label: 'Issues', icon: CircleAlertIcon },
     { href: '/performance', label: 'Performance', icon: GaugeIcon },
     { href: '/releases', label: 'Releases', icon: RocketIcon },
+    { href: '/monitors', label: 'Monitors', icon: TimerIcon },
     { href: '/projects', label: 'Projects', icon: BoxesIcon },
     { href: '/settings', label: 'Settings', icon: SettingsIcon },
   ];

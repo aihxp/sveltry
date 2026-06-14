@@ -4,6 +4,7 @@ import type {
   NormalizedSession,
   NormalizedTransaction,
   Platform,
+  SentryCheckIn,
   SentryEventPayload,
   SentryException,
   SentrySession,
@@ -238,5 +239,33 @@ export function normalizeSessionAggregates(
     release: attrs.release ?? '',
     environment: attrs.environment ?? 'production',
     buckets,
+  };
+}
+
+/** A normalized cron check-in. */
+export interface NormalizedCheckIn {
+  checkInId: string;
+  monitorSlug: string;
+  status: string;
+  durationMs?: number;
+  environment: string;
+  release?: string;
+  timestamp: number;
+}
+
+/** Distill a `check_in` item. Check-ins carry no timestamp, so `receivedAt` is used. */
+export function normalizeCheckIn(
+  payload: SentryCheckIn,
+  opts: { receivedAt?: number } = {},
+): NormalizedCheckIn {
+  return {
+    checkInId: payload.check_in_id ?? '',
+    monitorSlug: payload.monitor_slug ?? '',
+    status: payload.status ?? 'unknown',
+    durationMs:
+      typeof payload.duration === 'number' ? Math.round(payload.duration * 1000) : undefined,
+    environment: payload.environment ?? 'production',
+    release: payload.release,
+    timestamp: opts.receivedAt ?? DEFAULT_TimestampNow(),
   };
 }

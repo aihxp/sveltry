@@ -191,6 +191,31 @@ export const debugReleaseHealth = internalQuery({
   },
 });
 
+/** Monitors + check-in counts for an org, for cron-monitor verification. */
+export const debugMonitors = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const monitors = await ctx.db
+      .query('monitors')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .take(50);
+    const result = [];
+    for (const m of monitors) {
+      const checkIns = await ctx.db
+        .query('checkIns')
+        .withIndex('by_monitor', (q) => q.eq('projectId', m.projectId).eq('monitorSlug', m.slug))
+        .collect();
+      result.push({
+        slug: m.slug,
+        latestStatus: m.latestStatus,
+        lastDurationMs: m.lastDurationMs,
+        checkInCount: checkIns.length,
+      });
+    }
+    return result;
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

@@ -19,6 +19,7 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_scrub from "../lib/scrub.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as maintenance from "../maintenance.js";
+import type * as monitors from "../monitors.js";
 import type * as projects from "../projects.js";
 import type * as releases from "../releases.js";
 import type * as seed from "../seed.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   "lib/scrub": typeof lib_scrub;
   "lib/slug": typeof lib_slug;
   maintenance: typeof maintenance;
+  monitors: typeof monitors;
   projects: typeof projects;
   releases: typeof releases;
   seed: typeof seed;

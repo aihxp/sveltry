@@ -7,6 +7,7 @@ import {
   extractAuth,
   ingestError,
   ingestSuccess,
+  normalizeCheckIn,
   normalizeEvent,
   normalizeSession,
   normalizeSessionAggregates,
@@ -16,7 +17,12 @@ import {
   rateLimited,
   corsHeaders,
 } from '@sveltry/protocol';
-import type { SentryEventPayload, SentrySession, SentrySessionAggregates } from '@sveltry/types';
+import type {
+  SentryCheckIn,
+  SentryEventPayload,
+  SentrySession,
+  SentrySessionAggregates,
+} from '@sveltry/types';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
@@ -95,6 +101,7 @@ export const ingest = httpAction(async (ctx, request) => {
   const transactions: SentryEventPayload[] = [];
   const sessions: SentrySession[] = [];
   const sessionAggregates: SentrySessionAggregates[] = [];
+  const checkIns: SentryCheckIn[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -133,6 +140,12 @@ export const ingest = httpAction(async (ctx, request) => {
             );
           } catch {
             // Skip an unparseable aggregate; do not fail the whole envelope.
+          }
+        } else if (item.type === 'check_in') {
+          try {
+            checkIns.push(JSON.parse(decoder.decode(item.payload)) as SentryCheckIn);
+          } catch {
+            // Skip an unparseable check-in; do not fail the whole envelope.
           }
         }
         // replay / attachment / profile items are accepted but not yet persisted
@@ -227,6 +240,22 @@ export const ingest = httpAction(async (ctx, request) => {
       release: agg.release,
       environment: agg.environment,
       buckets: agg.buckets,
+    });
+  }
+
+  for (const payload of checkIns) {
+    const c = normalizeCheckIn(payload, { receivedAt });
+    if (!c.monitorSlug) continue;
+    await ctx.runMutation(internal.monitors.recordCheckIn, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      monitorSlug: c.monitorSlug,
+      checkInId: c.checkInId,
+      status: c.status,
+      durationMs: c.durationMs,
+      environment: c.environment,
+      release: c.release,
+      timestamp: c.timestamp,
     });
   }
 
