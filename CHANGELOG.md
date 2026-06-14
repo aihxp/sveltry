@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Session replay.** `replay_event` and `replay_recording` envelope items are persisted
+  (metadata in a `replays` table, the rrweb recording in file storage). A new Replays page
+  lists recordings, and the detail page plays them back with rrweb-player (the browser
+  decompresses the recording stream).
 - **Cron monitors.** `check_in` envelope items are persisted (upserted by id, so an
   in-progress start and its terminal status are one run). A new Monitors page shows each
   monitor's latest status and recent check-ins.
@@ -29,6 +33,13 @@ All notable changes to Sveltry are documented here. The format is based on
   original file, line, function, and source context. The dashboard shows resolved frames with
   a `source-mapped` badge and a per-project Source maps panel. The `@aihxp/sveltry-sdk`
   gains `uploadSourceMaps()` (for CI) and `parseDsn()`.
+
+### Fixed
+
+- **Gzip/deflate envelope decompression.** Request-body decompression now uses `fflate`
+  (pure JS) instead of `DecompressionStream`, which is absent from the self-hosted Convex
+  isolate. Previously every gzip- or deflate-compressed SDK envelope returned `400` and the
+  event was dropped; compressed traffic from official SDKs now ingests correctly.
 
 ## [0.1.0] - 2026-06-13
 

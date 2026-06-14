@@ -15,7 +15,8 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@sveltry/types": "workspace:*"
+    "@sveltry/types": "workspace:*",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -10,6 +10,7 @@
   import GaugeIcon from '@lucide/svelte/icons/gauge';
   import RocketIcon from '@lucide/svelte/icons/rocket';
   import TimerIcon from '@lucide/svelte/icons/timer';
+  import PlayCircleIcon from '@lucide/svelte/icons/play-circle';
   import BoxesIcon from '@lucide/svelte/icons/boxes';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -23,6 +24,7 @@
     { href: '/performance', label: 'Performance', icon: GaugeIcon },
     { href: '/releases', label: 'Releases', icon: RocketIcon },
     { href: '/monitors', label: 'Monitors', icon: TimerIcon },
+    { href: '/replays', label: 'Replays', icon: PlayCircleIcon },
     { href: '/projects', label: 'Projects', icon: BoxesIcon },
     { href: '/settings', label: 'Settings', icon: SettingsIcon },
   ];

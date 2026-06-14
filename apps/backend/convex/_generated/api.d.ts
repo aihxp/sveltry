@@ -22,6 +22,7 @@ import type * as maintenance from "../maintenance.js";
 import type * as monitors from "../monitors.js";
 import type * as projects from "../projects.js";
 import type * as releases from "../releases.js";
+import type * as replays from "../replays.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as sourcemaps from "../sourcemaps.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   monitors: typeof monitors;
   projects: typeof projects;
   releases: typeof releases;
+  replays: typeof replays;
   seed: typeof seed;
   sessions: typeof sessions;
   sourcemaps: typeof sourcemaps;

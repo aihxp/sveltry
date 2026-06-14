@@ -20,6 +20,7 @@ The error-tracking vertical slice, end to end:
 - Performance monitoring: `transaction` items persisted with spans, per-transaction p50/p95 latency over a recent-window sample, and a span-waterfall trace view
 - Release health: individual `session` items persisted (upsert by sid) and aggregated `sessions` buckets, folded into crash-free sessions/users per release
 - Cron monitors: `check_in` items persisted (upsert by id), with a Monitors page for per-monitor status and recent check-ins
+- Session replay: `replay_event` + `replay_recording` items persisted (metadata + rrweb stream in file storage) with rrweb-player playback
 - Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack / email (SMTP)
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest

@@ -17,5 +17,6 @@ export * from './normalize.js';
 export * from './fingerprint.js';
 export * from './ids.js';
 export * from './ratelimit.js';
+export * from './replay.js';
 export * from './responses.js';
 export * from './sourcemap.js';

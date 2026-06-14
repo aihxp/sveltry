@@ -142,8 +142,8 @@ Sveltry parses every item in an envelope but only persists what it currently mod
 | `session`        | Parsed and persisted (release health)     |
 | `sessions`       | Parsed and persisted (release-health buckets)|
 | `attachment`     | Accepted (200), not yet persisted         |
-| `replay_event`   | Accepted (200), not yet persisted         |
-| `replay_recording`| Accepted (200), not yet persisted        |
+| `replay_event`   | Parsed and persisted (replay metadata)    |
+| `replay_recording`| Parsed and persisted (rrweb recording)   |
 | `profile`        | Accepted (200), not yet persisted         |
 | `check_in`       | Parsed and persisted (cron monitors)      |
 | `client_report`  | Accepted (200), not yet persisted         |
@@ -290,9 +290,9 @@ off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
   the body uncompressed or gzip/deflate.
 - `event`, `transaction`, and individual `session` items are persisted (errors,
   performance, and release health, including aggregated `sessions` buckets) and `check_in`
-  items (cron monitors). `attachment`, `replay_*`, `profile`, `client_report`, and `feedback`
-  are accepted with `200` but not yet stored. Replays, profiling, and user feedback have no UI
-  surface yet.
+  items (cron monitors), and `replay_event` + `replay_recording` items (session replay).
+  `attachment`, `profile`, `client_report`, and `feedback` are accepted with `200` but not yet
+  stored. Profiling and user feedback have no UI surface yet.
 - Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
   uploaded for the same release), not by debug ID. Upload maps per release via
   `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to

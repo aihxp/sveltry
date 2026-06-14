@@ -216,6 +216,33 @@ export const debugMonitors = internalQuery({
   },
 });
 
+/** Replays + recording URLs for an org, for session-replay verification. */
+export const debugReplays = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const replays = await ctx.db
+      .query('replays')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .take(10);
+    const out = [];
+    for (const r of replays) {
+      const segs = await ctx.db
+        .query('replaySegments')
+        .withIndex('by_replay', (q) => q.eq('projectId', r.projectId).eq('replayId', r.replayId))
+        .collect();
+      const urls = await Promise.all(segs.map((s) => ctx.storage.getUrl(s.storageId)));
+      out.push({
+        replayId: r.replayId,
+        segmentCount: r.segmentCount,
+        url: r.url,
+        errorCount: r.errorCount,
+        recordingUrls: urls.filter((u): u is string => u !== null),
+      });
+    }
+    return out;
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },
