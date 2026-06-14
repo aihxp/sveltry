@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **HTTP uptime monitors.** Configure URL probes (interval, expected status); a per-minute
+  cron checks due ones and records each result as a check-in, so uptime history appears on
+  the Monitors page next to cron check-ins.
 - **Attachments and user feedback.** `attachment` envelope items are stored in file storage
   and downloadable from the issue detail page; `user_report` and `feedback` items are
   persisted and listed on a new Feedback page.

@@ -301,6 +301,24 @@ export default defineSchema({
     timestamp: v.number(),
   }).index('by_replay', ['projectId', 'replayId', 'segmentId']),
 
+  // HTTP uptime monitors. A cron probes each URL on its interval and records the
+  // result as a check-in (monitorSlug = the uptime monitor's slug), so uptime
+  // history reuses the same Monitors surface as cron check-ins.
+  uptimeMonitors: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    slug: v.string(),
+    url: v.string(),
+    method: v.string(),
+    expectedStatus: v.number(),
+    intervalSeconds: v.number(),
+    enabled: v.boolean(),
+    lastCheckedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_org', ['organizationId'])
+    .index('by_enabled', ['enabled']),
+
   // Cron monitors: one row per (project, slug), tracking the latest check-in.
   monitors: defineTable({
     organizationId: v.string(),

@@ -145,7 +145,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | --- | --- | --- |
 | Cron / check-in monitors | Done | `check_in` items are persisted (upserted by id, so in-progress + terminal are one run); a Monitors page shows each monitor's status and recent check-ins. |
 | Missed check-in detection | Planned | The schedule-based "didn't run" alert is not yet implemented. |
-| HTTP uptime monitors | Planned | Would reuse the existing alert pipeline. |
+| HTTP uptime monitors | Done | Configurable URL probes run by a per-minute cron; each result is recorded as a check-in so uptime history shows on the Monitors page. |
 | Backend maintenance crons | Done | Daily `sweepRetention` and hourly `sweepOngoing` (Sveltry's own crons, not user-facing monitors). |
 
 ## Data privacy and quotas

@@ -27,4 +27,7 @@ crons.daily(
   internal.maintenance.sweepRateLimitWindows,
 );
 
+// Probe HTTP uptime monitors that are due, every minute.
+crons.interval('run uptime checks', { minutes: 1 }, internal.monitors.runUptimeChecks);
+
 export default crons;

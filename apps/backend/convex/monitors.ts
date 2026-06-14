@@ -1,6 +1,14 @@
 import { v } from 'convex/values';
-import { internalMutation, query } from './_generated/server';
+import { internal } from './_generated/api';
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
 import { requireOrg } from './lib/auth';
+import { slugify } from './lib/slug';
 
 /**
  * Record a cron check-in. Upserts the check-in by check_in_id (an `in_progress`
@@ -142,5 +150,155 @@ export const monitorCheckIns = query({
         timestamp: c.timestamp,
       })),
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// HTTP uptime monitors
+// ---------------------------------------------------------------------------
+
+const UPTIME_TIMEOUT_MS = 10_000;
+const BLOCKED_UPTIME_HOSTS = new Set([
+  '169.254.169.254',
+  'metadata.google.internal',
+  '[fd00:ec2::254]',
+]);
+
+/** Create an HTTP uptime monitor for the caller's organization. */
+export const createUptimeMonitor = mutation({
+  args: {
+    projectId: v.id('projects'),
+    name: v.string(),
+    url: v.string(),
+    intervalSeconds: v.optional(v.number()),
+    expectedStatus: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.organizationId !== activeOrganizationId)
+      throw new Error('Project not found');
+
+    let url: URL;
+    try {
+      url = new URL(args.url);
+    } catch {
+      throw new Error('Invalid URL');
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('URL must be http or https');
+    }
+    if (BLOCKED_UPTIME_HOSTS.has(url.hostname.toLowerCase())) {
+      throw new Error('That host is not allowed');
+    }
+
+    return ctx.db.insert('uptimeMonitors', {
+      organizationId: activeOrganizationId,
+      projectId: args.projectId,
+      slug: slugify(args.name) || url.hostname,
+      url: args.url,
+      method: 'GET',
+      expectedStatus: args.expectedStatus ?? 200,
+      intervalSeconds: Math.max(60, args.intervalSeconds ?? 300),
+      enabled: true,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/** List the organization's uptime monitors. */
+export const listUptimeMonitors = query({
+  args: {},
+  handler: async (ctx) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const rows = await ctx.db
+      .query('uptimeMonitors')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .collect();
+    return rows.map((m) => ({
+      _id: m._id,
+      slug: m.slug,
+      url: m.url,
+      intervalSeconds: m.intervalSeconds,
+      expectedStatus: m.expectedStatus,
+      enabled: m.enabled,
+      lastCheckedAt: m.lastCheckedAt,
+    }));
+  },
+});
+
+/** Delete an uptime monitor. */
+export const deleteUptimeMonitor = mutation({
+  args: { monitorId: v.id('uptimeMonitors') },
+  handler: async (ctx, { monitorId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const m = await ctx.db.get(monitorId);
+    if (!m || m.organizationId !== activeOrganizationId) throw new Error('Not found');
+    await ctx.db.delete(monitorId);
+  },
+});
+
+/** Enabled uptime monitors whose interval has elapsed since the last probe. */
+export const dueUptimeMonitors = internalQuery({
+  args: { now: v.number() },
+  handler: async (ctx, { now }) => {
+    const enabled = await ctx.db
+      .query('uptimeMonitors')
+      .withIndex('by_enabled', (q) => q.eq('enabled', true))
+      .take(500);
+    return enabled.filter(
+      (m) => !m.lastCheckedAt || now - m.lastCheckedAt >= m.intervalSeconds * 1000,
+    );
+  },
+});
+
+/** Record that an uptime monitor was just probed. */
+export const markUptimeChecked = internalMutation({
+  args: { monitorId: v.id('uptimeMonitors'), checkedAt: v.number() },
+  handler: async (ctx, { monitorId, checkedAt }) => {
+    await ctx.db.patch(monitorId, { lastCheckedAt: checkedAt });
+  },
+});
+
+/**
+ * Probe due uptime monitors and record each result as a check-in (so uptime
+ * history shows up alongside cron check-ins on the Monitors page).
+ */
+export const runUptimeChecks = internalAction({
+  args: {},
+  // Explicit return type breaks the self-referential `internal.monitors` cycle.
+  handler: async (ctx): Promise<{ checked: number }> => {
+    const now = Date.now();
+    const due = await ctx.runQuery(internal.monitors.dueUptimeMonitors, { now });
+    for (const m of due) {
+      const start = Date.now();
+      let ok = false;
+      try {
+        const res = await fetch(m.url, {
+          method: m.method,
+          signal: AbortSignal.timeout(UPTIME_TIMEOUT_MS),
+          redirect: 'manual',
+        });
+        ok = res.status === m.expectedStatus;
+      } catch {
+        ok = false;
+      }
+      const latency = Date.now() - start;
+      await ctx.runMutation(internal.monitors.recordCheckIn, {
+        projectId: m.projectId,
+        organizationId: m.organizationId,
+        monitorSlug: m.slug,
+        checkInId: '',
+        status: ok ? 'ok' : 'error',
+        durationMs: latency,
+        environment: 'uptime',
+        timestamp: Date.now(),
+      });
+      await ctx.runMutation(internal.monitors.markUptimeChecked, {
+        monitorId: m._id,
+        checkedAt: Date.now(),
+      });
+    }
+    return { checked: due.length };
   },
 });
