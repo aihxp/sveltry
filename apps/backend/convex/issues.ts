@@ -1,7 +1,7 @@
 import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { issueStatusValidator, issueSubstatusValidator, levelValidator } from './schema';
 
 /** Paginated issue list, scoped to the org and optionally a single project. */
@@ -177,7 +177,7 @@ export const setIssueStatus = mutation({
     resolvedInRelease: v.optional(v.string()),
   },
   handler: async (ctx, { issueId, status, substatus, resolvedInRelease }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'member');
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.organizationId !== activeOrganizationId) throw new Error('Issue not found');
 
@@ -196,7 +196,7 @@ export const setIssueStatus = mutation({
 export const assignIssue = mutation({
   args: { issueId: v.id('issues'), assigneeId: v.optional(v.string()) },
   handler: async (ctx, { issueId, assigneeId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'member');
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.organizationId !== activeOrganizationId) throw new Error('Issue not found');
     await ctx.db.patch(issueId, { assigneeId });
@@ -207,7 +207,7 @@ export const assignIssue = mutation({
 export const snoozeIssue = mutation({
   args: { issueId: v.id('issues'), until: v.number() },
   handler: async (ctx, { issueId, until }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'member');
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.organizationId !== activeOrganizationId) throw new Error('Issue not found');
     await ctx.db.patch(issueId, {
@@ -227,7 +227,7 @@ export const mergeIssues = mutation({
   args: { sourceIssueId: v.id('issues'), targetIssueId: v.id('issues') },
   returns: v.object({ movedEvents: v.number() }),
   handler: async (ctx, { sourceIssueId, targetIssueId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'member');
     if (sourceIssueId === targetIssueId) throw new Error('Cannot merge an issue into itself');
     const source = await ctx.db.get(sourceIssueId);
     const target = await ctx.db.get(targetIssueId);
@@ -307,7 +307,7 @@ export const unmergeIssue = mutation({
   args: { mergeId: v.id('issueMerges') },
   returns: v.object({ newIssueId: v.id('issues'), movedBack: v.number() }),
   handler: async (ctx, { mergeId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'member');
     const merge = await ctx.db.get(mergeId);
     if (!merge || merge.organizationId !== activeOrganizationId) throw new Error('Merge not found');
 
@@ -391,7 +391,7 @@ export const listComments = query({
 export const addComment = mutation({
   args: { issueId: v.id('issues'), body: v.string() },
   handler: async (ctx, { issueId, body }) => {
-    const { activeOrganizationId, subject, email } = await requireOrg(ctx);
+    const { activeOrganizationId, subject, email } = await requireRole(ctx, 'member');
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.organizationId !== activeOrganizationId) throw new Error('Issue not found');
     const trimmed = body.trim();
@@ -411,7 +411,7 @@ export const addComment = mutation({
 export const deleteComment = mutation({
   args: { commentId: v.id('issueComments') },
   handler: async (ctx, { commentId }) => {
-    const { activeOrganizationId, subject } = await requireOrg(ctx);
+    const { activeOrganizationId, subject } = await requireRole(ctx, 'member');
     const comment = await ctx.db.get(commentId);
     if (!comment || comment.organizationId !== activeOrganizationId) throw new Error('Not found');
     if (comment.authorId !== subject) throw new Error('Only the author can delete a comment');

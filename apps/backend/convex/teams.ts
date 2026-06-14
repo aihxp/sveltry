@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { slugify } from './lib/slug';
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ export const myTeamIds = query({
 export const createTeam = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const trimmed = name.trim();
     if (!trimmed) throw new Error('A team name is required');
 
@@ -97,7 +97,7 @@ export const createTeam = mutation({
 export const deleteTeam = mutation({
   args: { teamId: v.id('teams') },
   handler: async (ctx, { teamId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const team = await ctx.db.get(teamId);
     if (!team || team.organizationId !== activeOrganizationId) throw new Error('Team not found');
 
@@ -127,7 +127,7 @@ export const addTeamMember = mutation({
     name: v.optional(v.string()),
   },
   handler: async (ctx, { teamId, userId, email, name }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const team = await ctx.db.get(teamId);
     if (!team || team.organizationId !== activeOrganizationId) throw new Error('Team not found');
 
@@ -151,7 +151,7 @@ export const addTeamMember = mutation({
 export const removeTeamMember = mutation({
   args: { memberId: v.id('teamMembers') },
   handler: async (ctx, { memberId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const member = await ctx.db.get(memberId);
     if (!member || member.organizationId !== activeOrganizationId)
       throw new Error('Member not found');
@@ -163,7 +163,7 @@ export const removeTeamMember = mutation({
 export const assignProjectTeam = mutation({
   args: { projectId: v.id('projects'), teamId: v.union(v.id('teams'), v.null()) },
   handler: async (ctx, { projectId, teamId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(projectId);
     if (!project || project.organizationId !== activeOrganizationId)
       throw new Error('Project not found');

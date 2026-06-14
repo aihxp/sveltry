@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Fine-grained roles.** Members now have a Sveltry role (owner / admin / member / billing),
+  enforced in Convex with a `requireRole` helper: admin and owner manage projects, teams, alerts,
+  and monitors; member can triage issues (resolve/ignore/assign/merge/comment); billing is
+  read-only. Roles are managed on the settings page. A fresh org's first user bootstraps as owner.
 - **Teams.** Group an organization's members into teams and assign projects to a team. A new
   Teams page creates teams, adds/removes members (picked from the org's member list), and shows
   each team's projects; projects gain an owning-team selector. Modeled in Convex alongside the

@@ -8,7 +8,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { alertChannelValidator } from './schema';
 
 const metricValidator = v.union(
@@ -32,7 +32,7 @@ export const createMetricAlert = mutation({
     channels: v.array(alertChannelValidator),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(args.projectId);
     if (!project || project.organizationId !== activeOrganizationId)
       throw new Error('Project not found');
@@ -67,7 +67,7 @@ export const listMetricAlerts = query({
 export const deleteMetricAlert = mutation({
   args: { alertId: v.id('metricAlerts') },
   handler: async (ctx, { alertId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const a = await ctx.db.get(alertId);
     if (!a || a.organizationId !== activeOrganizationId) throw new Error('Not found');
     await ctx.db.delete(alertId);

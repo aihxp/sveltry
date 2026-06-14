@@ -74,8 +74,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | DSN / client keys | Done | `projectKeys` per project, resolved at ingest by `resolveIngestKey`. |
 | Org-scoped data access | Done | Every dashboard query calls `requireOrg(ctx)`; Convex verifies RS256 JWTs statelessly via a Custom JWT provider. |
 | Authentication and identity | Done | Better Auth in Postgres; RS256 JWTs with a published JWKS at `/api/auth/jwks`. |
-| Teams | Done | Teams group org members and own projects (assignable per project). Modeled in Convex; managed on the Teams page. Hard team-based visibility is layered on by roles. |
-| Fine-grained roles / permissions | Planned | Beyond organization membership. |
+| Teams | Done | Teams group org members and own projects (assignable per project). Modeled in Convex; managed on the Teams page. |
+| Fine-grained roles / permissions | Done | owner / admin / member / billing roles, enforced in Convex via `requireRole`: admin+ manages projects/teams/alerts, member triages issues, billing is read-only. Managed on the settings page; the first user of a fresh org bootstraps as owner. |
 
 ## Alerts and integrations
 
