@@ -216,7 +216,8 @@ Convex appends the derived name itself. See [SELF_HOSTING.md](./SELF_HOSTING.md)
   non-goal rather than an oversight: it suits the team-and-product scale Sveltry targets and keeps
   operations simple. Horizontal multi-node scaling of the backend is explicitly out of scope (see the
   Non-goals section of [ROADMAP.md](./ROADMAP.md)). You scale by giving the node and its Postgres
-  more resources, plus optional S3 / R2 blob offload via the `S3_STORAGE_*_BUCKET` env vars.
+  more resources, plus optional S3 / R2 blob offload via the `S3_BUCKET` env vars (see
+  [SELF_HOSTING.md](./SELF_HOSTING.md)).
 
 - **Accepted-but-not-stored envelope items.** Only the `event` item type is parsed and persisted.
   `transaction`, `session` / `sessions`, `attachment`, `replay_*`, `profile`, `check_in`,

@@ -24,6 +24,7 @@ export * from './ids.js';
 export * from './ratelimit.js';
 export * from './replay.js';
 export * from './responses.js';
+export * from './s3.js';
 export * from './sourcemap.js';
 export * from './ssrf.js';
 export * from './trackers.js';

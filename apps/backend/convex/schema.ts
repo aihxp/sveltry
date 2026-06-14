@@ -536,7 +536,11 @@ export default defineSchema({
     /** The artifact path as it appears in stack frames, e.g. `~/app.min.js` or its `.map`. */
     name: v.string(),
     kind: v.union(v.literal('minified'), v.literal('sourcemap')),
-    storageId: v.id('_storage'),
+    /** Convex file-storage id when the blob lives in Convex; unset once offloaded to S3. */
+    storageId: v.optional(v.id('_storage')),
+    /** Set when the blob has been offloaded to S3/R2 (see lib `parseS3Env`). */
+    s3Bucket: v.optional(v.string()),
+    s3Key: v.optional(v.string()),
     size: v.number(),
     /** For a minified artifact, the `sourceMappingURL` annotation it carries, if any. */
     sourceMappingURL: v.optional(v.string()),

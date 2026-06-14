@@ -11,7 +11,9 @@ import {
   ingestError,
   matchSourcemap,
   parseDebugId,
+  parseS3Env,
   parseSourceMappingURL,
+  s3ObjectKey,
   type DebugMetaImage,
   type OriginalPosition,
 } from '@sveltry/protocol';
@@ -26,6 +28,10 @@ import {
   query,
 } from './_generated/server';
 import { requireOrg } from './lib/auth';
+
+// Blobs larger than this stay in Convex file storage (above the Node action's
+// argument-size limit, which is how bytes reach the S3 upload action).
+const S3_OFFLOAD_MAX_BYTES = 4 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Upload: POST /artifacts/upload?sentry_key=<key>&o=<publicId>&release=<v>&name=<n>
@@ -54,10 +60,6 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
 
   const buf = await request.arrayBuffer();
   const kind = name.endsWith('.map') ? ('sourcemap' as const) : ('minified' as const);
-  const blob = new Blob([buf], {
-    type: request.headers.get('content-type') ?? 'application/octet-stream',
-  });
-  const storageId = await ctx.storage.store(blob);
 
   // Extract the artifact's debug id (and, for minified files, its sourceMappingURL)
   // so the resolver can match frames by stable identity, not just path/release.
@@ -75,6 +77,28 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
     }
   }
 
+  // Offload to S3/R2 when configured and the blob is large enough; otherwise keep it
+  // in Convex file storage. The Node S3 action is pure (bytes in, result out); this
+  // isolate function owns the bytes and all DB writes. Oversized blobs (beyond the
+  // Node action's argument limit) fall back to Convex storage.
+  const s3 = parseS3Env(process.env);
+  let storageId: Id<'_storage'> | undefined;
+  let s3Bucket: string | undefined;
+  let s3Key: string | undefined;
+  if (s3 && buf.byteLength >= s3.minBytes && buf.byteLength <= S3_OFFLOAD_MAX_BYTES) {
+    const key = s3ObjectKey('artifacts', resolved.projectId, release, name);
+    const res = await ctx.runAction(internal.storage.putObject, { key, bytes: buf });
+    if (res.ok && res.bucket) {
+      s3Bucket = res.bucket;
+      s3Key = key;
+    }
+  }
+  if (!s3Key) {
+    storageId = await ctx.storage.store(
+      new Blob([buf], { type: request.headers.get('content-type') ?? 'application/octet-stream' }),
+    );
+  }
+
   await ctx.runMutation(internal.sourcemaps.recordArtifact, {
     projectId: resolved.projectId,
     organizationId: resolved.organizationId,
@@ -82,6 +106,8 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
     name,
     kind,
     storageId,
+    s3Bucket,
+    s3Key,
     size: buf.byteLength,
     sourceMappingURL,
     debugId,
@@ -101,12 +127,14 @@ export const recordArtifact = internalMutation({
     release: v.string(),
     name: v.string(),
     kind: v.union(v.literal('minified'), v.literal('sourcemap')),
-    storageId: v.id('_storage'),
+    storageId: v.optional(v.id('_storage')),
+    s3Bucket: v.optional(v.string()),
+    s3Key: v.optional(v.string()),
     size: v.number(),
     sourceMappingURL: v.optional(v.string()),
     debugId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<'releaseArtifacts'>> => {
     const existing = await ctx.db
       .query('releaseArtifacts')
       .withIndex('by_project_release_name', (q) =>
@@ -114,18 +142,27 @@ export const recordArtifact = internalMutation({
       )
       .first();
     if (existing) {
-      await ctx.storage.delete(existing.storageId);
+      // Drop the old bytes wherever they live (Convex storage or S3).
+      if (existing.storageId) await ctx.storage.delete(existing.storageId);
+      if (existing.s3Bucket && existing.s3Key) {
+        await ctx.scheduler.runAfter(0, internal.storage.deleteObject, {
+          bucket: existing.s3Bucket,
+          key: existing.s3Key,
+        });
+      }
       await ctx.db.patch(existing._id, {
         kind: args.kind,
         storageId: args.storageId,
+        s3Bucket: args.s3Bucket,
+        s3Key: args.s3Key,
         size: args.size,
         sourceMappingURL: args.sourceMappingURL,
         debugId: args.debugId,
         createdAt: Date.now(),
       });
-      return;
+      return existing._id;
     }
-    await ctx.db.insert('releaseArtifacts', { ...args, createdAt: Date.now() });
+    return ctx.db.insert('releaseArtifacts', { ...args, createdAt: Date.now() });
   },
 });
 
@@ -148,6 +185,13 @@ export const getEventForResolve = internalQuery({
   },
 });
 
+/** A source map's bytes location: either Convex file storage or an offloaded S3 object. */
+interface MapSource {
+  storageId?: Id<'_storage'>;
+  s3Bucket?: string;
+  s3Key?: string;
+}
+
 export const sourcemapsForRelease = internalQuery({
   args: { projectId: v.id('projects'), release: v.string() },
   handler: async (ctx, { projectId, release }) => {
@@ -157,7 +201,7 @@ export const sourcemapsForRelease = internalQuery({
       .collect();
     return artifacts
       .filter((a) => a.kind === 'sourcemap')
-      .map((a) => ({ name: a.name, storageId: a.storageId }));
+      .map((a) => ({ name: a.name, storageId: a.storageId, s3Bucket: a.s3Bucket, s3Key: a.s3Key }));
   },
 });
 
@@ -165,7 +209,7 @@ export const sourcemapsForRelease = internalQuery({
 export const sourcemapsByDebugId = internalQuery({
   args: { projectId: v.id('projects'), debugIds: v.array(v.string()) },
   handler: async (ctx, { projectId, debugIds }) => {
-    const out: { debugId: string; storageId: Id<'_storage'> }[] = [];
+    const out: (MapSource & { debugId: string })[] = [];
     const seen = new Set<string>();
     for (const debugId of debugIds) {
       if (seen.has(debugId)) continue;
@@ -175,7 +219,8 @@ export const sourcemapsByDebugId = internalQuery({
         .withIndex('by_project_debugid', (q) => q.eq('projectId', projectId).eq('debugId', debugId))
         .collect();
       const map = rows.find((r) => r.kind === 'sourcemap');
-      if (map) out.push({ debugId, storageId: map.storageId });
+      if (map)
+        out.push({ debugId, storageId: map.storageId, s3Bucket: map.s3Bucket, s3Key: map.s3Key });
     }
     return out;
   },
@@ -239,20 +284,32 @@ export const resolveEvent = internalAction({
     if (debugIdMaps.length === 0 && releaseMaps.length === 0) return;
 
     const mapNames = releaseMaps.map((m) => m.name);
-    const storageByName = new Map(releaseMaps.map((m) => [m.name, m.storageId]));
-    const storageByDebugId = new Map(debugIdMaps.map((m) => [m.debugId, m.storageId]));
+    const sourceByName = new Map<string, MapSource>(releaseMaps.map((m) => [m.name, m]));
+    const sourceByDebugId = new Map<string, MapSource>(debugIdMaps.map((m) => [m.debugId, m]));
 
-    // Lazily load + parse each map at most once per run, keyed by storage id (a map
-    // may be reached by either debug id or name). `@jridgewell/trace-mapping` is pure
-    // JS (no `eval`/`new Function`), so it runs in the Convex isolate.
+    // Lazily load + parse each map at most once per run, keyed by its location (a map
+    // may be reached by either debug id or name). Convex blobs load directly; offloaded
+    // blobs load via a Node action (the S3 SDK can't run in this isolate).
+    // `@jridgewell/trace-mapping` is pure JS (no `eval`/`new Function`).
     const tracers = new Map<string, TraceMap | null>();
-    const tracerFor = async (storageId: Id<'_storage'>): Promise<TraceMap | null> => {
-      const key = storageId as unknown as string;
+    const cacheKey = (src: MapSource): string =>
+      src.s3Key ? `s3:${src.s3Bucket}/${src.s3Key}` : String(src.storageId);
+    const tracerFor = async (src: MapSource): Promise<TraceMap | null> => {
+      const key = cacheKey(src);
       if (tracers.has(key)) return tracers.get(key) ?? null;
       let tracer: TraceMap | null = null;
       try {
-        const blob = await ctx.storage.get(storageId);
-        if (blob) tracer = new TraceMap(JSON.parse(await blob.text()));
+        let text: string | null = null;
+        if (src.s3Bucket && src.s3Key) {
+          text = await ctx.runAction(internal.storage.getObjectText, {
+            bucket: src.s3Bucket,
+            key: src.s3Key,
+          });
+        } else if (src.storageId) {
+          const blob = await ctx.storage.get(src.storageId);
+          text = blob ? await blob.text() : null;
+        }
+        if (text) tracer = new TraceMap(JSON.parse(text));
       } catch {
         tracer = null;
       }
@@ -260,12 +317,12 @@ export const resolveEvent = internalAction({
       return tracer;
     };
 
-    // Pick the storage id of the source map that resolves this frame, debug id first.
-    const mapForFrame = (ref: string): Id<'_storage'> | null => {
+    // Pick the source map that resolves this frame, debug id first.
+    const mapForFrame = (ref: string): MapSource | null => {
       const debugId = debugIdForRef(ref, images);
-      if (debugId && storageByDebugId.has(debugId)) return storageByDebugId.get(debugId)!;
+      if (debugId && sourceByDebugId.has(debugId)) return sourceByDebugId.get(debugId)!;
       const name = mapNames.length ? matchSourcemap(ref, mapNames) : null;
-      return name ? (storageByName.get(name) ?? null) : null;
+      return name ? (sourceByName.get(name) ?? null) : null;
     };
 
     let anyResolved = false;
@@ -277,9 +334,9 @@ export const resolveEvent = internalAction({
         if (typeof frame.lineno !== 'number' || typeof frame.colno !== 'number') continue;
         const ref = frameRef(frame);
         if (!ref) continue;
-        const storageId = mapForFrame(ref);
-        if (!storageId) continue;
-        const tracer = await tracerFor(storageId);
+        const src = mapForFrame(ref);
+        if (!src) continue;
+        const tracer = await tracerFor(src);
         if (!tracer) continue;
         const pos = originalPositionFor(tracer, {
           line: frame.lineno,
@@ -348,6 +405,7 @@ export const listProjectArtifacts = query({
       kind: a.kind,
       size: a.size,
       debugId: a.debugId ?? null,
+      storage: a.s3Key ? ('s3' as const) : ('convex' as const),
       createdAt: a.createdAt,
     }));
   },
