@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
@@ -90,6 +91,21 @@
       mergeTerm = '';
     } finally {
       merging = false;
+    }
+  }
+
+  // Undo a previous merge: recreate the merged-away issue and move its events back.
+  const merges = useQuery(api.issues.listIssueMerges, () =>
+    auth.isAuthenticated ? { issueId } : ('skip' as const),
+  );
+  let unmerging = $state(false);
+  async function unmerge(mergeId: Id<'issueMerges'>) {
+    unmerging = true;
+    try {
+      const { newIssueId } = await client.mutation(api.issues.unmergeIssue, { mergeId });
+      await goto(`/issues/${newIssueId}`);
+    } finally {
+      unmerging = false;
     }
   }
 
@@ -349,6 +365,33 @@
                 <span class="shrink-0 text-xs text-muted-foreground">merge in</span>
               </button>
             {/each}
+          </div>
+        {/if}
+
+        {#if merges.data && merges.data.length > 0}
+          <div class="space-y-1.5 pt-2">
+            <p class="text-xs font-medium text-muted-foreground">Merged in (undo to re-split)</p>
+            <div class="divide-y rounded-lg border">
+              {#each merges.data as m (m.id)}
+                <div class="flex items-center gap-2 px-3 py-2 text-sm">
+                  <LevelBadge level={m.level} />
+                  <span class="min-w-0 flex-1 truncate">
+                    {m.title}
+                    <span class="text-xs text-muted-foreground"
+                      >· {m.eventCount} events · {relativeTime(m.mergedAt)}</span
+                    >
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={unmerging}
+                    onclick={() => unmerge(m.id)}
+                  >
+                    Unmerge
+                  </Button>
+                </div>
+              {/each}
+            </div>
           </div>
         {/if}
       </Card.Content>

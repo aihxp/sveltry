@@ -252,8 +252,119 @@ export const mergeIssues = mutation({
       firstSeen: Math.min(target.firstSeen, source.firstSeen),
       lastSeen: Math.max(target.lastSeen, source.lastSeen),
     });
+
+    // Record the merge so it can be undone (see unmergeIssue).
+    await ctx.db.insert('issueMerges', {
+      organizationId: activeOrganizationId,
+      projectId: source.projectId,
+      targetIssueId,
+      source: {
+        fingerprint: source.fingerprint,
+        groupingConfig: source.groupingConfig,
+        title: source.title,
+        culprit: source.culprit,
+        level: source.level,
+        platform: source.platform,
+        errorType: source.errorType,
+        firstSeen: source.firstSeen,
+        count: source.count,
+        userCount: source.userCount,
+      },
+      movedEventIds: events.map((e) => e._id),
+      mergedAt: Date.now(),
+    });
+
     await ctx.db.delete(sourceIssueId);
     return { movedEvents: events.length };
+  },
+});
+
+/** Reversible merges recorded against an issue, newest first (for the unmerge UI). */
+export const listIssueMerges = query({
+  args: { issueId: v.id('issues') },
+  handler: async (ctx, { issueId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const issue = await ctx.db.get(issueId);
+    if (!issue || issue.organizationId !== activeOrganizationId) return [];
+    const merges = await ctx.db
+      .query('issueMerges')
+      .withIndex('by_target', (q) => q.eq('targetIssueId', issueId))
+      .order('desc')
+      .take(50);
+    return merges.map((m) => ({
+      id: m._id,
+      title: m.source.title,
+      culprit: m.source.culprit,
+      level: m.source.level,
+      eventCount: m.movedEventIds.length,
+      mergedAt: m.mergedAt,
+    }));
+  },
+});
+
+/** Undo a recorded merge: recreate the merged-away issue and move its events back. */
+export const unmergeIssue = mutation({
+  args: { mergeId: v.id('issueMerges') },
+  returns: v.object({ newIssueId: v.id('issues'), movedBack: v.number() }),
+  handler: async (ctx, { mergeId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const merge = await ctx.db.get(mergeId);
+    if (!merge || merge.organizationId !== activeOrganizationId) throw new Error('Merge not found');
+
+    const s = merge.source;
+    // Recreate the source issue. Counts/timestamps are recomputed from the events
+    // that actually move back, so intervening deletions cannot skew them.
+    const newIssueId = await ctx.db.insert('issues', {
+      organizationId: merge.organizationId,
+      projectId: merge.projectId,
+      fingerprint: s.fingerprint,
+      groupingConfig: s.groupingConfig,
+      title: s.title,
+      culprit: s.culprit,
+      level: s.level,
+      platform: s.platform,
+      status: 'unresolved',
+      substatus: 'ongoing',
+      count: 0,
+      userCount: 0,
+      firstSeen: s.firstSeen,
+      lastSeen: s.firstSeen,
+      errorType: s.errorType,
+    });
+
+    let movedBack = 0;
+    let firstSeen = Infinity;
+    let lastSeen = 0;
+    for (const eventId of merge.movedEventIds) {
+      const event = await ctx.db.get(eventId);
+      // Only move back events still attached to the merge target (some may have been
+      // deleted by retention or moved on by a later merge).
+      if (!event || event.issueId !== merge.targetIssueId) continue;
+      await ctx.db.patch(eventId, { issueId: newIssueId });
+      movedBack += 1;
+      firstSeen = Math.min(firstSeen, event.timestamp);
+      lastSeen = Math.max(lastSeen, event.timestamp);
+    }
+
+    const newUserCount = Math.min(s.userCount, movedBack);
+    await ctx.db.patch(newIssueId, {
+      count: movedBack,
+      userCount: newUserCount,
+      firstSeen: movedBack > 0 ? firstSeen : s.firstSeen,
+      lastSeen: movedBack > 0 ? lastSeen : s.firstSeen,
+    });
+
+    // Reverse the merge's effect on the target's counters (symmetric with mergeIssues).
+    const target = await ctx.db.get(merge.targetIssueId);
+    if (target) {
+      await ctx.db.patch(merge.targetIssueId, {
+        count: Math.max(0, target.count - movedBack),
+        userCount: Math.max(0, target.userCount - newUserCount),
+      });
+    }
+
+    await ctx.db.delete(mergeId);
+    return { newIssueId, movedBack };
   },
 });
 
