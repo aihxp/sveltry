@@ -29,6 +29,46 @@
   const artifacts = useQuery(api.sourcemaps.listProjectArtifacts, () =>
     projectId ? { projectId } : ('skip' as const),
   );
+  const metricAlerts = useQuery(api.metricAlerts.listMetricAlerts, () =>
+    projectId ? { projectId } : ('skip' as const),
+  );
+
+  // New metric alert form
+  let maMetric = $state<'p95_latency' | 'error_count' | 'crash_free_rate'>('p95_latency');
+  let maThreshold = $state(1000);
+  let maTransaction = $state('');
+  let maWindow = $state(60);
+  let maChannelType = $state<'webhook' | 'discord' | 'slack' | 'email'>('webhook');
+  let maTarget = $state('');
+  let savingMetric = $state(false);
+  const metricLabel = {
+    p95_latency: 'p95 latency (ms)',
+    error_count: 'errors',
+    crash_free_rate: 'crash-free %',
+  };
+
+  async function addMetricAlert(e: SubmitEvent) {
+    e.preventDefault();
+    if (!projectId) return;
+    savingMetric = true;
+    try {
+      await client.mutation(api.metricAlerts.createMetricAlert, {
+        projectId,
+        name: `${metricLabel[maMetric]} alert`,
+        metric: maMetric,
+        transactionName: maMetric === 'p95_latency' && maTransaction ? maTransaction : undefined,
+        windowMinutes: maWindow,
+        threshold: maThreshold,
+        channels: [{ type: maChannelType, target: maTarget }],
+      });
+      maTarget = '';
+    } finally {
+      savingMetric = false;
+    }
+  }
+  async function deleteMetricAlert(id: Id<'metricAlerts'>) {
+    await client.mutation(api.metricAlerts.deleteMetricAlert, { alertId: id });
+  }
 
   // New alert rule form
   let ruleName = $state('');
@@ -194,6 +234,94 @@
           <Button type="submit" size="sm" disabled={savingRule}>
             {savingRule ? 'Adding…' : 'Add alert rule'}
           </Button>
+        </form>
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Metric alerts</Card.Title>
+        <Card.Description
+          >Alert when latency, error count, or crash-free rate crosses a threshold.</Card.Description
+        >
+      </Card.Header>
+      <Card.Content class="space-y-4">
+        {#if metricAlerts.data && metricAlerts.data.length > 0}
+          <div class="space-y-2">
+            {#each metricAlerts.data as a (a._id)}
+              <div class="flex items-center justify-between rounded-lg border p-3">
+                <div class="min-w-0">
+                  <div class="text-sm font-medium">{a.name}</div>
+                  <div class="truncate text-xs text-muted-foreground">
+                    {metricLabel[a.metric]}
+                    {a.metric === 'crash_free_rate' ? '<' : '>'}
+                    {a.threshold} over {a.windowMinutes}m
+                    {#if a.lastValue != null}· last {Math.round(a.lastValue)}{/if}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onclick={() => deleteMetricAlert(a._id)}
+                  aria-label="Delete metric alert"
+                >
+                  <TrashIcon class="size-4 text-destructive" />
+                </Button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        <form class="space-y-3 rounded-lg border border-dashed p-4" onsubmit={addMetricAlert}>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="maMetric">Metric</Label>
+              <select
+                id="maMetric"
+                bind:value={maMetric}
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="p95_latency">p95 latency (ms)</option>
+                <option value="error_count">Error count</option>
+                <option value="crash_free_rate">Crash-free rate (%)</option>
+              </select>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="maThreshold">
+                Threshold {maMetric === 'crash_free_rate' ? '(alert below)' : '(alert above)'}
+              </Label>
+              <Input id="maThreshold" type="number" bind:value={maThreshold} />
+            </div>
+            {#if maMetric === 'p95_latency'}
+              <div class="space-y-1.5 sm:col-span-2">
+                <Label for="maTransaction">Transaction (blank = all)</Label>
+                <Input id="maTransaction" bind:value={maTransaction} placeholder="GET /api/users" />
+              </div>
+            {/if}
+            <div class="space-y-1.5">
+              <Label for="maWindow">Window (minutes)</Label>
+              <Input id="maWindow" type="number" min="5" bind:value={maWindow} />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="maChannel">Channel</Label>
+              <select
+                id="maChannel"
+                bind:value={maChannelType}
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="webhook">Webhook</option>
+                <option value="slack">Slack</option>
+                <option value="discord">Discord</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="maTarget"
+              >{maChannelType === 'email' ? 'Email address' : 'Channel URL'}</Label
+            >
+            <Input id="maTarget" bind:value={maTarget} required />
+          </div>
+          <Button type="submit" size="sm" disabled={savingMetric}>Add metric alert</Button>
         </form>
       </Card.Content>
     </Card.Root>

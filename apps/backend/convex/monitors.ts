@@ -26,6 +26,7 @@ export const recordCheckIn = internalMutation({
     environment: v.string(),
     release: v.optional(v.string()),
     timestamp: v.number(),
+    expectedIntervalSeconds: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Upsert the individual check-in by check_in_id.
@@ -83,6 +84,7 @@ export const recordCheckIn = internalMutation({
           lastCheckInAt: args.timestamp,
           lastDurationMs: args.durationMs ?? monitor.lastDurationMs,
           environment: args.environment,
+          expectedIntervalSeconds: args.expectedIntervalSeconds ?? monitor.expectedIntervalSeconds,
         });
       }
     } else {
@@ -94,6 +96,7 @@ export const recordCheckIn = internalMutation({
         lastCheckInAt: args.timestamp,
         lastDurationMs: args.durationMs,
         environment: args.environment,
+        expectedIntervalSeconds: args.expectedIntervalSeconds,
         createdAt: Date.now(),
       });
     }

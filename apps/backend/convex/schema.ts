@@ -169,6 +169,7 @@ export default defineSchema({
   })
     .index('by_project_sid', ['projectId', 'sid'])
     .index('by_org', ['organizationId', 'lastUpdate'])
+    .index('by_project', ['projectId', 'lastUpdate'])
     .index('by_project_release', ['projectId', 'release']),
 
   // Pre-aggregated session counts from `sessions` (aggregate) items, folded into
@@ -228,7 +229,8 @@ export default defineSchema({
     histogram: v.array(v.number()),
   })
     .index('by_org_bucket', ['organizationId', 'bucketStart'])
-    .index('by_project_name_bucket', ['projectId', 'transactionName', 'bucketStart']),
+    .index('by_project_name_bucket', ['projectId', 'transactionName', 'bucketStart'])
+    .index('by_project_bucket', ['projectId', 'bucketStart']),
 
   // Event attachments (envelope items with `type: "attachment"`). Bytes live in
   // Convex file storage; linked to the event by its Sentry event_id.
@@ -328,6 +330,8 @@ export default defineSchema({
     lastCheckInAt: v.number(),
     lastDurationMs: v.optional(v.number()),
     environment: v.optional(v.string()),
+    /** Expected seconds between check-ins, from the SDK's interval schedule. */
+    expectedIntervalSeconds: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index('by_project_slug', ['projectId', 'slug'])
@@ -395,6 +399,32 @@ export default defineSchema({
   })
     .index('by_project', ['projectId'])
     .index('by_org', ['organizationId']),
+
+  // Threshold alerts over aggregates, evaluated periodically by a cron (distinct
+  // from issue-triggered alertRules). Metric is p95 latency, error count, or
+  // crash-free rate over a window; fires to channels when the threshold is crossed.
+  metricAlerts: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    name: v.string(),
+    metric: v.union(
+      v.literal('p95_latency'),
+      v.literal('error_count'),
+      v.literal('crash_free_rate'),
+    ),
+    /** For p95_latency: which transaction to watch (empty = all). */
+    transactionName: v.optional(v.string()),
+    windowMinutes: v.number(),
+    /** Latency: ms; error_count: events; crash_free_rate: percent (fires when below). */
+    threshold: v.number(),
+    channels: v.array(alertChannelValidator),
+    enabled: v.boolean(),
+    lastFiredAt: v.optional(v.number()),
+    lastValue: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_enabled', ['enabled']),
 
   // An audit log of fired alerts, used for de-duplication and the activity feed.
   alertDeliveries: defineTable({

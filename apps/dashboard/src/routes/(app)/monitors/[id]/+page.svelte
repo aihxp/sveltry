@@ -15,6 +15,7 @@
   function statusColor(status: string): string {
     if (status === 'ok') return 'bg-emerald-500';
     if (status === 'in_progress') return 'bg-sky-500 animate-pulse';
+    if (status === 'missed') return 'bg-amber-500';
     if (status === 'error' || status === 'crashed' || status === 'timeout') return 'bg-destructive';
     return 'bg-muted-foreground';
   }

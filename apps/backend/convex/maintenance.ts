@@ -148,6 +148,33 @@ export const rollupTransactions = internalMutation({
 });
 
 /**
+ * Flag cron monitors that should have checked in by now but did not. Only applies
+ * to monitors with a known interval schedule; a 20% grace avoids flapping.
+ */
+export const detectMissedCheckIns = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const orgs = await ctx.db.query('organizations').take(500);
+    let missed = 0;
+    for (const org of orgs) {
+      const monitors = await ctx.db
+        .query('monitors')
+        .withIndex('by_org', (q) => q.eq('organizationId', org.slug))
+        .take(500);
+      for (const m of monitors) {
+        if (!m.expectedIntervalSeconds || m.latestStatus === 'missed') continue;
+        if (now - m.lastCheckInAt > m.expectedIntervalSeconds * 1000 * 1.2) {
+          await ctx.db.patch(m._id, { latestStatus: 'missed' });
+          missed += 1;
+        }
+      }
+    }
+    return { missed };
+  },
+});
+
+/**
  * Drop rate-limit windows that have already rolled over. Without this the
  * `ingestWindows` table grows by one row per DSN key per window forever; a window
  * older than a day can never be the current fixed window again, so it is dead.

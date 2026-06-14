@@ -30,4 +30,18 @@ crons.daily(
 // Probe HTTP uptime monitors that are due, every minute.
 crons.interval('run uptime checks', { minutes: 1 }, internal.monitors.runUptimeChecks);
 
+// Evaluate metric/threshold alerts (latency, error rate, crash-free), every 5 minutes.
+crons.interval(
+  'evaluate metric alerts',
+  { minutes: 5 },
+  internal.metricAlerts.evaluateMetricAlerts,
+);
+
+// Flag cron monitors that missed their expected check-in window, every 5 minutes.
+crons.interval(
+  'detect missed check-ins',
+  { minutes: 5 },
+  internal.maintenance.detectMissedCheckIns,
+);
+
 export default crons;

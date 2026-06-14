@@ -296,6 +296,7 @@ export const ingest = httpAction(async (ctx, request) => {
       environment: c.environment,
       release: c.release,
       timestamp: c.timestamp,
+      expectedIntervalSeconds: c.expectedIntervalSeconds,
     });
   }
 

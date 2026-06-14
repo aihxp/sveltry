@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Metric/threshold alerts.** Per-project alerts on p95 latency, error count, or crash-free rate
+  over a window, evaluated by a cron and delivered to webhook/Slack/Discord/email. Plus
+  missed-check-in detection: cron monitors with an interval schedule are flagged "missed" when
+  overdue.
 - **HTTP uptime monitors.** Configure URL probes (interval, expected status); a per-minute
   cron checks due ones and records each result as a check-in, so uptime history appears on
   the Monitors page next to cron check-ins.
