@@ -21,6 +21,7 @@ import type * as maintenance from "../maintenance.js";
 import type * as projects from "../projects.js";
 import type * as releases from "../releases.js";
 import type * as seed from "../seed.js";
+import type * as sourcemaps from "../sourcemaps.js";
 
 import type {
   ApiFromModules,
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   releases: typeof releases;
   seed: typeof seed;
+  sourcemaps: typeof sourcemaps;
 }>;
 
 /**

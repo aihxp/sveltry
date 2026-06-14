@@ -24,8 +24,7 @@ updates:
       # changelog-github 0.7.x breaks against the pinned @changesets/cli 2.x;
       # only accept patch updates until the changesets toolchain moves together.
       - dependency-name: '@changesets/changelog-github'
-        update-types:
-          ['version-update:semver-minor', 'version-update:semver-major']
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /

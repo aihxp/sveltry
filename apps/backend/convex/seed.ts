@@ -66,6 +66,55 @@ export const seedProject = internalMutation({
   },
 });
 
+/** The latest event's resolution state and top frames, for source-map verification. */
+export const debugEventFrames = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const event = await ctx.db
+      .query('events')
+      .filter((q) => q.eq(q.field('organizationId'), organizationId))
+      .order('desc')
+      .first();
+    if (!event) return null;
+    const ex = (event.payload as { exception?: { values?: unknown[] } | unknown[] }).exception;
+    const values = (Array.isArray(ex) ? ex : (ex?.values ?? [])) as Array<{
+      stacktrace?: {
+        frames?: Array<{
+          filename?: string;
+          function?: string;
+          lineno?: number;
+          colno?: number;
+          context_line?: string;
+          sveltry_resolved?: boolean;
+        }>;
+      };
+    }>;
+    const frames = (values[0]?.stacktrace?.frames ?? []) as Array<{
+      filename?: string;
+      abs_path?: string;
+      function?: string;
+      lineno?: number;
+      colno?: number;
+      context_line?: string;
+      sveltry_resolved?: boolean;
+    }>;
+    return {
+      eventDocId: event._id,
+      resolved: event.resolved ?? false,
+      release: event.release,
+      frames: frames.map((f) => ({
+        filename: f.filename,
+        abs_path: f.abs_path,
+        function: f.function,
+        lineno: f.lineno,
+        colno: f.colno,
+        resolved: f.sveltry_resolved ?? false,
+        context_line: f.context_line,
+      })),
+    };
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

@@ -102,8 +102,9 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Source-map / artifact upload | Planned | Debug-ID and release-artifact upload endpoint. |
-| Server-side symbolication | Planned | De-minify JavaScript stack traces using uploaded source maps. |
+| Source-map / artifact upload | Done | `POST /artifacts/upload` (DSN-key auth) per release; `uploadSourceMaps()` in the SDK and the project Source maps panel. |
+| Server-side symbolication | Done | Minified JavaScript frames are resolved to original source (file, line, function, context) against uploaded maps, on ingest. |
+| Debug-ID artifact bundles | Planned | Name-based matching today; debug-ID bundle matching is not yet implemented. |
 | Native symbolication (debug files) | Not planned | Out of scope for now. |
 
 ## Performance and tracing

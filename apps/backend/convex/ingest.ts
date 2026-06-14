@@ -236,7 +236,7 @@ export const recordEvent = internalMutation({
       if (args.userId) await markIssueUser(ctx, issueId, args.userId);
     }
 
-    await ctx.db.insert('events', {
+    const eventDocId = await ctx.db.insert('events', {
       organizationId: args.organizationId,
       projectId: args.projectId,
       issueId,
@@ -252,6 +252,12 @@ export const recordEvent = internalMutation({
       tags: args.tags,
       payload: args.payload,
     });
+
+    // If this event carries a release and minified-looking frames, resolve its
+    // stack trace against any uploaded source maps, off the ingest hot path.
+    if (args.release && hasMinifiedFrames(args.payload)) {
+      await ctx.scheduler.runAfter(0, internal.sourcemaps.resolveEvent, { eventDocId });
+    }
 
     if (args.release) {
       const existingRelease = await ctx.db
@@ -287,6 +293,17 @@ export const recordEvent = internalMutation({
     return { eventId: args.eventId };
   },
 });
+
+/** Whether any exception frame has a line+column, i.e. looks worth source-mapping. */
+function hasMinifiedFrames(payload: SentryEventPayload): boolean {
+  const ex = payload.exception;
+  const values = !ex ? [] : Array.isArray(ex) ? ex : (ex.values ?? []);
+  return values.some((v) =>
+    (v.stacktrace?.frames ?? []).some(
+      (f) => typeof f.lineno === 'number' && typeof f.colno === 'number',
+    ),
+  );
+}
 
 /**
  * Record that `userId` was seen on `issueId`, returning true only the first time.

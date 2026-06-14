@@ -254,6 +254,36 @@ You can also verify the deployment is up:
 curl -i https://your-deployment.convex.site/healthz
 ```
 
+## Source maps
+
+Upload a release's `.map` files so minified production stack frames resolve to original
+source. The endpoint is on the ingest (`.site`) origin, DSN-key authenticated, one file per
+request:
+
+```
+POST /artifacts/upload?sentry_key=<publicKey>&o=<projectId>&release=<version>&name=<name>
+<raw file bytes>
+```
+
+`name` is the artifact path as it appears in stack frames (or its `.map`), e.g.
+`~/app.min.js.map`. Files ending in `.map` are stored as source maps. From CI, prefer the
+SDK helper:
+
+```ts
+import { uploadSourceMaps } from '@aihxp/sveltry-sdk';
+import { readFileSync } from 'node:fs';
+
+await uploadSourceMaps({
+  dsn: process.env.SVELTRY_DSN!,
+  release: process.env.GIT_SHA!, // must match your Sentry SDK's `release`
+  files: [{ name: '~/app.min.js.map', content: readFileSync('dist/app.min.js.map', 'utf8') }],
+});
+```
+
+On ingest, any event whose `release` has matching maps has its minified JavaScript frames
+resolved to original file, line, function, and surrounding source context. Resolution runs
+off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
+
 ## Known limitations
 
 - `br` (Brotli) and `zstd` request compression are not supported and return `400`. Send
@@ -262,8 +292,10 @@ curl -i https://your-deployment.convex.site/healthz
   `replay_*`, `profile`, `check_in`, `client_report`, and `feedback` are accepted with
   `200` but not yet stored or aggregated. Performance, sessions/release health, replays,
   profiling, cron monitors, and user feedback have no UI surface yet.
-- Source maps are not symbolicated. Minified stack frames are stored and grouped as-is; no
-  unminification or source map resolution happens server side.
+- Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
+  uploaded for the same release), not by debug ID. Upload maps per release via
+  `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to
+  original source on ingest.
 - Minidumps are not processed. The `minidump` route is recognized and tolerated (`200`)
   but the payload is discarded, so native crash reports are not decoded.
 - Email alerts are not delivered. Alert channels `webhook`, `discord`, and `slack` work;

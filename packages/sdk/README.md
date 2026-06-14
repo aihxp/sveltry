@@ -75,6 +75,31 @@ The handler reads the DSN from the envelope header, validates it against
 `allowedHosts` (so it can't be abused as an open proxy), and forwards the raw
 envelope to the upstream ingest endpoint.
 
+## Source maps
+
+Upload your release's `.map` files so minified production stack traces resolve to
+original source in the dashboard. Run this in CI after a build, using the same
+`release` you pass to `Sentry.init`:
+
+```ts
+import { uploadSourceMaps } from '@aihxp/sveltry-sdk';
+import { readFileSync } from 'node:fs';
+
+const results = await uploadSourceMaps({
+  dsn: process.env.SVELTRY_DSN!,
+  release: process.env.GIT_SHA!,
+  files: [
+    { name: '~/app.min.js.map', content: readFileSync('dist/app.min.js.map', 'utf8') },
+  ],
+});
+console.log(results); // [{ name, ok: true, status: 201, kind: 'sourcemap' }]
+```
+
+`name` is the artifact path as it appears in stack frames (or its `.map`). Files
+ending in `.map` are stored as source maps; Sveltry resolves matching minified
+frames on ingest. Authentication uses the DSN public key, so no extra token is
+needed.
+
 ## License
 
 Apache-2.0
