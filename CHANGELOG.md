@@ -8,6 +8,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Merge issues.** Merge a duplicate issue into another from the issue detail page (search,
+  pick, merge); its events are re-pointed and counts folded into the target.
 - **Usage accounting and deploy tracking.** Per-project, per-day event/transaction counters
   (plus client-side drops from `client_report`), shown as 30-day totals on the project page;
   and a DSN-authenticated deploy API (`POST /deploys`) recording deploys per release.

@@ -311,6 +311,27 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Merge two issues bypassing auth, for verification (mirrors issues.mergeIssues). */
+export const debugMerge = internalMutation({
+  args: { sourceIssueId: v.id('issues'), targetIssueId: v.id('issues') },
+  handler: async (ctx, { sourceIssueId, targetIssueId }) => {
+    const source = await ctx.db.get(sourceIssueId);
+    const target = await ctx.db.get(targetIssueId);
+    if (!source || !target) throw new Error('not found');
+    const events = await ctx.db
+      .query('events')
+      .withIndex('by_issue', (q) => q.eq('issueId', sourceIssueId))
+      .take(2000);
+    for (const e of events) await ctx.db.patch(e._id, { issueId: targetIssueId });
+    await ctx.db.patch(targetIssueId, {
+      count: target.count + source.count,
+      userCount: target.userCount + source.userCount,
+    });
+    await ctx.db.delete(sourceIssueId);
+    return { movedEvents: events.length };
+  },
+});
+
 /** Usage totals + deploy count for a project, for verification. */
 export const debugUsage = internalQuery({
   args: { projectId: v.id('projects') },
