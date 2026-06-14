@@ -33,6 +33,16 @@ export function compactNumber(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}m`;
 }
 
+/** Human-readable duration from milliseconds: 42 -> "42ms", 1500 -> "1.50s". */
+export function formatDuration(ms: number): string {
+  if (ms < 1) return '<1ms';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`;
+  const min = Math.floor(ms / 60_000);
+  const sec = Math.round((ms % 60_000) / 1000);
+  return `${min}m ${sec}s`;
+}
+
 /** Human-readable byte size: 2048 -> "2.0 KB". */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

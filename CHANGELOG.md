@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Performance monitoring.** `transaction` envelope items are now persisted with their spans.
+  A new Performance page lists transactions with per-transaction p50/p95/avg/max latency
+  (computed over a recent-window sample) and failure rate, and a transaction detail page
+  renders the span waterfall. Ingest is idempotent per transaction `event_id`.
 - **Source-map symbolication.** Per-release artifact upload at `POST /artifacts/upload`
   (DSN-key authenticated) and on-ingest resolution of minified JavaScript stack frames to
   original file, line, function, and source context. The dashboard shows resolved frames with

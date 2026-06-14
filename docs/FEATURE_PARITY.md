@@ -111,10 +111,11 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Transactions and spans | Planned | `transaction` items are accepted but not persisted; needs an analytics tier. |
-| Latency percentiles (p50/p75/p95/p99) | Planned | Needs a columnar / time-series store. |
+| Transactions and spans | Done | `transaction` items are persisted with their spans; a Performance page lists them. |
+| Latency percentiles (p50/p95) | Done | Per-transaction p50/p95/avg/max computed over a recent-window sample (no columnar store yet, so percentiles are a recent approximation). |
+| Trace view (span waterfall) | Done | The transaction detail page renders the span waterfall. |
 | Web vitals | Planned | Needs a columnar / time-series store. |
-| Trace view / distributed tracing | Planned | Not yet implemented. |
+| Distributed tracing across services | Planned | Transactions carry their trace id, but cross-service trace stitching is not yet built. |
 
 ## Dashboards and Discover
 

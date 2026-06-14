@@ -124,7 +124,8 @@ sveltry/
 
 Sveltry's first milestone is a complete, genuinely usable **error-tracking vertical slice** that is
 wire-compatible with the Sentry SDKs, including server-side **source-map symbolication** of minified
-JavaScript stack traces. Performance tracing, session replay, and uptime/cron monitors are on the
+JavaScript stack traces and **performance monitoring** (transactions, p50/p95 latency, and a span
+waterfall). Session replay, release health, and uptime/cron monitors are on the
 [roadmap](docs/ROADMAP.md) but not yet built. See the honest
 [feature parity matrix](docs/FEATURE_PARITY.md).
 

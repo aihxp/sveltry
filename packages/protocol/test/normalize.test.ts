@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { messageString, normalizeEvent, normalizeTags, timestampToMs } from '../src/normalize.js';
+import {
+  messageString,
+  normalizeEvent,
+  normalizeTags,
+  normalizeTransaction,
+  timestampToMs,
+} from '../src/normalize.js';
 import type { SentryEventPayload } from '@sveltry/types';
 
 describe('timestampToMs', () => {
@@ -80,5 +86,47 @@ describe('normalizeEvent', () => {
     expect(n.level).toBe('warning');
     expect(n.platform).toBe('other');
     expect(n.environment).toBe('production');
+  });
+});
+
+describe('normalizeTransaction', () => {
+  test('extracts name, trace, duration, and span count', () => {
+    const payload: SentryEventPayload = {
+      type: 'transaction',
+      event_id: 'AA-BB',
+      transaction: 'GET /api/users',
+      start_timestamp: 1781705760,
+      timestamp: 1781705760.45,
+      platform: 'node',
+      release: 'v1.2.3',
+      environment: 'production',
+      contexts: {
+        trace: { trace_id: 'abc123', span_id: 'root1', op: 'http.server', status: 'ok' },
+      },
+      spans: [
+        { span_id: 's1', op: 'db.query' },
+        { span_id: 's2', op: 'http.client' },
+      ],
+    };
+    const t = normalizeTransaction(payload, { receivedAt: 1 });
+    expect(t.name).toBe('GET /api/users');
+    expect(t.traceId).toBe('abc123');
+    expect(t.spanId).toBe('root1');
+    expect(t.op).toBe('http.server');
+    expect(t.status).toBe('ok');
+    expect(t.timestamp).toBe(1781705760000);
+    expect(t.endTimestamp).toBe(1781705760450);
+    expect(t.durationMs).toBe(450);
+    expect(t.spanCount).toBe(2);
+    expect(t.eventId).toBe('aabb');
+    expect(t.tags['transaction.op']).toBe('http.server');
+  });
+
+  test('falls back gracefully when fields are missing', () => {
+    const t = normalizeTransaction({ type: 'transaction' }, { receivedAt: 1000 });
+    expect(t.name).toBe('<unnamed transaction>');
+    expect(t.op).toBe('default');
+    expect(t.durationMs).toBe(0);
+    expect(t.spanCount).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import {
   ingestError,
   ingestSuccess,
   normalizeEvent,
+  normalizeTransaction,
   parseEnvelope,
   projectIdFromPath,
   rateLimited,
@@ -87,8 +88,9 @@ export const ingest = httpAction(async (ctx, request) => {
     return ingestError(400, 'failed to read request body', [String(err)], cors);
   }
 
-  // Collect the error/default events from the request.
+  // Collect the error/default events and transactions from the request.
   let events: SentryEventPayload[] = [];
+  const transactions: SentryEventPayload[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -108,9 +110,15 @@ export const ingest = httpAction(async (ctx, request) => {
           } catch {
             // Skip an unparseable item; do not fail the whole envelope.
           }
+        } else if (item.type === 'transaction') {
+          try {
+            transactions.push(JSON.parse(decoder.decode(item.payload)) as SentryEventPayload);
+          } catch {
+            // Skip an unparseable transaction; do not fail the whole envelope.
+          }
         }
-        // transaction / session / replay / attachment items are accepted but
-        // not yet persisted (see ROADMAP.md). They are silently tolerated.
+        // session / replay / attachment items are accepted but not yet
+        // persisted (see ROADMAP.md). They are silently tolerated.
       }
     } catch (err) {
       return ingestError(400, 'invalid envelope', [String(err)], cors);
@@ -150,7 +158,66 @@ export const ingest = httpAction(async (ctx, request) => {
     });
   }
 
+  for (const payload of transactions) {
+    const t = normalizeTransaction(payload, { receivedAt });
+    const storedPayload = resolved.scrubPii ? scrubPayload(payload) : payload;
+    if (!firstId) firstId = t.eventId;
+    await ctx.runMutation(internal.ingest.recordTransaction, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      eventId: t.eventId,
+      traceId: t.traceId,
+      spanId: t.spanId,
+      name: t.name,
+      op: t.op,
+      status: t.status,
+      timestamp: t.timestamp,
+      endTimestamp: t.endTimestamp,
+      durationMs: t.durationMs,
+      platform: t.platform,
+      environment: t.environment,
+      release: t.release,
+      tags: t.tags,
+      spanCount: t.spanCount,
+      payload: storedPayload,
+    });
+  }
+
   return ingestSuccess(coerceEventId(firstId ?? headerEventId), cors);
+});
+
+/** Persist a performance transaction. */
+export const recordTransaction = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    organizationId: v.string(),
+    eventId: v.string(),
+    traceId: v.string(),
+    spanId: v.string(),
+    name: v.string(),
+    op: v.string(),
+    status: v.string(),
+    timestamp: v.number(),
+    endTimestamp: v.number(),
+    durationMs: v.number(),
+    platform: v.string(),
+    environment: v.string(),
+    release: v.optional(v.string()),
+    tags: v.record(v.string(), v.string()),
+    spanCount: v.number(),
+    payload: v.any(),
+  },
+  handler: async (ctx, args) => {
+    // Idempotency: an SDK retry resending the same transaction event_id is a no-op.
+    const dup = await ctx.db
+      .query('transactions')
+      .withIndex('by_project_eventId', (q) =>
+        q.eq('projectId', args.projectId).eq('eventId', args.eventId),
+      )
+      .first();
+    if (dup) return;
+    await ctx.db.insert('transactions', args);
+  },
 });
 
 /** Upsert an issue and persist an event. Schedules alert dispatch. */

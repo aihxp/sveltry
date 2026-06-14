@@ -111,16 +111,39 @@ export interface SentrySdkInfo {
   [key: string]: unknown;
 }
 
+/** A span within a transaction (a timed unit of work). */
+export interface SentrySpan {
+  span_id?: string;
+  parent_span_id?: string;
+  trace_id?: string;
+  op?: string;
+  description?: string;
+  status?: string;
+  /** Unix epoch seconds (or RFC 3339). */
+  start_timestamp?: number | string;
+  timestamp?: number | string;
+  data?: Record<string, unknown>;
+  tags?: Record<string, string>;
+  [key: string]: unknown;
+}
+
 /**
  * A Sentry error/default event payload. This is the JSON carried by an
  * envelope item with `type: "event"` (or the whole body of a legacy `/store/`
- * request).
+ * request). Transaction items (`type: "transaction"`) reuse this shape and add
+ * `start_timestamp` and `spans`.
  */
 export interface SentryEventPayload {
   /** 32-char hex UUID (no dashes). */
   event_id?: string;
-  /** RFC 3339 string or Unix epoch seconds. */
+  /** For transactions: the event type discriminator. */
+  type?: string;
+  /** RFC 3339 string or Unix epoch seconds (the end time for a transaction). */
   timestamp?: number | string;
+  /** Transaction start time (Unix epoch seconds or RFC 3339). */
+  start_timestamp?: number | string;
+  /** The spans of a transaction. */
+  spans?: SentrySpan[];
   platform?: string;
   level?: SentryLevel;
   logger?: string;
