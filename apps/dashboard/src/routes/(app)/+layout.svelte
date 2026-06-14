@@ -27,6 +27,7 @@
     { href: '/issues', label: 'Issues', icon: CircleAlertIcon },
     { href: '/performance', label: 'Performance', icon: GaugeIcon },
     { href: '/discover', label: 'Discover', icon: CompassIcon },
+    { href: '/dashboards', label: 'Dashboards', icon: LayoutDashboardIcon },
     { href: '/releases', label: 'Releases', icon: RocketIcon },
     { href: '/monitors', label: 'Monitors', icon: TimerIcon },
     { href: '/replays', label: 'Replays', icon: PlayCircleIcon },

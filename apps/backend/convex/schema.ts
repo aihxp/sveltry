@@ -24,6 +24,18 @@ export const roleValidator = v.union(
   v.literal('billing'),
 );
 
+/** The dataset and aggregate a Discover query / dashboard widget runs over. */
+export const discoverDatasetValidator = v.union(v.literal('errors'), v.literal('transactions'));
+export const discoverAggregateValidator = v.union(
+  v.literal('count'),
+  v.literal('users'),
+  v.literal('avg'),
+  v.literal('p50'),
+  v.literal('p75'),
+  v.literal('p95'),
+  v.literal('p99'),
+);
+
 export const issueSubstatusValidator = v.union(
   v.literal('new'),
   v.literal('ongoing'),
@@ -86,6 +98,28 @@ export default defineSchema({
     .index('by_org', ['organizationId'])
     .index('by_publicId', ['publicId'])
     .index('by_org_slug', ['organizationId', 'slug']),
+
+  // Custom dashboards: named, org-shared collections of saved Discover queries.
+  dashboards: defineTable({
+    organizationId: v.string(),
+    name: v.string(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+  }).index('by_org', ['organizationId']),
+
+  // A single dashboard widget: a saved Discover query rendered as a chart.
+  dashboardWidgets: defineTable({
+    organizationId: v.string(),
+    dashboardId: v.id('dashboards'),
+    title: v.string(),
+    dataset: discoverDatasetValidator,
+    groupBy: v.string(),
+    aggregate: discoverAggregateValidator,
+    hours: v.number(),
+    projectId: v.optional(v.id('projects')),
+    filters: v.optional(v.array(v.object({ field: v.string(), value: v.string() }))),
+    order: v.number(),
+  }).index('by_dashboard', ['dashboardId', 'order']),
 
   // Sveltry's own per-member roles, layered on Better Auth org membership and keyed
   // by the Better Auth user id. Enforced in Convex (see lib/auth `requireRole`). An
