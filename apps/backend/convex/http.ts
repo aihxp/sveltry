@@ -1,12 +1,16 @@
 import { httpRouter } from 'convex/server';
 import { corsPreflight } from '@sveltry/protocol';
 import { httpAction } from './_generated/server';
+import { authComponent, createAuth } from './betterauth';
 import { uploadCommits } from './commits';
 import { ingest } from './ingest';
 import { uploadArtifact } from './sourcemaps';
 import { recordDeployHttp } from './usage';
 
 const http = httpRouter();
+
+// SPIKE: mount the Better Auth handler (/api/auth/*) served by Convex itself.
+authComponent.registerRoutes(http, createAuth);
 
 // Sentry SDKs POST to `/api/<projectId>/envelope/` (modern) or
 // `/api/<projectId>/store/` (legacy). Match the whole `/api/` prefix and let the

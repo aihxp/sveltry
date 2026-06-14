@@ -9,6 +9,7 @@
  */
 
 import type * as alerts from "../alerts.js";
+import type * as betterauth from "../betterauth.js";
 import type * as commits from "../commits.js";
 import type * as crons from "../crons.js";
 import type * as dashboards from "../dashboards.js";
@@ -49,6 +50,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
+  betterauth: typeof betterauth;
   commits: typeof commits;
   crons: typeof crons;
   dashboards: typeof dashboards;
@@ -108,4 +110,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+};
