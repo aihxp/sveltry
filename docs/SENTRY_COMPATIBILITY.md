@@ -145,7 +145,7 @@ Sveltry parses every item in an envelope but only persists what it currently mod
 | `replay_event`   | Accepted (200), not yet persisted         |
 | `replay_recording`| Accepted (200), not yet persisted        |
 | `profile`        | Accepted (200), not yet persisted         |
-| `check_in`       | Accepted (200), not yet persisted         |
+| `check_in`       | Parsed and persisted (cron monitors)      |
 | `client_report`  | Accepted (200), not yet persisted         |
 | `feedback`       | Accepted (200), not yet persisted         |
 
@@ -289,9 +289,10 @@ off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
 - `br` (Brotli) and `zstd` request compression are not supported and return `400`. Send
   the body uncompressed or gzip/deflate.
 - `event`, `transaction`, and individual `session` items are persisted (errors,
-  performance, and release health, including aggregated `sessions` buckets). `attachment`,
-  `replay_*`, `profile`, `check_in`, `client_report`, and `feedback` are accepted with `200`
-  but not yet stored. Replays, profiling, cron monitors, and user feedback have no UI surface yet.
+  performance, and release health, including aggregated `sessions` buckets) and `check_in`
+  items (cron monitors). `attachment`, `replay_*`, `profile`, `client_report`, and `feedback`
+  are accepted with `200` but not yet stored. Replays, profiling, and user feedback have no UI
+  surface yet.
 - Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
   uploaded for the same release), not by debug ID. Upload maps per release via
   `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to

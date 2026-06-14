@@ -3,6 +3,7 @@ import {
   messageString,
   normalizeEvent,
   normalizeTags,
+  normalizeCheckIn,
   normalizeSession,
   normalizeSessionAggregates,
   normalizeTransaction,
@@ -181,5 +182,31 @@ describe('normalizeSessionAggregates', () => {
     expect(r.environment).toBe('staging');
     expect(r.buckets).toHaveLength(1);
     expect(r.buckets[0]).toMatchObject({ bucketStart: 1781705760000, exited: 100, crashed: 2 });
+  });
+});
+
+describe('normalizeCheckIn', () => {
+  test('reads slug, status, and converts duration to ms', () => {
+    const c = normalizeCheckIn(
+      {
+        check_in_id: 'ci-1',
+        monitor_slug: 'nightly',
+        status: 'ok',
+        duration: 12.5,
+        environment: 'production',
+      },
+      { receivedAt: 5000 },
+    );
+    expect(c.checkInId).toBe('ci-1');
+    expect(c.monitorSlug).toBe('nightly');
+    expect(c.status).toBe('ok');
+    expect(c.durationMs).toBe(12500);
+    expect(c.timestamp).toBe(5000);
+  });
+
+  test('defaults status and omits duration when absent', () => {
+    const c = normalizeCheckIn({ monitor_slug: 'm' }, { receivedAt: 1 });
+    expect(c.status).toBe('unknown');
+    expect(c.durationMs).toBeUndefined();
   });
 });

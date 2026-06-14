@@ -264,6 +264,20 @@ export interface SentrySessionAggregates {
   [key: string]: unknown;
 }
 
+/** A cron monitor check-in (envelope item `type: "check_in"`). */
+export interface SentryCheckIn {
+  check_in_id?: string;
+  monitor_slug?: string;
+  /** in_progress | ok | error | crashed. */
+  status?: string;
+  /** Run duration in seconds. */
+  duration?: number;
+  release?: string;
+  environment?: string;
+  monitor_config?: { schedule?: unknown; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
 /** A client report (SDK-side dropped-event accounting). */
 export interface SentryClientReport {
   timestamp?: string;

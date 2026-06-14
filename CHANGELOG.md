@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Cron monitors.** `check_in` envelope items are persisted (upserted by id, so an
+  in-progress start and its terminal status are one run). A new Monitors page shows each
+  monitor's latest status and recent check-ins.
 - **Email alerts.** The `email` alert channel now delivers over SMTP via a Convex Node
   action, configured by `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/
   `SMTP_FROM`. It is a clean no-op until `SMTP_HOST` is set.

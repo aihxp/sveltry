@@ -125,9 +125,9 @@ sveltry/
 Sveltry's first milestone is a complete, genuinely usable **error-tracking vertical slice** that is
 wire-compatible with the Sentry SDKs, including server-side **source-map symbolication** of minified
 JavaScript stack traces, **performance monitoring** (transactions, p50/p95 latency, and a span
-waterfall), and **release health** (crash-free sessions and users per release). Session replay,
-profiling, and uptime/cron monitors are on the [roadmap](docs/ROADMAP.md) but not yet built. See the
-honest [feature parity matrix](docs/FEATURE_PARITY.md).
+waterfall), **release health** (crash-free sessions and users per release), and **cron monitors**
+(check-ins). Session replay and profiling are on the [roadmap](docs/ROADMAP.md) but not yet built.
+See the honest [feature parity matrix](docs/FEATURE_PARITY.md).
 
 What works today: DSN-authenticated ingestion (envelope + legacy store), server-side grouping into
 issues, the resolve/ignore/reopen workflow, full event payloads with stack traces, breadcrumbs and

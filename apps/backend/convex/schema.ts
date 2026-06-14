@@ -199,6 +199,36 @@ export default defineSchema({
     .index('by_project_eventId', ['projectId', 'eventId'])
     .index('by_trace', ['traceId']),
 
+  // Cron monitors: one row per (project, slug), tracking the latest check-in.
+  monitors: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    slug: v.string(),
+    latestStatus: v.string(),
+    lastCheckInAt: v.number(),
+    lastDurationMs: v.optional(v.number()),
+    environment: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_project_slug', ['projectId', 'slug'])
+    .index('by_org', ['organizationId', 'lastCheckInAt']),
+
+  // Individual cron check-ins (envelope items with `type: "check_in"`). Upserted
+  // by check_in_id so an `in_progress` start and its terminal update are one run.
+  checkIns: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    monitorSlug: v.string(),
+    checkInId: v.string(),
+    status: v.string(),
+    durationMs: v.optional(v.number()),
+    environment: v.string(),
+    release: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index('by_project_checkInId', ['projectId', 'checkInId'])
+    .index('by_monitor', ['projectId', 'monitorSlug', 'timestamp']),
+
   releases: defineTable({
     organizationId: v.string(),
     projectId: v.id('projects'),

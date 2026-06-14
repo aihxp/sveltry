@@ -18,8 +18,9 @@ The error-tracking vertical slice, end to end:
 - Basic releases (recorded per event)
 - Source-map symbolication: per-release `.map` upload (`POST /artifacts/upload`) and on-ingest resolution of minified JavaScript frames to original source
 - Performance monitoring: `transaction` items persisted with spans, per-transaction p50/p95 latency over a recent-window sample, and a span-waterfall trace view
-- Release health: individual `session` items persisted (upsert by sid) and aggregated into crash-free sessions/users per release
-- Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack
+- Release health: individual `session` items persisted (upsert by sid) and aggregated `sessions` buckets, folded into crash-free sessions/users per release
+- Cron monitors: `check_in` items persisted (upsert by id), with a Monitors page for per-monitor status and recent check-ins
+- Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack / email (SMTP)
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest
 - Retention and triage-aging crons
