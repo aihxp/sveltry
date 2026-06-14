@@ -32,6 +32,26 @@
   const suspects = useQuery(api.commits.suspectCommitsForIssue, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
   );
+  const integration = useQuery(api.integrations.getProjectIntegration, () =>
+    auth.isAuthenticated && issue.data?.projectId
+      ? { projectId: issue.data.projectId }
+      : ('skip' as const),
+  );
+  let creatingTicket = $state(false);
+  let ticketError = $state('');
+  async function createTicket() {
+    creatingTicket = true;
+    ticketError = '';
+    try {
+      const res = await client.action(api.integrations.createTrackerIssue, { issueId });
+      if (!res.ok) ticketError = res.detail ?? res.skipped ?? 'Failed to create ticket';
+    } catch (e) {
+      ticketError = e instanceof Error ? e.message : String(e);
+    } finally {
+      creatingTicket = false;
+    }
+  }
+
   const comments = useQuery(api.issues.listComments, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
   );
@@ -210,6 +230,31 @@
         Resolved in <span class="font-mono">{i.resolvedInRelease}</span>; reopens if it recurs in a
         later release.
       </p>
+    {/if}
+
+    {#if i.trackerProvider}
+      <p class="text-sm">
+        Linked in {i.trackerProvider}:
+        {#if i.trackerUrl}
+          <a
+            href={i.trackerUrl}
+            target="_blank"
+            rel="noreferrer"
+            class="font-medium text-primary hover:underline"
+          >
+            {i.trackerKey ?? 'view ticket'}
+          </a>
+        {:else}
+          <span class="font-mono">{i.trackerKey ?? 'created'}</span>
+        {/if}
+      </p>
+    {:else if integration.data?.isEnabled}
+      <div class="flex items-center gap-3">
+        <Button variant="outline" size="sm" disabled={creatingTicket} onclick={createTicket}>
+          Create issue in {integration.data.display.type === 'jira' ? 'Jira' : 'Linear'}
+        </Button>
+        {#if ticketError}<span class="text-xs text-destructive">{ticketError}</span>{/if}
+      </div>
     {/if}
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">

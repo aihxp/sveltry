@@ -9,6 +9,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrg, requireRole } from './lib/auth';
+import { safeFetch } from './lib/net';
 import { alertChannelValidator } from './schema';
 
 const metricValidator = v.union(
@@ -199,7 +200,8 @@ export const evaluateMetricAlerts = internalAction({
               severity: a.metric === 'crash_free_rate' ? 'error' : 'warning',
             });
             if (req) {
-              await fetch(req.url, {
+              // safeFetch validates the target and every redirect hop (SSRF guard).
+              await safeFetch(req.url, {
                 method: 'POST',
                 headers: req.headers,
                 body: req.body,
