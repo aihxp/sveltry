@@ -22,12 +22,12 @@
     {
       icon: ServerIcon,
       title: 'Self-hosted',
-      body: 'Your data, your infrastructure. Postgres + open-source Convex + SvelteKit, all in Docker.',
+      body: 'Your data, your infrastructure. SvelteKit + open-source Convex (backed by Postgres), all in Docker.',
     },
     {
       icon: ShieldIcon,
       title: 'Private',
-      body: 'Default PII scrubbing at ingest, per-project retention, and an auth model where identity never leaves your Postgres.',
+      body: 'Default PII scrubbing at ingest, per-project retention, and an auth model where identity never leaves your own infrastructure.',
     },
   ];
 </script>
@@ -36,7 +36,7 @@
   <title>Sveltry · The reactive, self-hosted, Sentry-compatible error tracker</title>
   <meta
     name="description"
-    content="Sveltry is an open-source, self-hosted error tracker that speaks the Sentry wire protocol. Built on SvelteKit, Convex, and Postgres."
+    content="Sveltry is an open-source, self-hosted error tracker that speaks the Sentry wire protocol. Built on SvelteKit and self-hosted Convex."
   />
 </svelte:head>
 
@@ -104,7 +104,7 @@
     >
       <Logo class="opacity-80" />
       <p class="text-sm text-muted-foreground">
-        Built with SvelteKit, Convex &amp; Postgres. Not affiliated with Sentry.
+        Built with SvelteKit &amp; Convex. Not affiliated with Sentry.
       </p>
     </div>
   </footer>

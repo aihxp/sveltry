@@ -29,32 +29,54 @@ The error-tracking vertical slice, end to end:
 - Retention and triage-aging crons
 - A live, reactive dashboard (Convex over WebSockets)
 
+## Shipped since 0.1.0
+
+Most of what the original Next/Later horizons listed now ships. See
+[FEATURE_PARITY.md](./FEATURE_PARITY.md) and the [CHANGELOG](../CHANGELOG.md) for detail.
+
+- **Convex-only (Postgres removed for the app).** Auth runs entirely on Convex via the
+  `@convex-dev/better-auth` component; organizations, membership, and roles are modeled natively in
+  Convex. Postgres remains only as the Convex backend's own storage engine.
+- **Issue triage.** Full-text search, saved views, merge / unmerge, assignment, threaded comments,
+  resolve-in-next-release, fine-grained roles (owner / admin / member / billing), and teams.
+- **Alerts and integrations.** Email (SMTP), Microsoft Teams, PagerDuty, Opsgenie; metric/threshold
+  alerts; and Jira / Linear issue-tracker actions.
+- **Performance and analytics.** Web vitals, distributed tracing across services, Discover, custom
+  dashboards, and debug-ID artifact bundles.
+- **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
+- **Releases.** Deeper release health (aggregated `sessions` buckets), suspect commits, and deploy
+  tracking.
+- **Data controls.** Hard quotas, spike protection, usage accounting, optional S3 / R2 storage
+  offload, and inbound data filters (drop noisy events at ingest).
+
 ## Next
 
 Highest-value additions that build on the existing tables:
 
-- **Debug-ID artifact bundles.** Match source maps by debug ID (in addition to the current
-  name-based matching) so bundler plugins that emit debug IDs work without naming conventions.
-- **Release health, deeper.** Aggregated `sessions` buckets, session adoption over time,
-  resolve-in-next-release, and suspect commits (the crash-free-rate core already ships).
-- **Email alerts.** Wire an SMTP / transactional-email transport to the existing alert pipeline.
-- **More alert integrations.** Microsoft Teams, PagerDuty / Opsgenie, and issue-tracker actions
-  (Jira / Linear).
-- **Issue search and saved views.** Tag and full-text filtering, merge / unmerge.
-- **User feedback.** Crash-linked feedback, then a standalone widget.
+- **Environment-scoped alerts.** Fire an alert only for a chosen environment (e.g. production).
+- **Usage over time.** A daily usage time-series chart with an arbitrary date range on the project
+  page (the per-day series is already returned by `usage.projectUsage`).
+- **Member invitations.** Invite teammates by email (reusing the existing SMTP transport) and a
+  join flow, instead of each user self-registering.
+- **Per-key allowed origins.** An optional CORS/referrer allowlist on a DSN key, so a leaked browser
+  DSN cannot be used to report from other sites.
+- **Custom data scrubbing.** Per-project custom scrubbing rules and a safe-field allowlist, on top
+  of the current default ruleset.
 
 ## Later
 
-Latency percentiles over arbitrary windows already ship via hourly duration-histogram
-rollups (in Convex, no separate store). The following would still benefit from a richer
-analytics tier:
+Valuable, but a larger surface or a new subsystem:
 
-- **Web vitals and finer percentiles.** LCP/CLS/INP and p75/p99 with higher-resolution
-  histograms or a columnar store.
-- **Dashboards and Discover.** Composable widgets over a query engine.
-- **Metric alerts.** Threshold alerts over aggregates (error rate, latency, crash rate).
-- **Uptime monitors.** HTTP uptime checks reusing the alert pipeline (cron check-ins ship).
-- **Distributed tracing across services.** Stitch transactions into full cross-service traces.
+- **Public REST API.** Programmatic read access to issues / events / projects / releases, with
+  scoped API tokens.
+- **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links,
+  suspect commits from SCM, and auto-resolve from commit messages.
+- **Performance insights.** Per-op span breakdowns (DB / HTTP / cache / queues), a trace explorer /
+  span search, and n+1 / slow-span detection.
+- **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
+- **Org operations.** An organization audit log, project rename / transfer / delete, an org-level
+  stats page, and usage/quota threshold alerts.
+- **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
 
 ## Non-goals (for now)
 
