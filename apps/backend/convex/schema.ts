@@ -102,7 +102,22 @@ export default defineSchema({
     .index('by_project_fingerprint', ['projectId', 'fingerprint'])
     .index('by_project_status_lastSeen', ['projectId', 'status', 'lastSeen'])
     .index('by_org_status_lastSeen', ['organizationId', 'status', 'lastSeen'])
-    .index('by_project_lastSeen', ['projectId', 'lastSeen']),
+    .index('by_project_lastSeen', ['projectId', 'lastSeen'])
+    .searchIndex('search_title', {
+      searchField: 'title',
+      filterFields: ['organizationId', 'status', 'level', 'platform', 'projectId'],
+    }),
+
+  // Threaded comments on an issue (the collaboration surface). Author identity
+  // comes from the Better Auth JWT (no user data is stored in Convex otherwise).
+  issueComments: defineTable({
+    organizationId: v.string(),
+    issueId: v.id('issues'),
+    authorId: v.string(),
+    authorEmail: v.optional(v.string()),
+    body: v.string(),
+    createdAt: v.number(),
+  }).index('by_issue', ['issueId', 'createdAt']),
 
   events: defineTable({
     organizationId: v.string(),

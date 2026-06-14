@@ -411,7 +411,11 @@ export const recordEvent = internalMutation({
 
     if (existing) {
       issueId = existing._id;
-      const reopen = existing.status === 'resolved';
+      // A resolved issue reopens on a new event, except when it was "resolved in
+      // release X" and the event is still from X (expected during that rollout).
+      const reopen =
+        existing.status === 'resolved' &&
+        (!existing.resolvedInRelease || args.release !== existing.resolvedInRelease);
       if (reopen) isRegression = true;
       const newUser = args.userId ? await markIssueUser(ctx, issueId, args.userId) : false;
       await ctx.db.patch(existing._id, {

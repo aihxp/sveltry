@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Issue triage and collaboration.** Full-text issue search (Convex search index) with
+  status/level filters on the Issues page; per-issue threaded comments; assign/unassign to
+  yourself; and "resolve in next release" (stays resolved while the same release recurs,
+  reopens on a later one).
 - **Latency time-series.** An hourly cron rolls raw transaction durations into per-(project,
   transaction, hour) fixed-bucket histograms (`transactionRollups`). A `transactionTrend`
   query derives p50/p95 over arbitrary windows from the merged histograms, and the Performance
