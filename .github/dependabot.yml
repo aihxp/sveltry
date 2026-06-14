@@ -12,13 +12,28 @@ updates:
         patterns: ['convex', 'convex-svelte', 'convex-helpers']
       auth:
         patterns: ['better-auth', 'pg', '@types/pg', 'jose']
+      # Batch everything else (prettier, changesets, types, etc.) into a single
+      # PR instead of one per dependency, to cut review churn.
+      tooling:
+        patterns: ['*']
+    ignore:
+      # TypeScript majors are deliberate migrations (new diagnostics, dropped
+      # targets), not bot-driven bumps. Upgrade them by hand.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
 
   - package-ecosystem: docker
     directory: /infra
     schedule:
       interval: weekly
+    groups:
+      docker:
+        patterns: ['*']
