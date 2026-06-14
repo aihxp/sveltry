@@ -182,6 +182,35 @@ export interface IssueGrouping {
   errorType?: string;
 }
 
+/** The normalized transaction Sveltry stores, distilled from a `transaction` item. */
+export interface NormalizedTransaction {
+  eventId: string;
+  /** The distributed-trace id this transaction belongs to. */
+  traceId: string;
+  /** The root span id of the transaction. */
+  spanId: string;
+  /** The transaction name, e.g. `GET /api/users`. */
+  name: string;
+  /** The root operation, e.g. `http.server`, `pageload`, `navigation`. */
+  op: string;
+  /** Trace status, e.g. `ok`, `internal_error`, `cancelled`. */
+  status: string;
+  /** Start time (epoch ms). */
+  timestamp: number;
+  /** End time (epoch ms). */
+  endTimestamp: number;
+  /** Wall-clock duration in milliseconds. */
+  durationMs: number;
+  platform: Platform;
+  environment: string;
+  release?: string;
+  tags: Record<string, string>;
+  /** Number of child spans. */
+  spanCount: number;
+  /** The original Sentry transaction payload, retained verbatim. */
+  raw: unknown;
+}
+
 /** The normalized event Sveltry stores, distilled from a raw Sentry payload. */
 export interface NormalizedEvent {
   eventId: string;

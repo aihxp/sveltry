@@ -288,10 +288,10 @@ off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
 
 - `br` (Brotli) and `zstd` request compression are not supported and return `400`. Send
   the body uncompressed or gzip/deflate.
-- Only `event` items are persisted. `transaction`, `session`, `sessions`, `attachment`,
-  `replay_*`, `profile`, `check_in`, `client_report`, and `feedback` are accepted with
-  `200` but not yet stored or aggregated. Performance, sessions/release health, replays,
-  profiling, cron monitors, and user feedback have no UI surface yet.
+- `event` and `transaction` items are persisted (errors and performance). `session`,
+  `sessions`, `attachment`, `replay_*`, `profile`, `check_in`, `client_report`, and
+  `feedback` are accepted with `200` but not yet stored or aggregated. Sessions/release
+  health, replays, profiling, cron monitors, and user feedback have no UI surface yet.
 - Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
   uploaded for the same release), not by debug ID. Upload maps per release via
   `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to

@@ -1,0 +1,140 @@
+<script lang="ts">
+  import { useQuery, useAuth } from 'convex-svelte';
+  import { api } from '$convex/_generated/api';
+  import * as Card from '$lib/components/ui/card';
+  import { Badge } from '$lib/components/ui/badge';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import { Skeleton } from '$lib/components/ui/skeleton';
+  import { cn, formatDuration, relativeTime } from '$lib/utils';
+
+  const auth = useAuth();
+  const stats = useQuery(api.transactions.transactionStats, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+  const recent = useQuery(api.transactions.recentTransactions, () =>
+    auth.isAuthenticated ? { limit: 25 } : ('skip' as const),
+  );
+
+  // Color a p95 cell by latency band for an at-a-glance read.
+  function latencyClass(ms: number): string {
+    if (ms >= 1000) return 'text-destructive';
+    if (ms >= 300) return 'text-amber-600 dark:text-amber-400';
+    return 'text-foreground';
+  }
+</script>
+
+<svelte:head><title>Performance · Sveltry</title></svelte:head>
+
+<div class="mx-auto max-w-5xl space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Performance</h1>
+    <p class="text-sm text-muted-foreground">
+      Transaction latency across your projects.
+      {#if stats.data}
+        <span class="text-muted-foreground/70"
+          >Percentiles over the last {stats.data.sampleSize.toLocaleString()} transactions.</span
+        >
+      {/if}
+    </p>
+  </div>
+
+  <Card.Root>
+    <Card.Header><Card.Title>Transactions</Card.Title></Card.Header>
+    <Card.Content class="px-0">
+      {#if auth.isLoading || stats.isLoading}
+        <div class="space-y-3 px-6">
+          {#each Array(5) as _, i (i)}<Skeleton class="h-9 w-full" />{/each}
+        </div>
+      {:else if stats.error}
+        <p class="px-6 text-sm text-destructive">Failed to load: {stats.error.toString()}</p>
+      {:else if !stats.data || stats.data.rows.length === 0}
+        <div class="px-6 pb-2">
+          <EmptyState
+            title="No transactions yet"
+            description="Enable tracing in your SDK (set a non-zero tracesSampleRate) to see latency here."
+          />
+        </div>
+      {:else}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="border-y text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th class="px-6 py-2 text-left font-medium">Transaction</th>
+                <th class="px-3 py-2 text-right font-medium">Count</th>
+                <th class="px-3 py-2 text-right font-medium">p50</th>
+                <th class="px-3 py-2 text-right font-medium">p95</th>
+                <th class="px-3 py-2 text-right font-medium">Max</th>
+                <th class="px-6 py-2 text-right font-medium">Fail %</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {#each stats.data.rows as row (row.name)}
+                <tr class="hover:bg-muted/30">
+                  <td class="max-w-[20rem] px-6 py-2">
+                    <div class="truncate font-medium">{row.name}</div>
+                    <div class="font-mono text-xs text-muted-foreground">{row.op}</div>
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums">{row.count}</td>
+                  <td class="px-3 py-2 text-right tabular-nums">{formatDuration(row.p50Ms)}</td>
+                  <td
+                    class={cn(
+                      'px-3 py-2 text-right font-medium tabular-nums',
+                      latencyClass(row.p95Ms),
+                    )}
+                  >
+                    {formatDuration(row.p95Ms)}
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                    {formatDuration(row.maxMs)}
+                  </td>
+                  <td
+                    class={cn(
+                      'px-6 py-2 text-right tabular-nums',
+                      row.failureRate > 0 ? 'text-destructive' : 'text-muted-foreground',
+                    )}
+                  >
+                    {(row.failureRate * 100).toFixed(1)}%
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    </Card.Content>
+  </Card.Root>
+
+  <Card.Root>
+    <Card.Header><Card.Title>Recent transactions</Card.Title></Card.Header>
+    <Card.Content class="px-0">
+      {#if auth.isLoading || recent.isLoading}
+        <div class="space-y-3 px-6">
+          {#each Array(4) as _, i (i)}<Skeleton class="h-10 w-full" />{/each}
+        </div>
+      {:else if !recent.data || recent.data.length === 0}
+        <p class="px-6 text-sm text-muted-foreground">No transactions recorded.</p>
+      {:else}
+        <div class="divide-y border-t">
+          {#each recent.data as t (t._id)}
+            <a
+              href={`/performance/${t._id}`}
+              class="flex items-center gap-3 px-6 py-2.5 text-sm hover:bg-muted/30"
+            >
+              <Badge variant={t.status === 'ok' ? 'success' : 'muted'} class="shrink-0"
+                >{t.status}</Badge
+              >
+              <span class="min-w-0 flex-1 truncate font-medium">{t.name}</span>
+              <span class="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline"
+                >{t.op}</span
+              >
+              <span class="shrink-0 tabular-nums">{formatDuration(t.durationMs)}</span>
+              <span class="hidden w-16 shrink-0 text-right text-xs text-muted-foreground md:inline"
+                >{relativeTime(t.timestamp)}</span
+              >
+            </a>
+          {/each}
+        </div>
+      {/if}
+    </Card.Content>
+  </Card.Root>
+</div>

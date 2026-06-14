@@ -1,6 +1,7 @@
 import type {
   IssueLevel,
   NormalizedEvent,
+  NormalizedTransaction,
   Platform,
   SentryEventPayload,
   SentryException,
@@ -128,4 +129,48 @@ function generatePlaceholderId(): string {
   let s = '';
   for (let i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16);
   return s;
+}
+
+/**
+ * Distill a Sentry `transaction` envelope item into the normalized shape Sveltry
+ * persists for performance monitoring: name, trace ids, root op/status, wall-clock
+ * duration, and span count. The original payload (with all spans) is kept in `raw`.
+ */
+export function normalizeTransaction(
+  payload: SentryEventPayload,
+  opts: { receivedAt?: number } = {},
+): NormalizedTransaction {
+  const receivedAt = opts.receivedAt ?? DEFAULT_TimestampNow();
+  const trace = (payload.contexts?.trace ?? {}) as {
+    trace_id?: string;
+    span_id?: string;
+    op?: string;
+    status?: string;
+  };
+  const start = timestampToMs(payload.start_timestamp, receivedAt);
+  const end = timestampToMs(payload.timestamp, start);
+  const spans = Array.isArray(payload.spans) ? payload.spans : [];
+
+  const tags = normalizeTags(payload);
+  if (payload.release && !tags.release) tags.release = payload.release;
+  if (payload.environment && !tags.environment) tags.environment = payload.environment;
+  if (trace.op && !tags['transaction.op']) tags['transaction.op'] = trace.op;
+
+  return {
+    eventId: (payload.event_id ?? '').replace(/-/g, '').toLowerCase() || generatePlaceholderId(),
+    traceId: trace.trace_id ?? '',
+    spanId: trace.span_id ?? '',
+    name: payload.transaction || trace.op || '<unnamed transaction>',
+    op: trace.op ?? 'default',
+    status: trace.status ?? 'unknown',
+    timestamp: start,
+    endTimestamp: end,
+    durationMs: Math.max(0, end - start),
+    platform: (payload.platform as Platform) ?? 'other',
+    environment: payload.environment ?? 'production',
+    release: payload.release,
+    tags,
+    spanCount: spans.length,
+    raw: payload,
+  };
 }

@@ -17,6 +17,7 @@ The error-tracking vertical slice, end to end:
 - Multi-tenant organizations, projects, and DSN keys
 - Basic releases (recorded per event)
 - Source-map symbolication: per-release `.map` upload (`POST /artifacts/upload`) and on-ingest resolution of minified JavaScript frames to original source
+- Performance monitoring: `transaction` items persisted with spans, per-transaction p50/p95 latency over a recent-window sample, and a span-waterfall trace view
 - Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest

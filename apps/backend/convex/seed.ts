@@ -115,6 +115,29 @@ export const debugEventFrames = internalQuery({
   },
 });
 
+/** Recent transactions for an org, for performance-ingest verification. */
+export const debugTransactions = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const txns = await ctx.db
+      .query('transactions')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .order('desc')
+      .take(20);
+    return {
+      count: txns.length,
+      transactions: txns.map((t) => ({
+        name: t.name,
+        op: t.op,
+        status: t.status,
+        durationMs: t.durationMs,
+        spanCount: t.spanCount,
+        traceId: t.traceId,
+      })),
+    };
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

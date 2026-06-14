@@ -138,6 +138,34 @@ export default defineSchema({
     firstSeen: v.number(),
   }).index('by_issue_user', ['issueId', 'userId']),
 
+  // Performance transactions (envelope items with `type: "transaction"`). The
+  // full payload (including spans) is kept in `payload`; the columns are the
+  // searchable/aggregatable summary.
+  transactions: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    eventId: v.string(),
+    traceId: v.string(),
+    spanId: v.string(),
+    name: v.string(),
+    op: v.string(),
+    status: v.string(),
+    timestamp: v.number(),
+    endTimestamp: v.number(),
+    durationMs: v.number(),
+    platform: v.string(),
+    environment: v.string(),
+    release: v.optional(v.string()),
+    tags: v.record(v.string(), v.string()),
+    spanCount: v.number(),
+    payload: v.any(),
+  })
+    .index('by_org', ['organizationId', 'timestamp'])
+    .index('by_project', ['projectId', 'timestamp'])
+    .index('by_project_name', ['projectId', 'name', 'timestamp'])
+    .index('by_project_eventId', ['projectId', 'eventId'])
+    .index('by_trace', ['traceId']),
+
   releases: defineTable({
     organizationId: v.string(),
     projectId: v.id('projects'),
