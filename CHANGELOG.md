@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Saved views.** Save the current issues-list filters (search text, status, level) as a named,
+  org-shared preset and apply it again in one click. Presets appear as removable chips above the
+  list.
 - **More alert channels.** Microsoft Teams (MessageCard), PagerDuty (Events API v2 routing key),
   and Opsgenie (GenieKey) join webhook/Slack/Discord/email for both issue and metric alerts,
   via a shared, unit-tested channel formatter.

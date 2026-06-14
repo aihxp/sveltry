@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { useQuery, useAuth } from 'convex-svelte';
+  import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
+  import type { Id } from '$convex/_generated/dataModel';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -9,6 +10,8 @@
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { cn } from '$lib/utils';
   import SearchIcon from '@lucide/svelte/icons/search';
+  import BookmarkIcon from '@lucide/svelte/icons/bookmark';
+  import XIcon from '@lucide/svelte/icons/x';
 
   type Status = 'unresolved' | 'resolved' | 'ignored';
   type Level = '' | 'fatal' | 'error' | 'warning' | 'info' | 'debug';
@@ -22,6 +25,7 @@
   ];
 
   const auth = useAuth();
+  const client = useConvexClient();
   const searching = $derived(term.trim().length > 0);
 
   const recent = useQuery(api.issues.recentIssues, () =>
@@ -33,6 +37,50 @@
       : ('skip' as const),
   );
   const issues = $derived(searching ? results : recent);
+
+  // Saved views: named presets of the filters above, shared across the org.
+  const savedViews = useQuery(api.savedViews.listSavedViews, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+  let naming = $state(false);
+  let viewName = $state('');
+  let savingView = $state(false);
+
+  type SavedView = {
+    _id: Id<'savedViews'>;
+    name: string;
+    query?: string;
+    status?: Status;
+    level?: Exclude<Level, ''>;
+  };
+
+  function applyView(v: SavedView) {
+    status = v.status ?? 'unresolved';
+    level = v.level ?? '';
+    term = v.query ?? '';
+  }
+
+  async function saveView() {
+    const name = viewName.trim();
+    if (!name || savingView) return;
+    savingView = true;
+    try {
+      await client.mutation(api.savedViews.createSavedView, {
+        name,
+        query: term.trim() || undefined,
+        status,
+        level: level || undefined,
+      });
+      viewName = '';
+      naming = false;
+    } finally {
+      savingView = false;
+    }
+  }
+
+  async function deleteView(viewId: Id<'savedViews'>) {
+    await client.mutation(api.savedViews.deleteSavedView, { viewId });
+  }
 </script>
 
 <svelte:head><title>Issues · Sveltry</title></svelte:head>
@@ -62,6 +110,62 @@
       <option value="debug">Debug</option>
     </select>
   </div>
+
+  {#if auth.isAuthenticated}
+    <div class="flex flex-wrap items-center gap-2">
+      {#each savedViews.data ?? [] as view (view._id)}
+        <span
+          class="inline-flex items-center gap-1 rounded-full border bg-card py-0.5 pl-2.5 pr-1 text-xs"
+        >
+          <button class="font-medium hover:text-primary" onclick={() => applyView(view)}>
+            {view.name}
+          </button>
+          <button
+            class="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={`Delete view ${view.name}`}
+            onclick={() => deleteView(view._id)}
+          >
+            <XIcon class="size-3" />
+          </button>
+        </span>
+      {/each}
+
+      {#if naming}
+        <form class="flex items-center gap-1.5" onsubmit={(e) => (e.preventDefault(), saveView())}>
+          <!-- svelte-ignore a11y_autofocus -->
+          <Input
+            bind:value={viewName}
+            placeholder="View name…"
+            class="h-7 w-40 text-xs"
+            autofocus
+            onkeydown={(e) => e.key === 'Escape' && ((naming = false), (viewName = ''))}
+          />
+          <Button type="submit" size="sm" class="h-7" disabled={savingView || !viewName.trim()}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            class="h-7"
+            onclick={() => ((naming = false), (viewName = ''))}
+          >
+            Cancel
+          </Button>
+        </form>
+      {:else}
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-7 gap-1.5 text-xs text-muted-foreground"
+          onclick={() => (naming = true)}
+        >
+          <BookmarkIcon class="size-3.5" />
+          Save view
+        </Button>
+      {/if}
+    </div>
+  {/if}
 
   <div class="flex gap-1 rounded-lg border bg-card p-1">
     {#each tabs as tab (tab.value)}
