@@ -13,9 +13,11 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1068.0",
     "@aws-sdk/s3-request-presigner": "^3.1068.0",
+    "@convex-dev/better-auth": "0.12.3",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@sveltry/protocol": "workspace:*",
     "@sveltry/types": "workspace:*",
+    "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "catalog:",
     "nodemailer": "^8.0.11"

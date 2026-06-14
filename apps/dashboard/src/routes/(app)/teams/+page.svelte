@@ -2,7 +2,6 @@
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
-  import { authClient } from '$lib/auth-client';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -15,14 +14,23 @@
 
   const auth = useAuth();
   const client = useConvexClient();
-  const activeOrg = authClient.useActiveOrganization();
 
   const teams = useQuery(api.teams.listTeams, () =>
     auth.isAuthenticated ? {} : ('skip' as const),
   );
 
   type OrgMember = { userId: string; user?: { email?: string; name?: string } };
-  const orgMembers = $derived(($activeOrg.data?.members ?? []) as OrgMember[]);
+  const members = useQuery(api.organizations.listMembers, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+  const orgMembers = $derived(
+    (members.data ?? []).map(
+      (m): OrgMember => ({
+        userId: m.userId,
+        user: { email: m.email ?? undefined, name: m.name ?? undefined },
+      }),
+    ),
+  );
 
   let newTeam = $state('');
   let creating = $state(false);

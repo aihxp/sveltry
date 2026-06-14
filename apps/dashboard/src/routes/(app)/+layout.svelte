@@ -1,6 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { useQuery, useAuth } from 'convex-svelte';
+  import { api } from '$convex/_generated/api';
   import { authClient } from '$lib/auth-client';
   import Logo from '$lib/components/Logo.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -20,8 +22,6 @@
   import LogOutIcon from '@lucide/svelte/icons/log-out';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 
-  let { data, children } = $props();
-
   const nav = [
     { href: '/dashboard', label: 'Overview', icon: LayoutDashboardIcon },
     { href: '/issues', label: 'Issues', icon: CircleAlertIcon },
@@ -38,8 +38,25 @@
     { href: '/settings', label: 'Settings', icon: SettingsIcon },
   ];
 
+  let { children } = $props();
+
   const path = $derived(page.url.pathname);
-  const activeOrg = authClient.useActiveOrganization();
+  const auth = useAuth();
+  const session = authClient.useSession();
+  const user = $derived($session.data?.user);
+
+  // Client-side auth gating: redirect to login when unauthenticated, and to
+  // onboarding when the user has no active organization yet.
+  const activeOrg = useQuery(api.organizations.activeOrg, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+  $effect(() => {
+    if (!auth.isLoading && !auth.isAuthenticated) {
+      goto(`/login?redirectTo=${encodeURIComponent(page.url.pathname)}`);
+    } else if (auth.isAuthenticated && !activeOrg.isLoading && activeOrg.data === null) {
+      goto('/onboarding');
+    }
+  });
 
   async function signOut() {
     await authClient.signOut();
@@ -69,16 +86,16 @@
     </nav>
     <div class="border-t p-3 text-xs text-muted-foreground">
       <div class="truncate font-medium text-foreground">
-        {$activeOrg.data?.name ?? 'Organization'}
+        {activeOrg.data?.name ?? 'Organization'}
       </div>
-      <div class="truncate">{data.user.email}</div>
+      <div class="truncate">{user?.email ?? ''}</div>
     </div>
   </aside>
 
   <div class="flex min-w-0 flex-1 flex-col">
     <header class="flex h-14 items-center justify-between border-b px-5">
       <div class="flex items-center gap-2 md:hidden"><Logo /></div>
-      <div class="hidden text-sm text-muted-foreground md:block">{$activeOrg.data?.name ?? ''}</div>
+      <div class="hidden text-sm text-muted-foreground md:block">{activeOrg.data?.name ?? ''}</div>
       <div class="flex items-center gap-1.5">
         <ThemeToggle />
         <details class="group relative">
@@ -88,9 +105,9 @@
             <span
               class="flex size-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
             >
-              {(data.user.name || data.user.email).slice(0, 1).toUpperCase()}
+              {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
             </span>
-            <span class="hidden max-w-[12rem] truncate sm:inline">{data.user.email}</span>
+            <span class="hidden max-w-[12rem] truncate sm:inline">{user?.email ?? ''}</span>
             <ChevronDownIcon class="size-3.5 text-muted-foreground" />
           </summary>
           <div

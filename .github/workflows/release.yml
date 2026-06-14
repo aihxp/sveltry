@@ -37,6 +37,10 @@ jobs:
 
       - name: Build packages
         run: bun run build
+        env:
+          PUBLIC_CONVEX_URL: http://127.0.0.1:3210
+          PUBLIC_CONVEX_SITE_URL: http://127.0.0.1:3211
+          PUBLIC_APP_URL: http://localhost:5173
 
       - name: Create release PR or publish
         uses: changesets/action@v1

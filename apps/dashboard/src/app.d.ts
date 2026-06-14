@@ -1,20 +1,12 @@
-import type { auth } from '$lib/auth';
-
-type Session = Awaited<ReturnType<typeof auth.api.getSession>>;
-
 declare global {
   namespace App {
     interface Error {
       errorId?: string;
     }
-    interface Locals {
-      user: NonNullable<Session>['user'] | null;
-      session: NonNullable<Session>['session'] | null;
-    }
-    interface PageData {
-      user?: NonNullable<Session>['user'] | null;
-      activeOrganizationId?: string | null;
-    }
+    // Auth is resolved client-side via the Convex Better Auth component, so there
+    // is no server-side user/session on `locals` and no auth fields on page data.
+    // interface Locals {}
+    // interface PageData {}
     // interface Platform {}
   }
 }
