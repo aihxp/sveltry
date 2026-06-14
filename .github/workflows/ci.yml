@@ -35,6 +35,13 @@ jobs:
 
       - name: Build
         run: bun run build
+        # The SvelteKit auth adapter reads these public URLs from $env/static/public
+        # at build time. Real values are supplied per deployment; these committed
+        # defaults just let the build resolve.
+        env:
+          PUBLIC_CONVEX_URL: http://127.0.0.1:3210
+          PUBLIC_CONVEX_SITE_URL: http://127.0.0.1:3211
+          PUBLIC_APP_URL: http://localhost:5173
 
   format:
     name: Format check
