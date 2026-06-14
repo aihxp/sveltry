@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { issueStatusValidator, levelValidator } from './schema';
 
 /** All saved issue-list views for the active organization, oldest first. */
@@ -26,7 +26,7 @@ export const createSavedView = mutation({
     projectId: v.optional(v.id('projects')),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId, subject } = await requireOrg(ctx);
+    const { activeOrganizationId, subject } = await requireRole(ctx, 'member');
     const name = args.name.trim();
     if (!name) throw new Error('A name is required');
 
@@ -52,7 +52,7 @@ export const createSavedView = mutation({
 export const deleteSavedView = mutation({
   args: { viewId: v.id('savedViews') },
   handler: async (ctx, { viewId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'member');
     const view = await ctx.db.get(viewId);
     if (!view || view.organizationId !== activeOrganizationId) throw new Error('View not found');
     await ctx.db.delete(viewId);

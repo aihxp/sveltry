@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { internalQuery, mutation, query } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
 const DEFAULT_RETENTION_DAYS = 90;
@@ -71,7 +71,7 @@ export const createProject = mutation({
     publicKey: v.string(),
   }),
   handler: async (ctx, { name, platform }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const now = Date.now();
 
     // Lazily mirror the organization for project-scoped settings.
@@ -174,7 +174,7 @@ export const getProjectBySlug = query({
 export const createProjectKey = mutation({
   args: { projectId: v.id('projects'), label: v.string() },
   handler: async (ctx, { projectId, label }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(projectId);
     if (!project || project.organizationId !== activeOrganizationId) {
       throw new Error('Project not found');
@@ -196,7 +196,7 @@ export const createProjectKey = mutation({
 export const setProjectKeyActive = mutation({
   args: { keyId: v.id('projectKeys'), isActive: v.boolean() },
   handler: async (ctx, { keyId, isActive }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const key = await ctx.db.get(keyId);
     if (!key || key.organizationId !== activeOrganizationId) throw new Error('Key not found');
     await ctx.db.patch(keyId, { isActive });
@@ -213,7 +213,7 @@ export const updateProjectSettings = mutation({
     spikeThresholdPerMinute: v.optional(v.union(v.number(), v.null())),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(args.projectId);
     if (!project || project.organizationId !== activeOrganizationId) {
       throw new Error('Project not found');

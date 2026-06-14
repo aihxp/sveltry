@@ -38,6 +38,46 @@ export async function requireOrg(ctx: QueryCtx): Promise<SveltryIdentity> {
   };
 }
 
+export type Role = 'owner' | 'admin' | 'member' | 'billing';
+
+/** Role precedence: owner can do everything an admin can, and so on down. */
+export const ROLE_RANK: Record<Role, number> = { owner: 3, admin: 2, member: 1, billing: 0 };
+
+export interface SveltryMember extends SveltryIdentity {
+  role: Role;
+}
+
+/**
+ * The caller's identity plus their Sveltry role in the active org. Roles live in
+ * the `memberRoles` table. Bootstrap: an org with no role rows treats its caller as
+ * `owner` (the first user of a fresh, self-hosted org); once any role is assigned,
+ * an unassigned member defaults to `member`.
+ */
+export async function roleFor(ctx: QueryCtx): Promise<SveltryMember> {
+  const identity = await requireOrg(ctx);
+  const row = await ctx.db
+    .query('memberRoles')
+    .withIndex('by_org_user', (q) =>
+      q.eq('organizationId', identity.activeOrganizationId).eq('userId', identity.subject),
+    )
+    .first();
+  if (row) return { ...identity, role: row.role };
+  const anyRow = await ctx.db
+    .query('memberRoles')
+    .withIndex('by_org', (q) => q.eq('organizationId', identity.activeOrganizationId))
+    .first();
+  return { ...identity, role: anyRow ? 'member' : 'owner' };
+}
+
+/** Resolve the caller's role and throw unless it is at least `min`. */
+export async function requireRole(ctx: QueryCtx, min: Role): Promise<SveltryMember> {
+  const member = await roleFor(ctx);
+  if (ROLE_RANK[member.role] < ROLE_RANK[min]) {
+    throw new Error(`This action requires the ${min} role or higher.`);
+  }
+  return member;
+}
+
 /** Like {@link requireOrg} but returns null instead of throwing when unauthenticated. */
 export async function optionalOrg(ctx: QueryCtx): Promise<SveltryIdentity | null> {
   const identity = await ctx.auth.getUserIdentity();

@@ -7,7 +7,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { slugify } from './lib/slug';
 
 /**
@@ -177,7 +177,7 @@ export const createUptimeMonitor = mutation({
     expectedStatus: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(args.projectId);
     if (!project || project.organizationId !== activeOrganizationId)
       throw new Error('Project not found');
@@ -234,7 +234,7 @@ export const listUptimeMonitors = query({
 export const deleteUptimeMonitor = mutation({
   args: { monitorId: v.id('uptimeMonitors') },
   handler: async (ctx, { monitorId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const m = await ctx.db.get(monitorId);
     if (!m || m.organizationId !== activeOrganizationId) throw new Error('Not found');
     await ctx.db.delete(monitorId);

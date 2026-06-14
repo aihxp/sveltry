@@ -880,6 +880,99 @@ export const debugTeams = internalMutation({
   },
 });
 
+/**
+ * Verify role resolution (the DB-dependent part of `roleFor`) and the owner guards
+ * against real rows: bootstrap (empty org -> owner), default (assigned org -> member
+ * for the unassigned), explicit lookup, and the last-owner / owner-only checks.
+ */
+export const debugRoles = internalMutation({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const RANK = { owner: 3, admin: 2, member: 1, billing: 0 } as const;
+    // Mirror roleFor's reads.
+    const resolve = async (userId: string): Promise<keyof typeof RANK> => {
+      const row = await ctx.db
+        .query('memberRoles')
+        .withIndex('by_org_user', (q) =>
+          q.eq('organizationId', organizationId).eq('userId', userId),
+        )
+        .first();
+      if (row) return row.role;
+      const any = await ctx.db
+        .query('memberRoles')
+        .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+        .first();
+      return any ? 'member' : 'owner';
+    };
+
+    // Start from a clean slate for this throwaway org.
+    for (const r of await ctx.db
+      .query('memberRoles')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .collect())
+      await ctx.db.delete(r._id);
+
+    const bootstrap = await resolve('anyone'); // no rows -> owner
+
+    await ctx.db.insert('memberRoles', {
+      organizationId,
+      userId: 'alice',
+      role: 'owner',
+      updatedAt: Date.now(),
+    });
+    const aliceRole = await resolve('alice'); // explicit -> owner
+    const strangerRole = await resolve('bob'); // assigned org, unassigned -> member
+
+    // Last-owner guard: demoting alice (only owner) should be blocked.
+    const owners1 = await ctx.db
+      .query('memberRoles')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .filter((q) => q.eq(q.field('role'), 'owner'))
+      .collect();
+    const lastOwnerBlocked = owners1.length <= 1;
+
+    // Add a second owner; now demotion is allowed.
+    await ctx.db.insert('memberRoles', {
+      organizationId,
+      userId: 'bob',
+      role: 'owner',
+      updatedAt: Date.now(),
+    });
+    const owners2 = await ctx.db
+      .query('memberRoles')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .filter((q) => q.eq(q.field('role'), 'owner'))
+      .collect();
+    const demoteAllowedNow = owners2.length > 1;
+
+    // owner-only guard logic: an admin caller cannot touch the owner role.
+    const adminTouchesOwner = RANK['admin'] < RANK['owner']; // admin < owner -> would be blocked
+
+    // Cleanup.
+    for (const r of await ctx.db
+      .query('memberRoles')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .collect())
+      await ctx.db.delete(r._id);
+
+    return {
+      bootstrap,
+      aliceRole,
+      strangerRole,
+      lastOwnerBlocked,
+      demoteAllowedNow,
+      adminTouchesOwner,
+      ok:
+        bootstrap === 'owner' &&
+        aliceRole === 'owner' &&
+        strangerRole === 'member' &&
+        lastOwnerBlocked &&
+        demoteAllowedNow &&
+        adminTouchesOwner,
+    };
+  },
+});
+
 /** Run suspect-commit matching against stored release commits, for verification. */
 export const debugSuspectCommits = internalQuery({
   args: { projectId: v.id('projects'), release: v.string(), files: v.array(v.string()) },

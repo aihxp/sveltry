@@ -16,6 +16,14 @@ export const issueStatusValidator = v.union(
   v.literal('ignored'),
 );
 
+/** Sveltry member roles, ranked owner > admin > member > billing. */
+export const roleValidator = v.union(
+  v.literal('owner'),
+  v.literal('admin'),
+  v.literal('member'),
+  v.literal('billing'),
+);
+
 export const issueSubstatusValidator = v.union(
   v.literal('new'),
   v.literal('ongoing'),
@@ -78,6 +86,20 @@ export default defineSchema({
     .index('by_org', ['organizationId'])
     .index('by_publicId', ['publicId'])
     .index('by_org_slug', ['organizationId', 'slug']),
+
+  // Sveltry's own per-member roles, layered on Better Auth org membership and keyed
+  // by the Better Auth user id. Enforced in Convex (see lib/auth `requireRole`). An
+  // org with no rows treats its first caller as owner (self-hosted bootstrap).
+  memberRoles: defineTable({
+    organizationId: v.string(),
+    userId: v.string(),
+    role: roleValidator,
+    email: v.optional(v.string()),
+    name: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index('by_org', ['organizationId'])
+    .index('by_org_user', ['organizationId', 'userId']),
 
   // Teams group an org's members and own a subset of its projects (Sentry's teams).
   // Modeled in Convex (alongside projects and all other data) rather than in Better

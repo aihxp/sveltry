@@ -8,7 +8,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrg } from './lib/auth';
+import { requireOrg, requireRole } from './lib/auth';
 import { alertChannelValidator, alertTriggerValidator, levelValidator } from './schema';
 
 const LEVEL_RANK: Record<string, number> = { debug: 0, info: 1, warning: 2, error: 3, fatal: 4 };
@@ -41,7 +41,7 @@ export const createAlertRule = mutation({
     channels: v.array(alertChannelValidator),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(args.projectId);
     if (!project || project.organizationId !== activeOrganizationId)
       throw new Error('Project not found');
@@ -63,7 +63,7 @@ export const createAlertRule = mutation({
 export const setAlertRuleEnabled = mutation({
   args: { ruleId: v.id('alertRules'), isEnabled: v.boolean() },
   handler: async (ctx, { ruleId, isEnabled }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const rule = await ctx.db.get(ruleId);
     if (!rule || rule.organizationId !== activeOrganizationId) throw new Error('Rule not found');
     await ctx.db.patch(ruleId, { isEnabled });
@@ -73,7 +73,7 @@ export const setAlertRuleEnabled = mutation({
 export const deleteAlertRule = mutation({
   args: { ruleId: v.id('alertRules') },
   handler: async (ctx, { ruleId }) => {
-    const { activeOrganizationId } = await requireOrg(ctx);
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
     const rule = await ctx.db.get(ruleId);
     if (!rule || rule.organizationId !== activeOrganizationId) throw new Error('Rule not found');
     await ctx.db.delete(ruleId);
