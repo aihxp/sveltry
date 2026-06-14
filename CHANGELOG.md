@@ -8,6 +8,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Profiling.** `profile` envelope items are persisted; their samples/stacks/frames are
+  aggregated into a flamegraph rendered on a new Profiles page.
 - **Session replay.** `replay_event` and `replay_recording` envelope items are persisted
   (metadata in a `replays` table, the rrweb recording in file storage). A new Replays page
   lists recordings, and the detail page plays them back with rrweb-player (the browser

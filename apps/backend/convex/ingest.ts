@@ -9,6 +9,7 @@ import {
   ingestSuccess,
   normalizeCheckIn,
   normalizeEvent,
+  normalizeProfile,
   normalizeSession,
   normalizeSessionAggregates,
   normalizeTransaction,
@@ -21,6 +22,7 @@ import {
 import type {
   SentryCheckIn,
   SentryEventPayload,
+  SentryProfile,
   SentryReplayEvent,
   SentrySession,
   SentrySessionAggregates,
@@ -106,6 +108,7 @@ export const ingest = httpAction(async (ctx, request) => {
   const checkIns: SentryCheckIn[] = [];
   const replayEvents: SentryReplayEvent[] = [];
   const replayRecordings: Uint8Array[] = [];
+  const profiles: SentryProfile[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -160,9 +163,15 @@ export const ingest = httpAction(async (ctx, request) => {
         } else if (item.type === 'replay_recording') {
           // Binary rrweb stream; keep the raw bytes for storage.
           replayRecordings.push(item.payload);
+        } else if (item.type === 'profile') {
+          try {
+            profiles.push(JSON.parse(decoder.decode(item.payload)) as SentryProfile);
+          } catch {
+            // Skip an unparseable profile.
+          }
         }
-        // attachment / profile items are accepted but not yet persisted
-        // (see ROADMAP.md). They are silently tolerated.
+        // attachment items are accepted but not yet persisted (see ROADMAP.md).
+        // They are silently tolerated.
       }
     } catch (err) {
       return ingestError(400, 'invalid envelope', [String(err)], cors);
@@ -298,6 +307,24 @@ export const ingest = httpAction(async (ctx, request) => {
       errorCount: meta.error_ids?.length ?? 0,
       platform: meta.platform,
       environment: meta.environment,
+    });
+  }
+
+  for (const payload of profiles) {
+    const p = normalizeProfile(payload, { receivedAt });
+    if (!p.profileId || p.sampleCount === 0) continue;
+    await ctx.runMutation(internal.profiles.recordProfile, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      profileId: p.profileId,
+      transactionName: p.transactionName,
+      sampleCount: p.sampleCount,
+      durationMs: p.durationMs,
+      platform: p.platform,
+      release: p.release,
+      environment: p.environment,
+      timestamp: p.timestamp,
+      payload: resolved.scrubPii ? scrubPayload(payload) : payload,
     });
   }
 

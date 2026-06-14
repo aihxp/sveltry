@@ -58,7 +58,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | CORS preflight | Done | `OPTIONS /api/*` handled; `GET /healthz` for liveness. |
 | security / minidump endpoints | Partial | Recognized and tolerated (HTTP 200) but not stored. |
 | transaction / session / sessions / replay / check_in items | Done | Persisted: performance, release health, cron monitors, and session replay. |
-| profile / client_report / feedback items | Partial | Accepted (HTTP 200) but not yet persisted. |
+| profile items | Done | Persisted; rendered as a flamegraph on the Profiles page. |
+| client_report / feedback items | Partial | Accepted (HTTP 200) but not yet persisted. |
 
 ## Projects, orgs, teams, and access
 
@@ -115,6 +116,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Transactions and spans | Done | `transaction` items are persisted with their spans; a Performance page lists them. |
 | Latency percentiles (p50/p95) | Done | Per-transaction p50/p95/avg/max computed over a recent-window sample (no columnar store yet, so percentiles are a recent approximation). |
 | Trace view (span waterfall) | Done | The transaction detail page renders the span waterfall. |
+| Profiling (flamegraph) | Done | `profile` items are persisted; samples/stacks/frames are aggregated into a flamegraph on the Profiles page. |
 | Web vitals | Planned | Needs a columnar / time-series store. |
 | Distributed tracing across services | Planned | Transactions carry their trace id, but cross-service trace stitching is not yet built. |
 

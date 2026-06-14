@@ -199,6 +199,24 @@ export default defineSchema({
     .index('by_project_eventId', ['projectId', 'eventId'])
     .index('by_trace', ['traceId']),
 
+  // Sampled performance profiles (envelope items with `type: "profile"`). The
+  // full samples/stacks/frames payload is kept for flamegraph construction.
+  profiles: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    profileId: v.string(),
+    transactionName: v.string(),
+    sampleCount: v.number(),
+    durationMs: v.number(),
+    platform: v.string(),
+    release: v.optional(v.string()),
+    environment: v.string(),
+    timestamp: v.number(),
+    payload: v.any(),
+  })
+    .index('by_org', ['organizationId', 'timestamp'])
+    .index('by_project_profileId', ['projectId', 'profileId']),
+
   // Session replays. One `replays` row per replay (metadata), and one
   // `replaySegments` row per recording segment (rrweb stream in file storage).
   replays: defineTable({
