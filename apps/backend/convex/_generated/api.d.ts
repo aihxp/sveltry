@@ -26,6 +26,7 @@ import type * as profiles from "../profiles.js";
 import type * as projects from "../projects.js";
 import type * as releases from "../releases.js";
 import type * as replays from "../replays.js";
+import type * as savedViews from "../savedViews.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as sourcemaps from "../sourcemaps.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   releases: typeof releases;
   replays: typeof replays;
+  savedViews: typeof savedViews;
   seed: typeof seed;
   sessions: typeof sessions;
   sourcemaps: typeof sourcemaps;

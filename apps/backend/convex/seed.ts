@@ -443,6 +443,35 @@ export const debugMetricAlerts = internalQuery({
   },
 });
 
+/** Roundtrip a saved view (insert, read via by_org index, delete) for verification. */
+export const debugSavedViews = internalMutation({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const id = await ctx.db.insert('savedViews', {
+      organizationId,
+      userId: 'debug-user',
+      name: 'Fatal errors',
+      query: 'TypeError',
+      status: 'unresolved',
+      level: 'fatal',
+      createdAt: Date.now(),
+    });
+    const listed = await ctx.db
+      .query('savedViews')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .order('asc')
+      .take(100);
+    const found = listed.find((v) => v._id === id);
+    await ctx.db.delete(id);
+    return {
+      inserted: id,
+      count: listed.length,
+      roundtrip: found ? { name: found.name, level: found.level, query: found.query } : null,
+      deletedOk: (await ctx.db.get(id)) === null,
+    };
+  },
+});
+
 /** Insert an uptime monitor bypassing auth, for verification. */
 export const seedUptimeMonitor = internalMutation({
   args: {

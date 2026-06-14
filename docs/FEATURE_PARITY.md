@@ -26,7 +26,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Event and user counts | Done | `count` and `userCount` tracked per issue; `firstSeen` / `lastSeen` maintained. |
 | Triage aging | Done | Hourly `sweepOngoing` cron ages `new` issues older than 7 days to `ongoing`. |
 | Issue search | Done | Full-text search over issue titles (Convex search index) with status/level filters. |
-| Saved views | Planned | Persisted search/filter presets are not yet implemented. |
+| Saved views | Done | Named, org-shared issue-list presets (query, status, level) you can save and one-click apply. |
 | Merge issues | Done | Merge a duplicate issue into another from the issue detail page (events and counts move). |
 | Unmerge issues | Planned | Re-splitting a merged issue is not yet implemented. |
 | Issue assignment | Done | Assign/unassign to the current user from the issue detail page. |

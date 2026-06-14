@@ -483,6 +483,20 @@ export default defineSchema({
     deliveredAt: v.number(),
   }).index('by_issue', ['issueId']),
 
+  // Named issue-list filter presets (Sentry's "saved searches"). Org-shared so a
+  // team converges on the same triage views; `userId` records the author. The
+  // fields mirror the issues list filter state.
+  savedViews: defineTable({
+    organizationId: v.string(),
+    userId: v.string(),
+    name: v.string(),
+    query: v.optional(v.string()),
+    status: v.optional(issueStatusValidator),
+    level: v.optional(levelValidator),
+    projectId: v.optional(v.id('projects')),
+    createdAt: v.number(),
+  }).index('by_org', ['organizationId']),
+
   // A lightweight fixed-window rate limiter for ingestion, keyed per DSN key.
   // `by_window` lets a daily cron prune windows that have rolled over.
   ingestWindows: defineTable({
