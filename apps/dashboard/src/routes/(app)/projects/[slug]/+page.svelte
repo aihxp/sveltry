@@ -682,6 +682,9 @@
                     title={`debug id ${artifact.debugId}`}>{artifact.debugId.slice(0, 8)}</Badge
                   >
                 {/if}
+                {#if artifact.storage === 's3'}
+                  <Badge variant="outline" class="shrink-0" title="Offloaded to S3/R2">S3</Badge>
+                {/if}
                 <span class="shrink-0 font-mono text-xs text-muted-foreground"
                   >{artifact.release || 'no release'}</span
                 >

@@ -156,7 +156,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | PII scrubbing at ingest | Done | Default scrubbing applied per project before storage. |
 | Per-key rate limiting | Done | Optional fixed-window limit per project key (`ingestWindows`). |
 | Data retention | Done | Daily `sweepRetention` prunes events past each project's retention, bounded per run. |
-| S3 / R2 storage offload | Planned | Event payloads are stored inline in Convex documents today; offloading large objects/attachments to S3/R2 is not yet wired in Sveltry. |
+| S3 / R2 storage offload | Done | Optional offload of large blobs (source maps) to an S3-compatible bucket, configured by env vars (no-op when unset). Resolution reads offloaded maps back transparently. Inline event payloads are not yet offloaded. |
 | Spike protection | Done | Optional per-project per-minute cap; excess error events are dropped (still HTTP 200). |
 | Usage accounting | Done | Per-project, per-day event/transaction/dropped counters (30-day totals on the project page). |
 | Hard quotas | Done | Optional per-project monthly event quota; events over quota are dropped. Configurable on the project page. |

@@ -1108,6 +1108,113 @@ export const debugDiscover = internalMutation({
 
 const HOUR_MS = 3_600_000;
 
+/** Read an artifact's storage state, for the S3-offload roundtrip. */
+export const debugArtifactState = internalQuery({
+  args: { projectId: v.id('projects'), release: v.string(), name: v.string() },
+  handler: async (ctx, { projectId, release, name }) => {
+    const a = await ctx.db
+      .query('releaseArtifacts')
+      .withIndex('by_project_release_name', (q) =>
+        q.eq('projectId', projectId).eq('release', release).eq('name', name),
+      )
+      .first();
+    if (!a) return null;
+    return {
+      id: a._id,
+      hasConvexBlob: a.storageId != null,
+      s3Bucket: a.s3Bucket ?? null,
+      s3Key: a.s3Key ?? null,
+      size: a.size,
+    };
+  },
+});
+
+/** Seed an event referencing a debug id (its map is uploaded separately), for S3 read. */
+export const seedEventForDebugId = internalMutation({
+  args: {
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    debugId: v.string(),
+    codeFile: v.string(),
+  },
+  handler: async (ctx, { organizationId, projectId, debugId, codeFile }) => {
+    const now = Date.now();
+    const issueId = await ctx.db.insert('issues', {
+      organizationId,
+      projectId,
+      fingerprint: `s3-${now}`,
+      groupingConfig: 'debug',
+      title: 'Error: boom',
+      culprit: codeFile,
+      level: 'error',
+      platform: 'javascript',
+      status: 'unresolved',
+      substatus: 'new',
+      count: 1,
+      userCount: 0,
+      firstSeen: now,
+      lastSeen: now,
+    });
+    const eventDocId = await ctx.db.insert('events', {
+      organizationId,
+      projectId,
+      issueId,
+      eventId: `s3-${now}`,
+      timestamp: now,
+      receivedAt: now,
+      level: 'error',
+      platform: 'javascript',
+      environment: 'production',
+      message: 'boom',
+      culprit: codeFile,
+      tags: {},
+      payload: {
+        platform: 'javascript',
+        exception: {
+          values: [
+            {
+              type: 'Error',
+              value: 'boom',
+              stacktrace: { frames: [{ abs_path: codeFile, lineno: 1, colno: 42 }] },
+            },
+          ],
+        },
+        debug_meta: { images: [{ type: 'sourcemap', code_file: codeFile, debug_id: debugId }] },
+      },
+    });
+    return { issueId, eventDocId };
+  },
+});
+
+export const cleanupS3Scenario = internalMutation({
+  args: {
+    issueId: v.id('issues'),
+    eventDocId: v.id('events'),
+    projectId: v.id('projects'),
+    release: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, { issueId, eventDocId, projectId, release, name }) => {
+    await ctx.db.delete(eventDocId);
+    await ctx.db.delete(issueId);
+    const a = await ctx.db
+      .query('releaseArtifacts')
+      .withIndex('by_project_release_name', (q) =>
+        q.eq('projectId', projectId).eq('release', release).eq('name', name),
+      )
+      .first();
+    if (a) {
+      if (a.storageId) await ctx.storage.delete(a.storageId);
+      if (a.s3Bucket && a.s3Key)
+        await ctx.scheduler.runAfter(0, internal.storage.deleteObject, {
+          bucket: a.s3Bucket,
+          key: a.s3Key,
+        });
+      await ctx.db.delete(a._id);
+    }
+  },
+});
+
 /** Insert a Jira tracker integration + a throwaway issue, for the delivery roundtrip. */
 export const seedTrackerScenario = internalMutation({
   args: { organizationId: v.string(), projectId: v.id('projects'), siteUrl: v.string() },

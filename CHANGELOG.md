@@ -17,6 +17,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **S3 / R2 storage offload.** Large blobs (source maps today) can be offloaded to an S3-compatible
+  bucket instead of living inline in Convex, configured entirely by env vars (`S3_BUCKET`, ...). It
+  is a clean no-op when unconfigured, so existing instances are unaffected; stack-trace resolution
+  reads offloaded maps back transparently. The S3 work runs in a Convex Node action; the pure
+  config/key logic is unit-tested.
 - **Jira and Linear integrations.** Connect a project to Jira (REST v3) or Linear (GraphQL) and
   create a tracker ticket from a Sveltry issue, either on demand from the issue page or
   automatically when a new issue appears. Credentials are configured per project by the

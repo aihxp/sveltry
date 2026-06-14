@@ -149,6 +149,20 @@ bunx convex env set SMTP_PASS "..."          # optional
 bunx convex env set SMTP_FROM "alerts@example.com"
 ```
 
+To **offload large blobs** (source maps today) to an S3-compatible bucket instead of
+storing them inline in Convex, set the S3 env vars. Offload is a clean no-op until
+`S3_BUCKET` is set, so this is optional; unset leaves all blobs in Convex storage.
+
+```sh
+bunx convex env set S3_BUCKET "sveltry-blobs"
+bunx convex env set S3_ACCESS_KEY_ID "..."
+bunx convex env set S3_SECRET_ACCESS_KEY "..."
+bunx convex env set S3_REGION "auto"          # "auto" for R2; the AWS region for S3
+bunx convex env set S3_ENDPOINT "https://<acct>.r2.cloudflarestorage.com"  # set for R2/MinIO; unset for AWS S3
+bunx convex env set S3_FORCE_PATH_STYLE "true"  # "true" for MinIO (fine for R2)
+bunx convex env set S3_OFFLOAD_MIN_BYTES "102400"  # only offload blobs this size or larger
+```
+
 `SITE_URL` is the dashboard origin and JWT issuer; it must equal `PUBLIC_APP_URL`.
 `SVELTRY_JWT_AUDIENCE` is the JWT `aud` claim (`convex`). `SVELTRY_JWKS_URL` is
 where the backend fetches signing keys to verify JWTs statelessly. In production,
