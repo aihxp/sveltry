@@ -319,6 +319,15 @@ export interface SentryCheckIn {
   [key: string]: unknown;
 }
 
+/** Legacy user feedback (envelope item `type: "user_report"`). */
+export interface SentryUserReport {
+  event_id?: string;
+  name?: string;
+  email?: string;
+  comments?: string;
+  [key: string]: unknown;
+}
+
 /** A client report (SDK-side dropped-event accounting). */
 export interface SentryClientReport {
   timestamp?: string;

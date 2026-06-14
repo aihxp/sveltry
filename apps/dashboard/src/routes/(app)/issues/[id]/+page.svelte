@@ -9,7 +9,7 @@
   import LevelBadge from '$lib/components/LevelBadge.svelte';
   import StackTrace from '$lib/components/StackTrace.svelte';
   import { Input } from '$lib/components/ui/input';
-  import { relativeTime } from '$lib/utils';
+  import { formatBytes, relativeTime } from '$lib/utils';
   import CheckIcon from '@lucide/svelte/icons/check';
   import BellOffIcon from '@lucide/svelte/icons/bell-off';
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
@@ -29,6 +29,11 @@
   );
   const comments = useQuery(api.issues.listComments, () =>
     auth.isAuthenticated ? { issueId } : ('skip' as const),
+  );
+  const attachments = useQuery(api.feedback.eventAttachments, () =>
+    auth.isAuthenticated && event.data?.eventId
+      ? { eventId: event.data.eventId }
+      : ('skip' as const),
   );
 
   let busy = $state(false);
@@ -236,6 +241,28 @@
           </Card.Content>
         </Card.Root>
       {/if}
+    {/if}
+
+    {#if attachments.data && attachments.data.length > 0}
+      <Card.Root>
+        <Card.Header><Card.Title>Attachments</Card.Title></Card.Header>
+        <Card.Content class="space-y-2">
+          {#each attachments.data as a (a._id)}
+            <div class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+              <span class="min-w-0 flex-1 truncate font-mono text-xs">{a.filename}</span>
+              <span class="shrink-0 text-xs text-muted-foreground">{formatBytes(a.size)}</span>
+              {#if a.url}
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noopener"
+                  class="shrink-0 text-xs font-medium text-primary hover:underline">Download</a
+                >
+              {/if}
+            </div>
+          {/each}
+        </Card.Content>
+      </Card.Root>
     {/if}
 
     <Card.Root>

@@ -41,7 +41,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Tags | Done | Stored and indexed (`events.tags`) for later filtering. |
 | Contexts and request data | Done | Preserved in the stored payload. |
 | Event normalization | Done | Each event normalized at ingest before grouping and storage. |
-| Attachments | Partial | Attachment envelope items are accepted (HTTP 200) but not stored. |
+| Attachments | Done | `attachment` items are stored in file storage and downloadable from the issue detail page. |
 
 ## Ingestion and SDK compatibility
 
@@ -61,7 +61,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | security / minidump endpoints | Partial | Recognized and tolerated (HTTP 200) but not stored. |
 | transaction / session / sessions / replay / check_in items | Done | Persisted: performance, release health, cron monitors, and session replay. |
 | profile items | Done | Persisted; rendered as a flamegraph on the Profiles page. |
-| client_report / feedback items | Partial | Accepted (HTTP 200) but not yet persisted. |
+| user feedback (`user_report` / `feedback`) | Done | Persisted and listed on a Feedback page. |
+| client_report items | Partial | Accepted (HTTP 200); SDK-dropped-event accounting not yet surfaced. |
 
 ## Projects, orgs, teams, and access
 
