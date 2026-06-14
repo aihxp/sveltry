@@ -16,6 +16,19 @@ export const issueStatusValidator = v.union(
   v.literal('ignored'),
 );
 
+/**
+ * Per-project inbound data filters: drop matching error events at ingest before
+ * they are stored or counted. Patterns are case-insensitive globs (see
+ * `@sveltry/protocol` `inboundfilters`). An empty config is a clean no-op.
+ */
+export const ingestFiltersValidator = v.object({
+  ignoreErrors: v.optional(v.array(v.string())),
+  ignoreReleases: v.optional(v.array(v.string())),
+  ignoreEnvironments: v.optional(v.array(v.string())),
+  ignorePaths: v.optional(v.array(v.string())),
+  filterBots: v.optional(v.boolean()),
+});
+
 /** Sveltry member roles, ranked owner > admin > member > billing. */
 export const roleValidator = v.union(
   v.literal('owner'),
@@ -120,6 +133,8 @@ export default defineSchema({
     monthlyEventQuota: v.optional(v.number()),
     /** Optional automatic spike protection: max events accepted per minute. */
     spikeThresholdPerMinute: v.optional(v.number()),
+    /** Optional inbound data filters: drop matching error events at ingest. */
+    ingestFilters: v.optional(ingestFiltersValidator),
     /** Optional owning team (see the `teams` table); null = org-wide. */
     teamId: v.optional(v.id('teams')),
   })
@@ -528,7 +543,8 @@ export default defineSchema({
   }).index('by_project', ['projectId', 'deployedAt']),
 
   // Per-project, per-day usage counters (events/transactions accepted, plus
-  // client-side drops reported via client_report). One write per ingest batch.
+  // client-side/quota/spike drops and inbound-filter drops). One write per ingest
+  // batch. `filteredCount` is optional so existing rows keep working.
   usageDaily: defineTable({
     organizationId: v.string(),
     projectId: v.id('projects'),
@@ -536,6 +552,8 @@ export default defineSchema({
     eventCount: v.number(),
     transactionCount: v.number(),
     droppedCount: v.number(),
+    /** Error events dropped by inbound data filters (see `projects.ingestFilters`). */
+    filteredCount: v.optional(v.number()),
   }).index('by_project_day', ['projectId', 'day']),
 
   // Uploaded build artifacts (minified bundles and their source maps) used to

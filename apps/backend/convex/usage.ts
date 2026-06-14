@@ -15,9 +15,12 @@ export const recordUsage = internalMutation({
     events: v.number(),
     transactions: v.number(),
     dropped: v.number(),
+    /** Error events dropped by inbound data filters; optional for back-compat. */
+    filtered: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const day = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+    const filtered = args.filtered ?? 0;
     const existing = await ctx.db
       .query('usageDaily')
       .withIndex('by_project_day', (q) => q.eq('projectId', args.projectId).eq('day', day))
@@ -27,6 +30,7 @@ export const recordUsage = internalMutation({
         eventCount: existing.eventCount + args.events,
         transactionCount: existing.transactionCount + args.transactions,
         droppedCount: existing.droppedCount + args.dropped,
+        filteredCount: (existing.filteredCount ?? 0) + filtered,
       });
     } else {
       await ctx.db.insert('usageDaily', {
@@ -36,6 +40,7 @@ export const recordUsage = internalMutation({
         eventCount: args.events,
         transactionCount: args.transactions,
         droppedCount: args.dropped,
+        filteredCount: filtered,
       });
     }
   },
@@ -58,8 +63,9 @@ export const projectUsage = query({
         events: acc.events + r.eventCount,
         transactions: acc.transactions + r.transactionCount,
         dropped: acc.dropped + r.droppedCount,
+        filtered: acc.filtered + (r.filteredCount ?? 0),
       }),
-      { events: 0, transactions: 0, dropped: 0 },
+      { events: 0, transactions: 0, dropped: 0, filtered: 0 },
     );
     return {
       totals,
@@ -68,6 +74,8 @@ export const projectUsage = query({
           day: r.day,
           events: r.eventCount,
           transactions: r.transactionCount,
+          dropped: r.droppedCount,
+          filtered: r.filteredCount ?? 0,
         }))
         .sort((a, b) => a.day - b.day),
     };

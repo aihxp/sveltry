@@ -158,6 +158,57 @@
     }
   }
 
+  // Inbound data filters (one glob pattern per line). Seeded once from the project.
+  let filterErrors = $state('');
+  let filterReleases = $state('');
+  let filterEnvironments = $state('');
+  let filterPaths = $state('');
+  let filterBots = $state(false);
+  let savingFilters = $state(false);
+  let filtersSeeded = false;
+  $effect(() => {
+    const f = proj.data?.project?.ingestFilters;
+    if (proj.data?.project && !filtersSeeded) {
+      filtersSeeded = true;
+      filterErrors = (f?.ignoreErrors ?? []).join('\n');
+      filterReleases = (f?.ignoreReleases ?? []).join('\n');
+      filterEnvironments = (f?.ignoreEnvironments ?? []).join('\n');
+      filterPaths = (f?.ignorePaths ?? []).join('\n');
+      filterBots = f?.filterBots ?? false;
+    }
+  });
+  const lines = (s: string): string[] =>
+    s
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+  async function saveFilters(e: SubmitEvent) {
+    e.preventDefault();
+    if (!projectId) return;
+    savingFilters = true;
+    try {
+      const ignoreErrors = lines(filterErrors);
+      const ignoreReleases = lines(filterReleases);
+      const ignoreEnvironments = lines(filterEnvironments);
+      const ignorePaths = lines(filterPaths);
+      const empty =
+        !ignoreErrors.length &&
+        !ignoreReleases.length &&
+        !ignoreEnvironments.length &&
+        !ignorePaths.length &&
+        !filterBots;
+      await client.mutation(api.projects.updateProjectSettings, {
+        projectId,
+        // null clears all filters when nothing is configured.
+        ingestFilters: empty
+          ? null
+          : { ignoreErrors, ignoreReleases, ignoreEnvironments, ignorePaths, filterBots },
+      });
+    } finally {
+      savingFilters = false;
+    }
+  }
+
   // New metric alert form
   let maMetric = $state<'p95_latency' | 'error_count' | 'crash_free_rate'>('p95_latency');
   let maThreshold = $state(1000);
@@ -426,13 +477,76 @@
       </Card.Content>
     </Card.Root>
 
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Inbound filters</Card.Title>
+        <Card.Description>
+          Drop matching error events at ingest, before they are stored, grouped, or counted against
+          your quota. One glob pattern per line: <code class="font-mono">*</code> matches any text,
+          <code class="font-mono">?</code> matches one character, and a pattern matches the whole
+          field (wrap with <code class="font-mono">*</code> for a substring).
+        </Card.Description>
+      </Card.Header>
+      <Card.Content>
+        <form class="space-y-3" onsubmit={saveFilters}>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="filterErrors">Error messages</Label>
+              <textarea
+                id="filterErrors"
+                bind:value={filterErrors}
+                rows="3"
+                placeholder={'*ResizeObserver loop*\n*Non-Error promise rejection*'}
+                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              ></textarea>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="filterPaths">Stack-frame paths</Label>
+              <textarea
+                id="filterPaths"
+                bind:value={filterPaths}
+                rows="3"
+                placeholder={'chrome-extension://*\nmoz-extension://*'}
+                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              ></textarea>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="filterReleases">Releases</Label>
+              <textarea
+                id="filterReleases"
+                bind:value={filterReleases}
+                rows="2"
+                placeholder={'1.0.0-rc*'}
+                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              ></textarea>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="filterEnvironments">Environments</Label>
+              <textarea
+                id="filterEnvironments"
+                bind:value={filterEnvironments}
+                rows="2"
+                placeholder={'local\ntest'}
+                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              ></textarea>
+            </div>
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" bind:checked={filterBots} class="size-4" />
+            Filter known web crawlers and bots (by request user-agent)
+          </label>
+          <Button type="submit" size="sm" disabled={savingFilters}>Save filters</Button>
+        </form>
+      </Card.Content>
+    </Card.Root>
+
     {#if usage.data}
       <Card.Root>
         <Card.Header>
           <Card.Title>Usage (last 30 days)</Card.Title>
         </Card.Header>
         <Card.Content>
-          <div class="grid grid-cols-3 gap-4">
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <div class="text-xs uppercase tracking-wide text-muted-foreground">Events</div>
               <div class="text-2xl font-bold tabular-nums">
@@ -446,11 +560,15 @@
               </div>
             </div>
             <div>
-              <div class="text-xs uppercase tracking-wide text-muted-foreground">
-                Dropped (client)
-              </div>
+              <div class="text-xs uppercase tracking-wide text-muted-foreground">Dropped</div>
               <div class="text-2xl font-bold tabular-nums text-muted-foreground">
                 {usage.data.totals.dropped.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide text-muted-foreground">Filtered</div>
+              <div class="text-2xl font-bold tabular-nums text-muted-foreground">
+                {usage.data.totals.filtered.toLocaleString()}
               </div>
             </div>
           </div>
