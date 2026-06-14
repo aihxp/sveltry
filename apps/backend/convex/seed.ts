@@ -9,6 +9,7 @@ import {
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { internalAction, internalMutation, internalQuery } from './_generated/server';
+import { resolveActiveOrg } from './lib/auth';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
 /**
@@ -1107,6 +1108,104 @@ export const debugDiscover = internalMutation({
 });
 
 const HOUR_MS = 3_600_000;
+
+/**
+ * Exercise the Convex-native org model end to end: create an org (owner row +
+ * active pointer), resolve the active org via the real resolveActiveOrg through all
+ * three paths (userSettings, JWT-claim fallback, single-membership), and the
+ * stale-pointer guard. Cleans up.
+ */
+export const debugOrgModel = internalMutation({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    const now = Date.now();
+    const orgA = `dbgorg-a-${now}`;
+    const orgB = `dbgorg-b-${now}`;
+    const orgStale = `dbgorg-stale-${now}`;
+
+    // createOrganization-equivalent for orgA (owner + active).
+    await ctx.db.insert('organizations', {
+      slug: orgA,
+      name: 'A',
+      createdBy: userId,
+      createdAt: now,
+    });
+    await ctx.db.insert('memberRoles', {
+      organizationId: orgA,
+      userId,
+      role: 'owner',
+      updatedAt: now,
+    });
+    const settingsId = await ctx.db.insert('userSettings', {
+      userId,
+      activeOrganizationId: orgA,
+    });
+
+    // Path 1: userSettings + member -> orgA.
+    const r1 = await resolveActiveOrg(ctx, userId, null);
+
+    // Path 3 setup: a second membership; clear settings -> single-membership fallback
+    // is ambiguous (2 orgs) so it returns null; with only orgB it returns orgB.
+    await ctx.db.insert('organizations', {
+      slug: orgB,
+      name: 'B',
+      createdBy: userId,
+      createdAt: now,
+    });
+    await ctx.db.insert('memberRoles', {
+      organizationId: orgB,
+      userId,
+      role: 'member',
+      updatedAt: now,
+    });
+
+    // Stale pointer: point settings at an org the user is NOT in, that HAS another member.
+    await ctx.db.insert('memberRoles', {
+      organizationId: orgStale,
+      userId: 'someone-else',
+      role: 'owner',
+      updatedAt: now,
+    });
+    await ctx.db.patch(settingsId, { activeOrganizationId: orgStale });
+    // Stale -> ignored; jwtClaim used instead.
+    const rStaleJwt = await resolveActiveOrg(ctx, userId, orgB);
+
+    // Path 2: JWT-claim fallback when settings unset.
+    await ctx.db.patch(settingsId, { activeOrganizationId: undefined });
+    const r2 = await resolveActiveOrg(ctx, userId, 'jwt-org');
+
+    // Two memberships, no settings, no claim -> ambiguous -> null.
+    const rAmbiguous = await resolveActiveOrg(ctx, userId, null);
+
+    // Cleanup.
+    for (const row of await ctx.db
+      .query('memberRoles')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect())
+      await ctx.db.delete(row._id);
+    for (const slug of [orgA, orgB, orgStale]) {
+      const o = await ctx.db
+        .query('organizations')
+        .withIndex('by_slug', (q) => q.eq('slug', slug))
+        .first();
+      if (o) await ctx.db.delete(o._id);
+    }
+    const stale = await ctx.db
+      .query('memberRoles')
+      .withIndex('by_org', (q) => q.eq('organizationId', orgStale))
+      .first();
+    if (stale) await ctx.db.delete(stale._id);
+    await ctx.db.delete(settingsId);
+
+    return {
+      path1_userSettingsMember: r1,
+      path2_jwtFallback: r2,
+      staleIgnored_usesJwt: rStaleJwt,
+      ambiguous_null: rAmbiguous,
+      ok: r1 === orgA && r2 === 'jwt-org' && rStaleJwt === orgB && rAmbiguous === null,
+    };
+  },
+});
 
 /** Read an artifact's storage state, for the S3-offload roundtrip. */
 export const debugArtifactState = internalQuery({

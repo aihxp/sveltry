@@ -87,13 +87,24 @@ export const alertChannelValidator = v.object({
  * issue/event data, all scoped by `organizationId` (the Better Auth org id).
  */
 export default defineSchema({
-  // A thin mirror of the Better Auth organization, created on first use so the
-  // dashboard can attach project-level settings without a Postgres round-trip.
+  // Organizations (tenants). The Convex-native source of truth: `slug` is the
+  // tenant key used as `organizationId` across every domain table. `createdBy` is
+  // the owner's user id. (Historically a thin mirror of a Better Auth org; now
+  // authoritative so the org model lives entirely in Convex.)
   organizations: defineTable({
     slug: v.string(),
     name: v.string(),
+    createdBy: v.optional(v.string()),
     createdAt: v.number(),
   }).index('by_slug', ['slug']),
+
+  // Per-user app settings, including which organization is active. Resolved by
+  // `requireOrg` (replaces the active-org JWT claim, so no auth provider is needed
+  // to track it).
+  userSettings: defineTable({
+    userId: v.string(),
+    activeOrganizationId: v.optional(v.string()),
+  }).index('by_user', ['userId']),
 
   projects: defineTable({
     organizationId: v.string(),
@@ -162,7 +173,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_org', ['organizationId'])
-    .index('by_org_user', ['organizationId', 'userId']),
+    .index('by_org_user', ['organizationId', 'userId'])
+    .index('by_user', ['userId']),
 
   // Teams group an org's members and own a subset of its projects (Sentry's teams).
   // Modeled in Convex (alongside projects and all other data) rather than in Better
