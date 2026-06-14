@@ -264,6 +264,22 @@ export interface SentrySessionAggregates {
   [key: string]: unknown;
 }
 
+/** Replay metadata (envelope item `type: "replay_event"`). */
+export interface SentryReplayEvent {
+  replay_id?: string;
+  segment_id?: number;
+  timestamp?: number | string;
+  replay_start_timestamp?: number | string;
+  urls?: string[];
+  error_ids?: string[];
+  trace_ids?: string[];
+  platform?: string;
+  environment?: string;
+  release?: string;
+  contexts?: Record<string, Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
 /** A cron monitor check-in (envelope item `type: "check_in"`). */
 export interface SentryCheckIn {
   check_in_id?: string;

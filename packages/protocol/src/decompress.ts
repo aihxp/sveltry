@@ -1,11 +1,12 @@
 /**
  * Transparent decompression of ingest request bodies. Sentry SDKs may compress
- * with gzip, deflate (zlib), br (Brotli), or zstd. The web-standard
- * `DecompressionStream` (available in the Convex V8 runtime and modern browsers)
- * handles gzip and deflate; Brotli/zstd are passed through to an optional global
- * if the runtime provides one, otherwise an error is thrown so the caller can
- * return a 400 with an `X-Sentry-Error` reason.
+ * with gzip, deflate (zlib), br (Brotli), or zstd. Decompression uses `fflate`
+ * (pure JS) rather than `DecompressionStream`, because the latter is not present
+ * in every runtime (notably the self-hosted Convex isolate). Brotli/zstd are not
+ * supported and raise an error so the caller can return a 400 with a reason.
  */
+
+import { decompressSync } from 'fflate';
 
 /** Guard against decompression bombs: reject bodies that expand past this. */
 export const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024; // 200 MiB, per the envelope spec.
@@ -20,14 +21,10 @@ export class DecodeError extends Error {
   }
 }
 
-async function inflate(bytes: Uint8Array, format: 'gzip' | 'deflate'): Promise<Uint8Array> {
-  if (typeof DecompressionStream === 'undefined') {
-    throw new DecodeError('decompression unsupported', [`no DecompressionStream for ${format}`]);
-  }
+function inflate(bytes: Uint8Array, format: 'gzip' | 'deflate'): Uint8Array {
   try {
-    const ds = new DecompressionStream(format);
-    const stream = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(ds));
-    const buf = new Uint8Array(await stream.arrayBuffer());
+    // `decompressSync` auto-detects gzip, zlib, and raw deflate.
+    const buf = decompressSync(bytes);
     if (buf.byteLength > MAX_DECOMPRESSED_BYTES) {
       throw new DecodeError('payload too large', [
         `decompressed size exceeds ${MAX_DECOMPRESSED_BYTES}`,

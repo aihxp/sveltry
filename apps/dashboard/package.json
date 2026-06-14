@@ -13,8 +13,8 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
-    "@sveltry/types": "workspace:*",
     "@lucide/svelte": "catalog:",
+    "@sveltry/types": "workspace:*",
     "@tanstack/table-core": "catalog:",
     "better-auth": "catalog:",
     "bits-ui": "catalog:",
@@ -23,6 +23,7 @@
     "convex-svelte": "catalog:",
     "mode-watcher": "catalog:",
     "pg": "catalog:",
+    "rrweb-player": "^2.0.1",
     "tailwind-merge": "catalog:",
     "tailwind-variants": "catalog:"
   },

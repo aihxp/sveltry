@@ -15,11 +15,13 @@ import {
   parseEnvelope,
   projectIdFromPath,
   rateLimited,
+  splitReplayRecording,
   corsHeaders,
 } from '@sveltry/protocol';
 import type {
   SentryCheckIn,
   SentryEventPayload,
+  SentryReplayEvent,
   SentrySession,
   SentrySessionAggregates,
 } from '@sveltry/types';
@@ -102,6 +104,8 @@ export const ingest = httpAction(async (ctx, request) => {
   const sessions: SentrySession[] = [];
   const sessionAggregates: SentrySessionAggregates[] = [];
   const checkIns: SentryCheckIn[] = [];
+  const replayEvents: SentryReplayEvent[] = [];
+  const replayRecordings: Uint8Array[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -147,8 +151,17 @@ export const ingest = httpAction(async (ctx, request) => {
           } catch {
             // Skip an unparseable check-in; do not fail the whole envelope.
           }
+        } else if (item.type === 'replay_event') {
+          try {
+            replayEvents.push(JSON.parse(decoder.decode(item.payload)) as SentryReplayEvent);
+          } catch {
+            // Skip an unparseable replay event.
+          }
+        } else if (item.type === 'replay_recording') {
+          // Binary rrweb stream; keep the raw bytes for storage.
+          replayRecordings.push(item.payload);
         }
-        // replay / attachment / profile items are accepted but not yet persisted
+        // attachment / profile items are accepted but not yet persisted
         // (see ROADMAP.md). They are silently tolerated.
       }
     } catch (err) {
@@ -256,6 +269,35 @@ export const ingest = httpAction(async (ctx, request) => {
       environment: c.environment,
       release: c.release,
       timestamp: c.timestamp,
+    });
+  }
+
+  // Replays: a replay_event (metadata) is paired with a replay_recording (the
+  // rrweb stream) in the same envelope. Store the decompressed recording in file
+  // storage and roll the metadata onto the replay row.
+  for (let i = 0; i < replayEvents.length; i++) {
+    const meta = replayEvents[i]!;
+    const recording = replayRecordings[i];
+    if (!meta.replay_id || !recording) continue;
+    // Store the rrweb recording body as-is (it may be gzip/deflate compressed by
+    // the SDK). Decompression happens in the browser at playback, where
+    // DecompressionStream is reliable. `.slice()` detaches the nested subarray view.
+    const { header, body } = splitReplayRecording(recording);
+    const storageId = await ctx.storage.store(
+      new Blob([body.slice() as BlobPart], { type: 'application/octet-stream' }),
+    );
+    const segmentId = (header.segment_id as number) ?? meta.segment_id ?? i;
+    await ctx.runMutation(internal.replays.recordReplaySegment, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      replayId: meta.replay_id,
+      segmentId,
+      storageId,
+      timestamp: receivedAt,
+      url: meta.urls?.[0],
+      errorCount: meta.error_ids?.length ?? 0,
+      platform: meta.platform,
+      environment: meta.environment,
     });
   }
 

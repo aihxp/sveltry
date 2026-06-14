@@ -199,6 +199,32 @@ export default defineSchema({
     .index('by_project_eventId', ['projectId', 'eventId'])
     .index('by_trace', ['traceId']),
 
+  // Session replays. One `replays` row per replay (metadata), and one
+  // `replaySegments` row per recording segment (rrweb stream in file storage).
+  replays: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    replayId: v.string(),
+    startedAt: v.number(),
+    lastSegmentAt: v.number(),
+    segmentCount: v.number(),
+    url: v.optional(v.string()),
+    errorCount: v.number(),
+    platform: v.optional(v.string()),
+    environment: v.optional(v.string()),
+  })
+    .index('by_project_replayId', ['projectId', 'replayId'])
+    .index('by_org', ['organizationId', 'lastSegmentAt']),
+
+  replaySegments: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    replayId: v.string(),
+    segmentId: v.number(),
+    storageId: v.id('_storage'),
+    timestamp: v.number(),
+  }).index('by_replay', ['projectId', 'replayId', 'segmentId']),
+
   // Cron monitors: one row per (project, slug), tracking the latest check-in.
   monitors: defineTable({
     organizationId: v.string(),

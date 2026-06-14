@@ -57,7 +57,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Error responses | Done | Bad/missing key -> 401 with `X-Sentry-Error`; malformed body -> 400 with `{detail, causes}`; throttle -> 429 + `Retry-After`. |
 | CORS preflight | Done | `OPTIONS /api/*` handled; `GET /healthz` for liveness. |
 | security / minidump endpoints | Partial | Recognized and tolerated (HTTP 200) but not stored. |
-| transaction / session / sessions / replay / profile / check_in / client_report / feedback items | Partial | Accepted (HTTP 200) but not yet persisted or aggregated. |
+| transaction / session / sessions / replay / check_in items | Done | Persisted: performance, release health, cron monitors, and session replay. |
+| profile / client_report / feedback items | Partial | Accepted (HTTP 200) but not yet persisted. |
 
 ## Projects, orgs, teams, and access
 
@@ -129,8 +130,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Replay ingestion | Partial | `replay_*` envelope items are accepted (HTTP 200) but not stored. |
-| Replay viewer | Planned | rrweb-style playback with a dedicated blob store and consumer. |
+| Replay ingestion | Done | `replay_event` + `replay_recording` items are persisted (metadata in `replays`, rrweb stream in file storage). |
+| Replay viewer | Done | A Replays page lists recordings; the detail page plays them back with rrweb-player. |
 
 ## Crons and uptime
 
