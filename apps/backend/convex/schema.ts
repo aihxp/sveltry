@@ -199,6 +199,22 @@ export default defineSchema({
     .index('by_project_eventId', ['projectId', 'eventId'])
     .index('by_trace', ['traceId']),
 
+  // Hourly latency rollups: a fixed-bucket duration histogram per (project,
+  // transaction, hour). Lets percentiles span arbitrary windows without scanning
+  // raw transactions or needing a columnar store. Recomputed by an hourly cron.
+  transactionRollups: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    transactionName: v.string(),
+    bucketStart: v.number(),
+    count: v.number(),
+    sumMs: v.number(),
+    maxMs: v.number(),
+    histogram: v.array(v.number()),
+  })
+    .index('by_org_bucket', ['organizationId', 'bucketStart'])
+    .index('by_project_name_bucket', ['projectId', 'transactionName', 'bucketStart']),
+
   // Sampled performance profiles (envelope items with `type: "profile"`). The
   // full samples/stacks/frames payload is kept for flamegraph construction.
   profiles: defineTable({

@@ -9,6 +9,7 @@
  */
 
 export * from './hash.js';
+export * from './histogram.js';
 export * from './dsn.js';
 export * from './auth.js';
 export * from './decompress.js';

@@ -1,6 +1,9 @@
 import { v } from 'convex/values';
+import { mergeHistograms, percentileFromHistogram } from '@sveltry/protocol';
 import { query } from './_generated/server';
 import { requireOrg } from './lib/auth';
+
+const HOUR_MS = 60 * 60 * 1000;
 
 /** Nearest-rank percentile of a numbers array sorted ascending. */
 function percentile(sortedAsc: number[], p: number): number {
@@ -80,6 +83,55 @@ export const recentTransactions = query({
       release: t.release,
       spanCount: t.spanCount,
     }));
+  },
+});
+
+/**
+ * Hourly latency trend from the precomputed rollups: count, avg, p50, and p95 per
+ * hour over the requested window (optionally filtered to one transaction name).
+ * Percentiles are exact within the histogram's bucket resolution.
+ */
+export const transactionTrend = query({
+  args: { transactionName: v.optional(v.string()), hours: v.optional(v.number()) },
+  handler: async (ctx, { transactionName, hours }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const span = Math.min(hours ?? 24, 168);
+    const since = Math.floor(Date.now() / HOUR_MS) * HOUR_MS - span * HOUR_MS;
+
+    const rollups = await ctx.db
+      .query('transactionRollups')
+      .withIndex('by_org_bucket', (q) =>
+        q.eq('organizationId', activeOrganizationId).gte('bucketStart', since),
+      )
+      .collect();
+    const filtered = transactionName
+      ? rollups.filter((r) => r.transactionName === transactionName)
+      : rollups;
+
+    const buckets = new Map<number, { count: number; sum: number; histos: number[][] }>();
+    for (const r of filtered) {
+      let b = buckets.get(r.bucketStart);
+      if (!b) {
+        b = { count: 0, sum: 0, histos: [] };
+        buckets.set(r.bucketStart, b);
+      }
+      b.count += r.count;
+      b.sum += r.sumMs;
+      b.histos.push(r.histogram);
+    }
+
+    return [...buckets.entries()]
+      .map(([bucketStart, b]) => {
+        const merged = mergeHistograms(b.histos);
+        return {
+          bucketStart,
+          count: b.count,
+          avgMs: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+          p50Ms: percentileFromHistogram(merged, 50),
+          p95Ms: percentileFromHistogram(merged, 95),
+        };
+      })
+      .sort((a, b) => a.bucketStart - b.bucketStart);
   },
 });
 

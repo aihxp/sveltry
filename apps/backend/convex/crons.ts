@@ -13,6 +13,13 @@ crons.daily(
 // Transition `new` issues older than 7 days to `ongoing`, hourly.
 crons.hourly('age new issues to ongoing', { minuteUTC: 15 }, internal.maintenance.sweepOngoing);
 
+// Recompute hourly transaction-latency histograms for the trend view.
+crons.hourly(
+  'roll up transaction latency',
+  { minuteUTC: 20 },
+  internal.maintenance.rollupTransactions,
+);
+
 // Drop rolled-over ingest rate-limit windows so the table stays bounded, daily.
 crons.daily(
   'prune rate-limit windows',
