@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import {
   buildFlamegraph,
+  discoverAggregate,
   mergeHistograms,
   percentileFromHistogram,
   suspectCommits,
@@ -972,6 +973,140 @@ export const debugRoles = internalMutation({
     };
   },
 });
+
+/**
+ * Seed a few events + transactions, run the Discover gather/map/aggregate path over
+ * them (the same logic as runDiscover), assert the grouped results, and clean up.
+ */
+export const debugDiscover = internalMutation({
+  args: { organizationId: v.string(), projectId: v.id('projects') },
+  handler: async (ctx, { organizationId, projectId }) => {
+    const now = Date.now();
+    const eventIds: Id<'events'>[] = [];
+    const txnIds: Id<'transactions'>[] = [];
+
+    const issueId = await ctx.db.insert('issues', {
+      organizationId,
+      projectId,
+      fingerprint: `disc-${now}`,
+      groupingConfig: 'debug',
+      title: 'disc',
+      culprit: 'c',
+      level: 'error',
+      platform: 'javascript',
+      status: 'unresolved',
+      substatus: 'new',
+      count: 0,
+      userCount: 0,
+      firstSeen: now,
+      lastSeen: now,
+    });
+
+    const mkEvent = async (level: 'error' | 'warning', user: string) => {
+      eventIds.push(
+        await ctx.db.insert('events', {
+          organizationId,
+          projectId,
+          issueId,
+          eventId: `disc-${now}-${eventIds.length}`,
+          timestamp: now,
+          receivedAt: now,
+          level,
+          platform: 'javascript',
+          environment: 'production',
+          message: 'm',
+          culprit: 'c',
+          tags: {},
+          payload: { user: { id: user } },
+        }),
+      );
+    };
+    const mkTxn = async (name: string, durationMs: number) => {
+      txnIds.push(
+        await ctx.db.insert('transactions', {
+          organizationId,
+          projectId,
+          eventId: `disct-${now}-${txnIds.length}`,
+          traceId: 't',
+          spanId: 's',
+          name,
+          op: 'http.server',
+          status: 'ok',
+          timestamp: now,
+          endTimestamp: now + durationMs,
+          durationMs,
+          platform: 'javascript',
+          environment: 'production',
+          tags: {},
+          spanCount: 1,
+          payload: {},
+        }),
+      );
+    };
+
+    await mkEvent('error', 'u1');
+    await mkEvent('error', 'u2');
+    await mkEvent('warning', 'u1');
+    await mkTxn('GET /a', 100);
+    await mkTxn('GET /a', 300);
+    await mkTxn('GET /b', 1000);
+
+    const since = now - HOUR_MS;
+    const events = await ctx.db
+      .query('events')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId).gte('timestamp', since))
+      .take(10000);
+    const txns = await ctx.db
+      .query('transactions')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId).gte('timestamp', since))
+      .take(10000);
+
+    const ourEvents = events.filter((e) => e.eventId.startsWith('disc-'));
+    const ourTxns = txns.filter((t) => t.eventId.startsWith('disct-'));
+
+    const levelCount = discoverAggregate(
+      ourEvents.map((e) => ({ group: e.level })),
+      'count',
+    );
+    const levelUsers = discoverAggregate(
+      ourEvents.map((e) => ({
+        group: e.level,
+        user: (e.payload as { user?: { id?: string } }).user?.id,
+      })),
+      'users',
+    );
+    const txnP95 = discoverAggregate(
+      ourTxns.map((t) => ({ group: t.name, value: t.durationMs })),
+      'p95',
+    );
+
+    // Cleanup.
+    for (const id of eventIds) await ctx.db.delete(id);
+    for (const id of txnIds) await ctx.db.delete(id);
+    await ctx.db.delete(issueId);
+
+    const error = levelCount.find((r) => r.group === 'error');
+    const warning = levelCount.find((r) => r.group === 'warning');
+    const errUsers = levelUsers.find((r) => r.group === 'error');
+    const a95 = txnP95.find((r) => r.group === 'GET /a');
+    const b95 = txnP95.find((r) => r.group === 'GET /b');
+
+    return {
+      levelCount,
+      levelUsers,
+      txnP95,
+      ok:
+        error?.value === 2 &&
+        warning?.value === 1 &&
+        errUsers?.value === 2 &&
+        b95?.value === 1000 &&
+        a95?.value === 290 &&
+        txnP95[0]?.group === 'GET /b',
+    };
+  },
+});
+
+const HOUR_MS = 3_600_000;
 
 /** Run suspect-commit matching against stored release commits, for verification. */
 export const debugSuspectCommits = internalQuery({
