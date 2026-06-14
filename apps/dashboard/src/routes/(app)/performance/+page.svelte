@@ -14,12 +14,24 @@
   const recent = useQuery(api.transactions.recentTransactions, () =>
     auth.isAuthenticated ? { limit: 25 } : ('skip' as const),
   );
+  const trend = useQuery(api.transactions.transactionTrend, () =>
+    auth.isAuthenticated ? { hours: 24 } : ('skip' as const),
+  );
+  const maxP95 = $derived(Math.max(1, ...(trend.data ?? []).map((d) => d.p95Ms)));
 
   // Color a p95 cell by latency band for an at-a-glance read.
   function latencyClass(ms: number): string {
     if (ms >= 1000) return 'text-destructive';
     if (ms >= 300) return 'text-amber-600 dark:text-amber-400';
     return 'text-foreground';
+  }
+  function barColor(ms: number): string {
+    if (ms >= 1000) return 'bg-destructive';
+    if (ms >= 300) return 'bg-amber-500';
+    return 'bg-primary';
+  }
+  function hourLabel(ms: number): string {
+    return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 </script>
 
@@ -37,6 +49,38 @@
       {/if}
     </p>
   </div>
+
+  <Card.Root>
+    <Card.Header><Card.Title>Latency over time (24h, p95)</Card.Title></Card.Header>
+    <Card.Content>
+      {#if auth.isLoading || trend.isLoading}
+        <Skeleton class="h-32 w-full" />
+      {:else if !trend.data || trend.data.length === 0}
+        <p class="text-sm text-muted-foreground">
+          No latency history yet. Hourly rollups populate this chart over time.
+        </p>
+      {:else}
+        <div class="flex h-32 items-end gap-0.5">
+          {#each trend.data as pt (pt.bucketStart)}
+            <div
+              class="flex-1"
+              title={`${hourLabel(pt.bucketStart)} · p95 ${formatDuration(pt.p95Ms)} · p50 ${formatDuration(pt.p50Ms)} · ${pt.count} txns`}
+            >
+              <div
+                class={cn('rounded-t', barColor(pt.p95Ms))}
+                style={`height:${Math.max(2, (pt.p95Ms / maxP95) * 100)}%`}
+              ></div>
+            </div>
+          {/each}
+        </div>
+        <div class="mt-1 flex justify-between text-xs text-muted-foreground">
+          <span>{hourLabel(trend.data[0]!.bucketStart)}</span>
+          <span>p95 up to {formatDuration(maxP95)}</span>
+          <span>{hourLabel(trend.data[trend.data.length - 1]!.bucketStart)}</span>
+        </div>
+      {/if}
+    </Card.Content>
+  </Card.Root>
 
   <Card.Root>
     <Card.Header><Card.Title>Transactions</Card.Title></Card.Header>

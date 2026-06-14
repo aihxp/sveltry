@@ -22,6 +22,7 @@ The error-tracking vertical slice, end to end:
 - Cron monitors: `check_in` items persisted (upsert by id), with a Monitors page for per-monitor status and recent check-ins
 - Session replay: `replay_event` + `replay_recording` items persisted (metadata + rrweb stream in file storage) with rrweb-player playback
 - Profiling: `profile` items persisted and aggregated into a flamegraph on the Profiles page
+- Latency trend: hourly transaction duration-histogram rollups (cron) with a p95-over-time chart, giving percentiles over arbitrary windows
 - Alert rules (new issue, regression, event-frequency) to webhook / Discord / Slack / email (SMTP)
 - Per-key fixed-window rate limiting
 - Default PII scrubbing at ingest
@@ -42,15 +43,18 @@ Highest-value additions that build on the existing tables:
 - **Issue search and saved views.** Tag and full-text filtering, merge / unmerge.
 - **User feedback.** Crash-linked feedback, then a standalone widget.
 
-## Later (needs an analytics tier)
+## Later
 
-These depend on a columnar / time-series store for percentile aggregates over arbitrary windows:
+Latency percentiles over arbitrary windows already ship via hourly duration-histogram
+rollups (in Convex, no separate store). The following would still benefit from a richer
+analytics tier:
 
-- **Performance / tracing.** Transactions and spans, p50/p75/p95/p99, web vitals.
+- **Web vitals and finer percentiles.** LCP/CLS/INP and p75/p99 with higher-resolution
+  histograms or a columnar store.
 - **Dashboards and Discover.** Composable widgets over a query engine.
 - **Metric alerts.** Threshold alerts over aggregates (error rate, latency, crash rate).
-- **Session replay.** rrweb-style DOM recording with a dedicated blob store and consumer.
-- **Cron and uptime monitors.** Check-in monitors and HTTP uptime checks reusing the alert pipeline.
+- **Uptime monitors.** HTTP uptime checks reusing the alert pipeline (cron check-ins ship).
+- **Distributed tracing across services.** Stitch transactions into full cross-service traces.
 
 ## Non-goals (for now)
 

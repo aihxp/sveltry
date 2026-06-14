@@ -8,6 +8,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Latency time-series.** An hourly cron rolls raw transaction durations into per-(project,
+  transaction, hour) fixed-bucket histograms (`transactionRollups`). A `transactionTrend`
+  query derives p50/p95 over arbitrary windows from the merged histograms, and the Performance
+  page shows a p95-over-time chart. Percentiles over long windows no longer need to scan raw
+  transactions.
 - **Profiling.** `profile` envelope items are persisted; their samples/stacks/frames are
   aggregated into a flamegraph rendered on a new Profiles page.
 - **Session replay.** `replay_event` and `replay_recording` envelope items are persisted

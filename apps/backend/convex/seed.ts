@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { buildFlamegraph } from '@sveltry/protocol';
+import { buildFlamegraph, mergeHistograms, percentileFromHistogram } from '@sveltry/protocol';
 import { internalMutation, internalQuery } from './_generated/server';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
@@ -264,6 +264,34 @@ export const debugProfiles = internalQuery({
         topChild: flame.children[0]
           ? { name: flame.children[0].name, value: flame.children[0].value }
           : null,
+      };
+    });
+  },
+});
+
+/** Latency trend from rollups for an org, for time-series verification. */
+export const debugTrend = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const rollups = await ctx.db
+      .query('transactionRollups')
+      .withIndex('by_org_bucket', (q) => q.eq('organizationId', organizationId))
+      .collect();
+    const buckets = new Map<number, number[][]>();
+    const counts = new Map<number, number>();
+    for (const r of rollups) {
+      const list = buckets.get(r.bucketStart) ?? [];
+      list.push(r.histogram);
+      buckets.set(r.bucketStart, list);
+      counts.set(r.bucketStart, (counts.get(r.bucketStart) ?? 0) + r.count);
+    }
+    return [...buckets.entries()].map(([bucketStart, histos]) => {
+      const merged = mergeHistograms(histos);
+      return {
+        bucketStart,
+        count: counts.get(bucketStart) ?? 0,
+        p50Ms: percentileFromHistogram(merged, 50),
+        p95Ms: percentileFromHistogram(merged, 95),
       };
     });
   },

@@ -1,7 +1,10 @@
+import { addSample, emptyHistogram } from '@sveltry/protocol';
 import { internalMutation } from './_generated/server';
+import type { Id } from './_generated/dataModel';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * DAY_MS;
+const HOUR_MS = 60 * 60 * 1000;
 
 /**
  * Prune events past each project's retention window. Bounded per run so a single
@@ -59,6 +62,88 @@ export const sweepOngoing = internalMutation({
       }
     }
     return { updated };
+  },
+});
+
+/**
+ * Recompute hourly latency rollups for the recent window from raw transactions.
+ * Each (project, transaction, hour) bucket gets a fixed-bucket duration histogram
+ * so the trend query can derive percentiles over any window. Recomputing the last
+ * few hours each run is idempotent (the bucket is replaced from raw), and older
+ * buckets stay frozen once their hour has passed.
+ */
+export const rollupTransactions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const windowStart = Math.floor(now / HOUR_MS) * HOUR_MS - 2 * HOUR_MS;
+    const orgs = await ctx.db.query('organizations').take(500);
+    let upserts = 0;
+
+    for (const org of orgs) {
+      const txns = await ctx.db
+        .query('transactions')
+        .withIndex('by_org', (q) => q.eq('organizationId', org.slug).gte('timestamp', windowStart))
+        .take(8000);
+
+      type Agg = {
+        projectId: Id<'projects'>;
+        name: string;
+        bucket: number;
+        count: number;
+        sum: number;
+        max: number;
+        histo: number[];
+      };
+      const groups = new Map<string, Agg>();
+      for (const t of txns) {
+        const bucket = Math.floor(t.timestamp / HOUR_MS) * HOUR_MS;
+        const key = `${t.projectId}|${t.name}|${bucket}`;
+        let g = groups.get(key);
+        if (!g) {
+          g = {
+            projectId: t.projectId,
+            name: t.name,
+            bucket,
+            count: 0,
+            sum: 0,
+            max: 0,
+            histo: emptyHistogram(),
+          };
+          groups.set(key, g);
+        }
+        g.count += 1;
+        g.sum += t.durationMs;
+        g.max = Math.max(g.max, t.durationMs);
+        addSample(g.histo, t.durationMs);
+      }
+
+      for (const g of groups.values()) {
+        const row = {
+          organizationId: org.slug,
+          projectId: g.projectId,
+          transactionName: g.name,
+          bucketStart: g.bucket,
+          count: g.count,
+          sumMs: g.sum,
+          maxMs: g.max,
+          histogram: g.histo,
+        };
+        const existing = await ctx.db
+          .query('transactionRollups')
+          .withIndex('by_project_name_bucket', (q) =>
+            q
+              .eq('projectId', g.projectId)
+              .eq('transactionName', g.name)
+              .eq('bucketStart', g.bucket),
+          )
+          .first();
+        if (existing) await ctx.db.patch(existing._id, row);
+        else await ctx.db.insert('transactionRollups', row);
+        upserts += 1;
+      }
+    }
+    return { upserts };
   },
 });
 
