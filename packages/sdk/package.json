@@ -1,6 +1,6 @@
 {
   "name": "@aihxp/sveltry-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Point official Sentry SDKs at a self-hosted Sveltry deployment: DSN builder, recommended init options, and an ad-blocker-proof tunnel handler.",
   "license": "Apache-2.0",

@@ -74,7 +74,7 @@
     },
     "packages/sdk": {
       "name": "@aihxp/sveltry-sdk",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@sentry/sveltekit": "catalog:testing",
         "typescript": "catalog:",
