@@ -311,6 +311,29 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Insert an uptime monitor bypassing auth, for verification. */
+export const seedUptimeMonitor = internalMutation({
+  args: {
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    url: v.string(),
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return ctx.db.insert('uptimeMonitors', {
+      organizationId: args.organizationId,
+      projectId: args.projectId,
+      slug: args.slug,
+      url: args.url,
+      method: 'GET',
+      expectedStatus: 200,
+      intervalSeconds: 60,
+      enabled: true,
+      createdAt: Date.now(),
+    });
+  },
+});
+
 /** Attachments + feedback for an org, for ingestion-completeness verification. */
 export const debugFeedback = internalQuery({
   args: { organizationId: v.string() },
