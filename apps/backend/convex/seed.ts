@@ -311,6 +311,25 @@ export const debugSearch = internalQuery({
   },
 });
 
+/** Attachments + feedback for an org, for ingestion-completeness verification. */
+export const debugFeedback = internalQuery({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    const fb = await ctx.db
+      .query('feedback')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .collect();
+    const att = await ctx.db
+      .query('attachments')
+      .filter((q) => q.eq(q.field('organizationId'), organizationId))
+      .take(50);
+    return {
+      feedback: fb.map((f) => ({ name: f.name, email: f.email, message: f.message })),
+      attachments: att.map((a) => ({ filename: a.filename, size: a.size, eventId: a.eventId })),
+    };
+  },
+});
+
 /** Counts + the most recent issue for an org, for verification. */
 export const debugSummary = internalQuery({
   args: { organizationId: v.string() },

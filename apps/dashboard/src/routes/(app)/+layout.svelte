@@ -12,6 +12,7 @@
   import TimerIcon from '@lucide/svelte/icons/timer';
   import PlayCircleIcon from '@lucide/svelte/icons/play-circle';
   import FlameIcon from '@lucide/svelte/icons/flame';
+  import MessageSquareIcon from '@lucide/svelte/icons/message-square';
   import BoxesIcon from '@lucide/svelte/icons/boxes';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -27,6 +28,7 @@
     { href: '/monitors', label: 'Monitors', icon: TimerIcon },
     { href: '/replays', label: 'Replays', icon: PlayCircleIcon },
     { href: '/profiles', label: 'Profiles', icon: FlameIcon },
+    { href: '/feedback', label: 'Feedback', icon: MessageSquareIcon },
     { href: '/projects', label: 'Projects', icon: BoxesIcon },
     { href: '/settings', label: 'Settings', icon: SettingsIcon },
   ];

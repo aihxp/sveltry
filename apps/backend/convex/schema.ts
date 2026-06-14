@@ -230,6 +230,33 @@ export default defineSchema({
     .index('by_org_bucket', ['organizationId', 'bucketStart'])
     .index('by_project_name_bucket', ['projectId', 'transactionName', 'bucketStart']),
 
+  // Event attachments (envelope items with `type: "attachment"`). Bytes live in
+  // Convex file storage; linked to the event by its Sentry event_id.
+  attachments: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    eventId: v.string(),
+    filename: v.string(),
+    contentType: v.optional(v.string()),
+    attachmentType: v.optional(v.string()),
+    size: v.number(),
+    storageId: v.id('_storage'),
+    createdAt: v.number(),
+  }).index('by_event', ['eventId']),
+
+  // User feedback (envelope items `user_report` or `feedback`).
+  feedback: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    eventId: v.optional(v.string()),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    message: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_org', ['organizationId', 'createdAt'])
+    .index('by_event', ['eventId']),
+
   // Sampled performance profiles (envelope items with `type: "profile"`). The
   // full samples/stacks/frames payload is kept for flamegraph construction.
   profiles: defineTable({

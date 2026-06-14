@@ -8,6 +8,9 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Attachments and user feedback.** `attachment` envelope items are stored in file storage
+  and downloadable from the issue detail page; `user_report` and `feedback` items are
+  persisted and listed on a new Feedback page.
 - **Issue triage and collaboration.** Full-text issue search (Convex search index) with
   status/level filters on the Issues page; per-issue threaded comments; assign/unassign to
   yourself; and "resolve in next release" (stays resolved while the same release recurs,

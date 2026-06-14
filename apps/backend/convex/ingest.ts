@@ -20,12 +20,14 @@ import {
   corsHeaders,
 } from '@sveltry/protocol';
 import type {
+  EnvelopeItem,
   SentryCheckIn,
   SentryEventPayload,
   SentryProfile,
   SentryReplayEvent,
   SentrySession,
   SentrySessionAggregates,
+  SentryUserReport,
 } from '@sveltry/types';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
@@ -109,6 +111,9 @@ export const ingest = httpAction(async (ctx, request) => {
   const replayEvents: SentryReplayEvent[] = [];
   const replayRecordings: Uint8Array[] = [];
   const profiles: SentryProfile[] = [];
+  const attachmentItems: EnvelopeItem[] = [];
+  const userReports: SentryUserReport[] = [];
+  const feedbacks: SentryEventPayload[] = [];
   let headerEventId: string | undefined;
 
   if (route.endpoint === 'store') {
@@ -169,9 +174,22 @@ export const ingest = httpAction(async (ctx, request) => {
           } catch {
             // Skip an unparseable profile.
           }
+        } else if (item.type === 'attachment') {
+          attachmentItems.push(item); // binary; keep header (filename, type) + bytes
+        } else if (item.type === 'user_report') {
+          try {
+            userReports.push(JSON.parse(decoder.decode(item.payload)) as SentryUserReport);
+          } catch {
+            // Skip an unparseable user report.
+          }
+        } else if (item.type === 'feedback') {
+          try {
+            feedbacks.push(JSON.parse(decoder.decode(item.payload)) as SentryEventPayload);
+          } catch {
+            // Skip an unparseable feedback event.
+          }
         }
-        // attachment items are accepted but not yet persisted (see ROADMAP.md).
-        // They are silently tolerated.
+        // client_report items are accepted but not stored (see ROADMAP.md).
       }
     } catch (err) {
       return ingestError(400, 'invalid envelope', [String(err)], cors);
@@ -325,6 +343,55 @@ export const ingest = httpAction(async (ctx, request) => {
       environment: p.environment,
       timestamp: p.timestamp,
       payload: resolved.scrubPii ? scrubPayload(payload) : payload,
+    });
+  }
+
+  // Attachments: stored in file storage, linked to the envelope's event id.
+  const attachEventId = coerceEventId(firstId ?? headerEventId);
+  for (const item of attachmentItems) {
+    const storageId = await ctx.storage.store(
+      new Blob([item.payload.slice() as BlobPart], {
+        type: item.header.content_type ?? 'application/octet-stream',
+      }),
+    );
+    await ctx.runMutation(internal.feedback.recordAttachment, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      eventId: attachEventId,
+      filename: item.header.filename ?? 'attachment',
+      contentType: item.header.content_type,
+      attachmentType: item.header.attachment_type,
+      size: item.payload.byteLength,
+      storageId,
+    });
+  }
+
+  // User feedback: legacy `user_report` and the newer `feedback` event shape.
+  for (const r of userReports) {
+    if (!r.comments) continue;
+    await ctx.runMutation(internal.feedback.recordFeedback, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      eventId: r.event_id,
+      name: r.name,
+      email: r.email,
+      message: r.comments,
+    });
+  }
+  for (const f of feedbacks) {
+    const fb = (f.contexts?.feedback ?? {}) as {
+      message?: string;
+      contact_email?: string;
+      name?: string;
+    };
+    if (!fb.message) continue;
+    await ctx.runMutation(internal.feedback.recordFeedback, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      eventId: f.event_id,
+      name: fb.name,
+      email: fb.contact_email,
+      message: fb.message,
     });
   }
 

@@ -75,8 +75,8 @@ Credentials may be supplied two ways. The header wins when both are present.
 
 The request body is decompressed transparently based on `Content-Encoding`:
 
-- `gzip` - supported (via `DecompressionStream`).
-- `deflate` - supported (via `DecompressionStream`).
+- `gzip` - supported (via `fflate`, pure JS so it works in the Convex isolate).
+- `deflate` - supported (via `fflate`).
 - `br` (Brotli) - not supported. Returns `400`.
 - `zstd` - not supported. Returns `400`.
 
@@ -141,13 +141,13 @@ Sveltry parses every item in an envelope but only persists what it currently mod
 | `transaction`    | Parsed and persisted (performance + traces)|
 | `session`        | Parsed and persisted (release health)     |
 | `sessions`       | Parsed and persisted (release-health buckets)|
-| `attachment`     | Accepted (200), not yet persisted         |
+| `attachment`     | Parsed and persisted (event attachments)  |
 | `replay_event`   | Parsed and persisted (replay metadata)    |
 | `replay_recording`| Parsed and persisted (rrweb recording)   |
 | `profile`        | Parsed and persisted (flamegraph)         |
 | `check_in`       | Parsed and persisted (cron monitors)      |
 | `client_report`  | Accepted (200), not yet persisted         |
-| `feedback`       | Accepted (200), not yet persisted         |
+| `feedback`       | Parsed and persisted (user feedback)      |
 
 "Accepted, not yet persisted" means the request succeeds with `200` and the SDK is happy,
 but no aggregation, storage, or UI surface exists for that item type yet.
@@ -292,7 +292,7 @@ off the ingest hot path and matches a frame to a map by name (no debug IDs yet).
   performance, and release health, including aggregated `sessions` buckets) and `check_in`
   items (cron monitors), and `replay_event` + `replay_recording` items (session replay).
   `replay_event` + `replay_recording` items (session replay), and `profile` items (flamegraphs).
-  `attachment`, `client_report`, and `feedback` are accepted with `200` but not yet stored.
+  `client_report` is accepted with `200` but not yet surfaced (SDK-dropped-event accounting).
 - Source maps are matched by artifact name (`app.min.js` resolves against an `app.min.js.map`
   uploaded for the same release), not by debug ID. Upload maps per release via
   `POST /artifacts/upload` (see below); minified JavaScript frames are then resolved to
