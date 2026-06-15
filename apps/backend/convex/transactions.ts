@@ -17,6 +17,15 @@ const STATS_SAMPLE = 2000;
 const RECENT_LIMIT = 50;
 const SPAN_SAMPLE = 1000;
 
+// Performance-issue detector thresholds (recent-window approximation, no
+// persistence). N+1 values match the per-transaction detector on the
+// transaction detail page.
+const N1_THRESHOLD = 4;
+const N1_CATEGORIES = new Set(['db', 'cache']);
+const SLOW_DB_MS = 1000;
+const SLOW_HTTP_MS = 3000;
+const ISSUES_CAP = 100;
+
 /** Sentry span timestamps are unix seconds (floats); normalize to ms. */
 function spanMs(ts: unknown): number | null {
   if (typeof ts !== 'number') return null;
@@ -150,6 +159,181 @@ export const spanSearch = query({
 
     matches.sort((a, b) => b.spanDurationMs - a.spanDurationMs);
     return { sampleSize: recent.length, total: matches.length, matches: matches.slice(0, cap) };
+  },
+});
+
+type PerfIssueType = 'n_plus_one' | 'slow_db' | 'slow_http';
+interface PerfOccurrence {
+  type: PerfIssueType;
+  op: string;
+  description: string;
+  impactMs: number;
+  transactionId: string;
+  transactionName: string;
+}
+
+/**
+ * Standalone performance-issues list: scans the spans of the most recent
+ * {@link SPAN_SAMPLE} transactions, runs lightweight detectors (N+1 db/cache
+ * queries, slow db queries, slow outbound HTTP calls), and aggregates the
+ * findings across transactions by a (type, op, description) fingerprint, ranked
+ * by total impact time. A recent-window approximation (no columnar store yet),
+ * consistent with the rest of the performance views; nothing is persisted.
+ */
+export const performanceIssues = query({
+  args: { type: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (ctx, { type, limit }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const recent = await ctx.db
+      .query('transactions')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .order('desc')
+      .take(SPAN_SAMPLE);
+
+    const occurrences: PerfOccurrence[] = [];
+
+    for (const t of recent) {
+      const spans = ((t.payload as { spans?: RawSpan[] } | null)?.spans ?? []) as RawSpan[];
+      const txnId = t._id as string;
+      const txnName = t.name;
+
+      // Per-transaction N+1 grouping: the same db/cache op repeated in one trace.
+      const n1Groups = new Map<
+        string,
+        { op: string; description: string; count: number; totalMs: number }
+      >();
+
+      for (const s of spans) {
+        const op = typeof s.op === 'string' ? s.op : 'other';
+        const description = typeof s.description === 'string' ? s.description : '';
+        const start = spanMs(s.start_timestamp);
+        const end = spanMs(s.timestamp);
+        if (start == null || end == null) continue;
+        const durMs = Math.max(0, end - start);
+        const category = op.split('.')[0] || 'other';
+
+        if (N1_CATEGORIES.has(category)) {
+          const key = `${op}\n${description}`;
+          let g = n1Groups.get(key);
+          if (!g) {
+            g = { op, description, count: 0, totalMs: 0 };
+            n1Groups.set(key, g);
+          }
+          g.count += 1;
+          g.totalMs += durMs;
+        }
+
+        if (category === 'db' && durMs >= SLOW_DB_MS) {
+          occurrences.push({
+            type: 'slow_db',
+            op,
+            description,
+            impactMs: durMs,
+            transactionId: txnId,
+            transactionName: txnName,
+          });
+        }
+
+        if ((op.startsWith('http.client') || category === 'http') && durMs >= SLOW_HTTP_MS) {
+          occurrences.push({
+            type: 'slow_http',
+            op,
+            description,
+            impactMs: durMs,
+            transactionId: txnId,
+            transactionName: txnName,
+          });
+        }
+      }
+
+      for (const g of n1Groups.values()) {
+        if (g.count >= N1_THRESHOLD) {
+          occurrences.push({
+            type: 'n_plus_one',
+            op: g.op,
+            description: g.description,
+            impactMs: g.totalMs,
+            transactionId: txnId,
+            transactionName: txnName,
+          });
+        }
+      }
+    }
+
+    const filtered = type ? occurrences.filter((o) => o.type === type) : occurrences;
+
+    // Aggregate across transactions by (type, op, description). Detectors are
+    // independent, so one span can contribute to more than one issue (e.g. a slow
+    // db span that is also part of an N+1 group); each issue's totals are correct
+    // for that fingerprint, but totals are not partitioned across types and should
+    // not be summed into a single grand total.
+    const groups = new Map<
+      string,
+      {
+        type: PerfIssueType;
+        op: string;
+        description: string;
+        occurrences: number;
+        affectedTxns: Set<string>;
+        totalMs: number;
+        maxMs: number;
+        worst: { transactionId: string; transactionName: string; impactMs: number };
+      }
+    >();
+
+    for (const o of filtered) {
+      const key = `${o.type}\n${o.op}\n${o.description}`;
+      let a = groups.get(key);
+      if (!a) {
+        a = {
+          type: o.type,
+          op: o.op,
+          description: o.description,
+          occurrences: 0,
+          affectedTxns: new Set<string>(),
+          totalMs: 0,
+          maxMs: 0,
+          worst: {
+            transactionId: o.transactionId,
+            transactionName: o.transactionName,
+            impactMs: -1,
+          },
+        };
+        groups.set(key, a);
+      }
+      a.occurrences += 1;
+      a.affectedTxns.add(o.transactionId);
+      a.totalMs += o.impactMs;
+      if (o.impactMs > a.maxMs) a.maxMs = o.impactMs;
+      if (o.impactMs > a.worst.impactMs) {
+        a.worst = {
+          transactionId: o.transactionId,
+          transactionName: o.transactionName,
+          impactMs: o.impactMs,
+        };
+      }
+    }
+
+    const cap = Math.min(ISSUES_CAP, Math.max(1, limit ?? ISSUES_CAP));
+    const issues = [...groups.values()]
+      .map((a) => ({
+        type: a.type,
+        op: a.op,
+        description: a.description,
+        occurrences: a.occurrences,
+        affectedTransactions: a.affectedTxns.size,
+        totalMs: Math.round(a.totalMs),
+        avgMs: Math.round(a.totalMs / Math.max(1, a.occurrences)),
+        maxMs: Math.round(a.maxMs),
+        sample: {
+          transactionId: a.worst.transactionId,
+          transactionName: a.worst.transactionName,
+        },
+      }))
+      .sort((x, y) => y.totalMs - x.totalMs)
+      .slice(0, cap);
+
+    return { sampleSize: recent.length, issues };
   },
 });
 
