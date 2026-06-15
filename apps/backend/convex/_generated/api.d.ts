@@ -9,6 +9,7 @@
  */
 
 import type * as alerts from "../alerts.js";
+import type * as apiTokens from "../apiTokens.js";
 import type * as betterauth from "../betterauth.js";
 import type * as commits from "../commits.js";
 import type * as crons from "../crons.js";
@@ -31,6 +32,7 @@ import type * as monitors from "../monitors.js";
 import type * as organizations from "../organizations.js";
 import type * as profiles from "../profiles.js";
 import type * as projects from "../projects.js";
+import type * as publicApi from "../publicApi.js";
 import type * as releases from "../releases.js";
 import type * as replays from "../replays.js";
 import type * as roles from "../roles.js";
@@ -51,6 +53,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
+  apiTokens: typeof apiTokens;
   betterauth: typeof betterauth;
   commits: typeof commits;
   crons: typeof crons;
@@ -73,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   organizations: typeof organizations;
   profiles: typeof profiles;
   projects: typeof projects;
+  publicApi: typeof publicApi;
   releases: typeof releases;
   replays: typeof replays;
   roles: typeof roles;

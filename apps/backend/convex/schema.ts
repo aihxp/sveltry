@@ -206,6 +206,23 @@ export default defineSchema({
     .index('by_org_user', ['organizationId', 'userId'])
     .index('by_user', ['userId']),
 
+  // Organization API tokens for the public read API (Bearer auth). Only the SHA-1
+  // hash of the token is stored; the raw value is shown once at creation. A token
+  // grants read access scoped to its organization.
+  apiTokens: defineTable({
+    organizationId: v.string(),
+    name: v.string(),
+    tokenHash: v.string(),
+    /** First chars of the raw token (e.g. `svtry_1a2b3c4d`), for display only. */
+    tokenPrefix: v.string(),
+    createdBy: v.string(),
+    createdByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+  })
+    .index('by_org', ['organizationId'])
+    .index('by_hash', ['tokenHash']),
+
   // Pending email invitations to join an org with a given role. The `token` is the
   // unguessable secret in the accept link; an invite is accepted by a logged-in
   // user whose email matches. Accepted/expired rows are retained for the record.
