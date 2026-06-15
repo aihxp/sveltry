@@ -18,6 +18,7 @@ export * from './decompress.js';
 export * from './discover.js';
 export * from './envelope.js';
 export * from './normalize.js';
+export * from './origins.js';
 export * from './profile.js';
 export * from './fingerprint.js';
 export * from './ids.js';

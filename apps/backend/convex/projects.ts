@@ -25,6 +25,7 @@ export const resolveIngestKey = internalQuery({
       monthlyEventQuota: v.optional(v.number()),
       spikeThresholdPerMinute: v.optional(v.number()),
       ingestFilters: v.optional(ingestFiltersValidator),
+      allowedOrigins: v.optional(v.array(v.string())),
     }),
   ),
   handler: async (ctx, { publicId, publicKey }) => {
@@ -47,6 +48,7 @@ export const resolveIngestKey = internalQuery({
       monthlyEventQuota: project.monthlyEventQuota,
       spikeThresholdPerMinute: project.spikeThresholdPerMinute,
       ingestFilters: project.ingestFilters,
+      allowedOrigins: key.allowedOrigins,
     };
   },
 });
@@ -203,6 +205,21 @@ export const setProjectKeyActive = mutation({
     const key = await ctx.db.get(keyId);
     if (!key || key.organizationId !== activeOrganizationId) throw new Error('Key not found');
     await ctx.db.patch(keyId, { isActive });
+  },
+});
+
+/**
+ * Set a key's allowed-origin patterns (Sentry's "Allowed Domains"). An empty list
+ * clears the restriction (any origin accepted). Admin+ only.
+ */
+export const setKeyAllowedOrigins = mutation({
+  args: { keyId: v.id('projectKeys'), allowedOrigins: v.array(v.string()) },
+  handler: async (ctx, { keyId, allowedOrigins }) => {
+    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const key = await ctx.db.get(keyId);
+    if (!key || key.organizationId !== activeOrganizationId) throw new Error('Key not found');
+    const cleaned = allowedOrigins.map((o) => o.trim()).filter(Boolean);
+    await ctx.db.patch(keyId, { allowedOrigins: cleaned.length ? cleaned : undefined });
   },
 });
 

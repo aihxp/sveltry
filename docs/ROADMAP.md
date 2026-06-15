@@ -49,8 +49,9 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Releases.** Deeper release health (aggregated `sessions` buckets), suspect commits, and deploy
   tracking.
 - **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
-  a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, and inbound data filters
-  (drop noisy events at ingest).
+  a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, inbound data filters
+  (drop noisy events at ingest), and per-key allowed domains (reject browser events from non-listed
+  origins).
 
 ## Next
 
@@ -59,8 +60,6 @@ Highest-value additions that build on the existing tables:
 - **Environment-scoped metric alerts.** Extend the environment scope (already on issue alerts) to
   the metric/threshold alerts so p95-latency / error-count / crash-free rules can target one
   environment.
-- **Per-key allowed origins.** An optional CORS/referrer allowlist on a DSN key, so a leaked browser
-  DSN cannot be used to report from other sites.
 - **Custom data scrubbing.** Per-project custom scrubbing rules and a safe-field allowlist, on top
   of the current default ruleset.
 

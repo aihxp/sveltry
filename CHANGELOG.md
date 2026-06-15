@@ -29,6 +29,13 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Per-key allowed domains.** A DSN key can carry an optional origin allowlist (Sentry's "Allowed
+  Domains"). When set, a browser ingest request whose `Origin` (or `Referer`) is not listed is
+  rejected with HTTP 403, so a leaked public browser DSN cannot report from another site. Patterns
+  support exact hosts, `*.example.com` subdomain wildcards, and scheme-qualified forms
+  (`https://example.com`); server-side requests (no origin) are unaffected, and an empty list is a
+  clean no-op. The matcher is a pure, unit-tested module in `@sveltry/protocol`; configured per key
+  on the project page.
 - **Member invitations.** An owner or admin can invite teammates by email at a chosen role from the
   settings page, instead of each person self-registering into a new org. The invitee opens a
   tokenized link, signs in or signs up as that email, and accepts to join the org. Invites are
