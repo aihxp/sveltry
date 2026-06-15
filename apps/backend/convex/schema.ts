@@ -702,6 +702,24 @@ export default defineSchema({
     .index('by_project', ['projectId'])
     .index('by_enabled', ['enabled']),
 
+  // Per-project quota-usage alerts: notify when this calendar month's events reach
+  // a percentage of the project's monthly quota. A cron evaluates them; each fires
+  // at most once per month (tracked by `lastFiredMonth`).
+  usageAlerts: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    /** Fire when month usage reaches this percent of the project's monthly quota. */
+    thresholdPercent: v.number(),
+    channels: v.array(alertChannelValidator),
+    enabled: v.boolean(),
+    /** UTC month-start (ms) this alert last fired, so it fires once per month. */
+    lastFiredMonth: v.optional(v.number()),
+    lastFiredAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_enabled', ['enabled']),
+
   // An audit log of fired alerts, used for de-duplication and the activity feed.
   alertDeliveries: defineTable({
     organizationId: v.string(),

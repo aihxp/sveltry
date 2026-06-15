@@ -29,6 +29,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Quota-usage alerts.** A per-project alert that fires when this calendar month's events reach a
+  chosen percentage of the project's monthly event quota. An hourly cron evaluates enabled alerts
+  and delivers to any channel (webhook / Slack / Discord / email / Teams / PagerDuty / Opsgenie) via
+  the existing SSRF-guarded path, at most once per month. Configured on the project page next to the
+  metric alerts.
 - **Org-wide Stats page and project rename.** A new Stats page aggregates usage across all of an
   organization's projects: window totals (events / transactions / dropped / filtered), a daily
   events chart, and a per-project breakdown, over a selectable 7 / 30 / 90-day window
