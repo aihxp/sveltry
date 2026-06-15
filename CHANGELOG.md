@@ -6,6 +6,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Public API: deploys + strict event lookup.** The v1 REST API gains `GET
+  /api/v1/projects/<slug>/deploys` (a project's deploys, newest first, cursor-paginated) and `GET
+  /api/v1/projects/<slug>/events/<eventId>`, the strict project-scoped form of the event-detail
+  lookup (event ids are unique per project, so this is collision-proof; it distinguishes a missing
+  project from a missing event in its 404).
+
 ## [0.5.0] - 2026-06-15
 
 ### Added
