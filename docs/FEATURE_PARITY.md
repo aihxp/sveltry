@@ -157,7 +157,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| PII scrubbing at ingest | Done | A fixed default ruleset (credit cards, SSNs, bearer tokens, sensitive-key-named fields) applied per project before storage, with a per-project on/off toggle. Custom rules and a safe-field allowlist are not yet supported. |
+| PII scrubbing at ingest | Done | A default ruleset (credit cards, SSNs, bearer tokens, sensitive-key-named fields) applied per project before storage, with a per-project on/off toggle. Customizable per project: extra sensitive field-name keywords, a safe-field allowlist that exempts keys from redaction, and an IP-address toggle. The matcher is a pure, unit-tested module in `@sveltry/protocol`. |
 | Inbound data filters | Done | Optional per-project filters drop matching error events at ingest, before they are stored, grouped, or counted: by error message/type, release, environment, or stack-frame path (case-insensitive globs), and by known web-crawler user-agent. Pure matcher in `@sveltry/protocol`; configured on the project page; a clean no-op when unset. Filtered drops are counted separately (`filteredCount`). |
 | Per-key rate limiting | Done | Optional fixed-window limit per project key (`ingestWindows`). |
 | Allowed domains (per key) | Done | Optional per-key origin allowlist (Sentry's "Allowed Domains"): when set, a browser request whose `Origin`/`Referer` is not listed is rejected with 403, so a leaked browser DSN cannot report from other sites. Supports exact hosts, `*.example.com`, and scheme-qualified patterns; server-side requests (no origin) are unaffected. Pure matcher in `@sveltry/protocol`. |

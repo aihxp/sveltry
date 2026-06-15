@@ -29,6 +29,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Custom PII scrubbing.** The default ingest scrubber (credit cards, SSNs, bearer tokens,
+  secret-named fields) is now customizable per project: add extra sensitive field-name keywords, an
+  allowlist of safe fields that are never redacted (so a field like `auth_method` survives the
+  default `auth` rule), and a toggle to scrub IP-address fields (`user.ip_address`, `REMOTE_ADDR`).
+  The scrubber moved to `@sveltry/protocol` as a pure, unit-tested module; the defaults are
+  unchanged when no custom rules are set. Configured on the project page when scrubbing is on.
 - **Environment-scoped metric alerts.** A metric/threshold alert (p95 latency, error count, or
   crash-free rate) can now be scoped to a single environment, matching the environment scope already
   on issue alerts. The metric is computed over only that environment's data (error-count and

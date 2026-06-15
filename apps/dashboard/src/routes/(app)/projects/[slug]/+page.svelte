@@ -182,6 +182,9 @@
   // Project limits/settings (seeded once from the loaded project)
   let retention = $state(90);
   let scrub = $state(true);
+  let scrubExtra = $state('');
+  let scrubSafe = $state('');
+  let scrubIp = $state(false);
   let quota = $state<number | ''>('');
   let spike = $state<number | ''>('');
   let savingSettings = $state(false);
@@ -192,6 +195,9 @@
       seeded = true;
       retention = p.eventRetentionDays;
       scrub = p.scrubPii;
+      scrubExtra = (p.scrubConfig?.extraFields ?? []).join('\n');
+      scrubSafe = (p.scrubConfig?.safeFields ?? []).join('\n');
+      scrubIp = p.scrubConfig?.scrubIp ?? false;
       quota = p.monthlyEventQuota ?? '';
       spike = p.spikeThresholdPerMinute ?? '';
     }
@@ -201,10 +207,17 @@
     if (!projectId) return;
     savingSettings = true;
     try {
+      const extraFields = lines(scrubExtra);
+      const safeFields = lines(scrubSafe);
+      const scrubConfig =
+        extraFields.length || safeFields.length || scrubIp
+          ? { extraFields, safeFields, scrubIp }
+          : null;
       await client.mutation(api.projects.updateProjectSettings, {
         projectId,
         eventRetentionDays: Number(retention),
         scrubPii: scrub,
+        scrubConfig,
         monthlyEventQuota: quota === '' ? null : Number(quota),
         spikeThresholdPerMinute: spike === '' ? null : Number(spike),
       });
@@ -554,6 +567,41 @@
               Scrub PII at ingest
             </label>
           </div>
+          {#if scrub}
+            <div class="space-y-3 rounded-lg border border-dashed p-3">
+              <p class="text-xs text-muted-foreground">
+                Custom scrubbing, layered on the default rules (credit cards, SSNs, bearer tokens,
+                and common secret-named fields). One field-name keyword per line; matching is a
+                case-insensitive substring.
+              </p>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-1.5">
+                  <Label for="scrubExtra">Also scrub fields named</Label>
+                  <textarea
+                    id="scrubExtra"
+                    bind:value={scrubExtra}
+                    rows="3"
+                    placeholder={'phone\naddress'}
+                    class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  ></textarea>
+                </div>
+                <div class="space-y-1.5">
+                  <Label for="scrubSafe">Never scrub fields named</Label>
+                  <textarea
+                    id="scrubSafe"
+                    bind:value={scrubSafe}
+                    rows="3"
+                    placeholder={'auth_method\nsession_count'}
+                    class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  ></textarea>
+                </div>
+              </div>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" bind:checked={scrubIp} class="size-4" />
+                Scrub IP addresses (user IP, REMOTE_ADDR, ...)
+              </label>
+            </div>
+          {/if}
           <Button type="submit" size="sm" disabled={savingSettings}>Save settings</Button>
         </form>
       </Card.Content>
