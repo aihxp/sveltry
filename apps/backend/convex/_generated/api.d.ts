@@ -33,6 +33,7 @@ import type * as metricAlerts from "../metricAlerts.js";
 import type * as monitors from "../monitors.js";
 import type * as organizations from "../organizations.js";
 import type * as profiles from "../profiles.js";
+import type * as projectLifecycle from "../projectLifecycle.js";
 import type * as projects from "../projects.js";
 import type * as publicApi from "../publicApi.js";
 import type * as releases from "../releases.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   monitors: typeof monitors;
   organizations: typeof organizations;
   profiles: typeof profiles;
+  projectLifecycle: typeof projectLifecycle;
   projects: typeof projects;
   publicApi: typeof publicApi;
   releases: typeof releases;

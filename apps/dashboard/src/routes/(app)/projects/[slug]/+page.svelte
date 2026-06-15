@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
@@ -226,6 +227,29 @@
       });
     } finally {
       savingSettings = false;
+    }
+  }
+
+  // Delete project (danger zone): requires typing the exact project name.
+  let deleteConfirm = $state('');
+  let deleting = $state(false);
+  let deleteError = $state('');
+  const deleteArmed = $derived(
+    !!proj.data?.project && deleteConfirm.trim() === proj.data.project.name,
+  );
+  async function deleteProject() {
+    if (!projectId || !deleteArmed) return;
+    deleting = true;
+    deleteError = '';
+    try {
+      await client.mutation(api.projectLifecycle.deleteProject, {
+        projectId,
+        confirmName: deleteConfirm.trim(),
+      });
+      await goto('/projects');
+    } catch (err) {
+      deleting = false;
+      deleteError = err instanceof Error ? err.message : 'Could not delete the project';
     }
   }
 
@@ -1097,6 +1121,32 @@
             <code class="font-mono">/artifacts/upload</code>.
           </p>
         {/if}
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root class="border-destructive/40">
+      <Card.Header>
+        <Card.Title class="text-destructive">Delete project</Card.Title>
+        <Card.Description>
+          Permanently deletes <span class="font-medium">{project.name}</span> and all of its issues, events,
+          and history. This cannot be undone. Type the project name to confirm.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content class="space-y-3">
+        <Input
+          bind:value={deleteConfirm}
+          placeholder={project.name}
+          aria-label="Confirm project name"
+        />
+        {#if deleteError}<p class="text-sm text-destructive">{deleteError}</p>{/if}
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={!deleteArmed || deleting}
+          onclick={deleteProject}
+        >
+          {deleting ? 'Deleting…' : 'Delete this project'}
+        </Button>
       </Card.Content>
     </Card.Root>
   {/if}

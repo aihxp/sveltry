@@ -57,6 +57,8 @@ Most of what the original Next/Later horizons listed now ships. See
   a daily chart, and a per-project breakdown over a selectable window); projects can be renamed.
 - **Quota-usage alerts.** Per-project alerts that fire (hourly cron, once per month) when this
   month's events reach a chosen percentage of the monthly quota.
+- **Project delete.** A typed-name confirmation removes a project and purges all of its data across
+  every scoped table in a bounded, self-rescheduling background sweep.
 - **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
   a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, inbound data filters
   (drop noisy events at ingest), per-key allowed domains (reject browser events from non-listed
@@ -68,8 +70,8 @@ Highest-value additions that build on the existing tables:
 
 - **Public API, deeper.** Build on the v1 slice: more resources (releases, members), pagination
   cursors, issue assignment, and event detail.
-- **Org operations, deeper.** Project delete (cascade) and transfer. The org-level stats page,
-  project rename, and quota-usage alerts already ship.
+- **Project transfer.** Move a project (and its data) to another organization. The org-level stats
+  page, project rename, project delete, and quota-usage alerts already ship.
 
 ## Later
 
