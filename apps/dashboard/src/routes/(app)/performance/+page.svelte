@@ -7,6 +7,7 @@
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import SearchIcon from '@lucide/svelte/icons/search';
+  import GaugeIcon from '@lucide/svelte/icons/gauge';
   import { cn, formatDuration, relativeTime } from '$lib/utils';
 
   const auth = useAuth();
@@ -66,7 +67,7 @@
 <svelte:head><title>Performance · Sveltry</title></svelte:head>
 
 <div class="mx-auto max-w-5xl space-y-6">
-  <div class="flex items-start justify-between gap-4">
+  <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Performance</h1>
       <p class="text-sm text-muted-foreground">
@@ -78,10 +79,16 @@
         {/if}
       </p>
     </div>
-    <Button href="/performance/spans" variant="outline" size="sm" class="shrink-0">
-      <SearchIcon class="size-4" />
-      Search spans
-    </Button>
+    <div class="flex shrink-0 gap-2">
+      <Button href="/performance/issues" variant="outline" size="sm">
+        <GaugeIcon class="size-4" />
+        Performance issues
+      </Button>
+      <Button href="/performance/spans" variant="outline" size="sm">
+        <SearchIcon class="size-4" />
+        Search spans
+      </Button>
+    </div>
   </div>
 
   {#if vitals.data && vitals.data.length > 0}

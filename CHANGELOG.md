@@ -29,6 +29,13 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Performance issues list.** A new Performance issues page (linked from the Performance header)
+  surfaces detected performance problems across recent transactions: N+1 queries (the same database
+  or cache operation repeated within one transaction), slow database queries, and slow outbound HTTP
+  calls. Findings are grouped by (type, operation, description) and ranked by total impact time, with
+  a per-type filter and a drill-down to the worst sample transaction. Detected on read over the span
+  data already stored with each transaction (a recent-window sample), consistent with the other
+  performance views; nothing new is persisted.
 - **Span search (trace explorer).** A new Span search page (linked from the Performance header)
   finds individual spans across recent transactions by operation or description, ranked by
   duration, each row linking back to its transaction. The "Slowest operations" rows now drill into

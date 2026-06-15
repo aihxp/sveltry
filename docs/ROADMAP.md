@@ -44,7 +44,10 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Alerts and integrations.** Email (SMTP), Microsoft Teams, PagerDuty, Opsgenie; metric/threshold
   alerts; environment-scoped issue and metric alerts; and Jira / Linear issue-tracker actions.
 - **Performance and analytics.** Web vitals, distributed tracing across services, Discover, custom
-  dashboards, and debug-ID artifact bundles.
+  dashboards, and debug-ID artifact bundles. Deeper performance insights: a per-transaction span
+  operations breakdown, slowest-spans, a cross-transaction "slowest operations" view, a trace
+  explorer / span search, N+1 detection, and a standalone performance-issues list (N+1 queries,
+  slow DB queries, and slow outbound HTTP calls surfaced across transactions and ranked by impact).
 - **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
 - **Releases.** Deeper release health (aggregated `sessions` buckets), suspect commits, and deploy
   tracking.
@@ -79,10 +82,6 @@ Valuable, but a larger surface or a new subsystem:
 
 - **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links,
   suspect commits from SCM, and auto-resolve from commit messages.
-- **Performance insights, deeper.** A per-transaction span operations breakdown, slowest-spans, a
-  cross-transaction "slowest operations" view, N+1 detection, and a trace explorer / span search
-  (find which transactions run a given span, drilling down from "slowest operations") already ship;
-  still to come is a standalone performance-issues list.
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
 - **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
 
