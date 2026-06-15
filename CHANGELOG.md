@@ -29,6 +29,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Span search (trace explorer).** A new Span search page (linked from the Performance header)
+  finds individual spans across recent transactions by operation or description, ranked by
+  duration, each row linking back to its transaction. The "Slowest operations" rows now drill into
+  it, so you can go from "this query costs the most overall" to the specific transactions running
+  it. Backed by a recent-window span scan, consistent with the existing latency percentiles.
 - **N+1 detection.** The transaction detail page now flags a potential N+1 when the same database
   or cache operation repeats many times within one transaction (the classic query-in-a-loop),
   showing the operation, its repeat count, and the total time, with a hint to batch or eager-load.

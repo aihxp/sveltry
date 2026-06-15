@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import SearchIcon from '@lucide/svelte/icons/search';
   import { cn, formatDuration, relativeTime } from '$lib/utils';
 
   const auth = useAuth();
@@ -65,16 +66,22 @@
 <svelte:head><title>Performance · Sveltry</title></svelte:head>
 
 <div class="mx-auto max-w-5xl space-y-6">
-  <div>
-    <h1 class="text-2xl font-bold tracking-tight">Performance</h1>
-    <p class="text-sm text-muted-foreground">
-      Transaction latency across your projects.
-      {#if stats.data}
-        <span class="text-muted-foreground/70"
-          >Percentiles over the last {stats.data.sampleSize.toLocaleString()} transactions.</span
-        >
-      {/if}
-    </p>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Performance</h1>
+      <p class="text-sm text-muted-foreground">
+        Transaction latency across your projects.
+        {#if stats.data}
+          <span class="text-muted-foreground/70"
+            >Percentiles over the last {stats.data.sampleSize.toLocaleString()} transactions.</span
+          >
+        {/if}
+      </p>
+    </div>
+    <Button href="/performance/spans" variant="outline" size="sm" class="shrink-0">
+      <SearchIcon class="size-4" />
+      Search spans
+    </Button>
   </div>
 
   {#if vitals.data && vitals.data.length > 0}
@@ -170,12 +177,16 @@
               Total
             </div>
             {#each spanOps.data.rows as r (r.op + '\n' + r.description)}
-              <div class="flex min-w-0 items-center gap-2 border-t py-1.5">
+              <a
+                href={`/performance/spans?q=${encodeURIComponent(r.description || r.op)}`}
+                class="group flex min-w-0 items-center gap-2 border-t py-1.5"
+                title="Find transactions running this operation"
+              >
                 <Badge variant="muted" class="shrink-0 font-mono">{r.op}</Badge>
-                <span class="min-w-0 truncate text-muted-foreground"
+                <span class="min-w-0 truncate text-muted-foreground group-hover:text-foreground"
                   >{r.description || '(no description)'}</span
                 >
-              </div>
+              </a>
               <div class="border-t py-1.5 text-right tabular-nums">{r.count.toLocaleString()}</div>
               <div class="border-t py-1.5 text-right tabular-nums">{formatDuration(r.avgMs)}</div>
               <div class={cn('border-t py-1.5 text-right tabular-nums', latencyClass(r.p95Ms))}>
