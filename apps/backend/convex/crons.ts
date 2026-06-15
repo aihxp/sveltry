@@ -44,4 +44,7 @@ crons.interval(
   internal.maintenance.detectMissedCheckIns,
 );
 
+// Evaluate quota-usage alerts (fire when a project nears its monthly quota), hourly.
+crons.hourly('evaluate usage alerts', { minuteUTC: 25 }, internal.usageAlerts.evaluateUsageAlerts);
+
 export default crons;

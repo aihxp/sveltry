@@ -96,6 +96,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Delivery logging | Done | Each attempt recorded in `alertDeliveries`. |
 | Email alerts | Done | The `email` channel sends over SMTP via a Convex Node action (`SMTP_HOST` etc.); a clean no-op until configured. |
 | Metric / threshold alerts | Done | A cron evaluates p95-latency, error-count, and crash-free-rate thresholds over a window and fires to webhook/Slack/Discord/email. |
+| Quota-usage alerts | Done | Per-project alert when this month's events reach a chosen percentage of the monthly quota; an hourly cron fires to any channel, at most once per month. |
 | Microsoft Teams / PagerDuty / Opsgenie | Done | Provider-specific channels (MessageCard, Events API v2, GenieKey) for issue and metric alerts. |
 | Issue-tracker actions (Jira / Linear) | Done | Per-project Jira (REST v3) and Linear (GraphQL) integration: create a ticket from an issue manually, or auto-create on a new issue. Credentials are self-hoster supplied and never returned to the client. |
 
