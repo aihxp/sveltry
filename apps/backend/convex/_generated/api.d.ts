@@ -20,6 +20,7 @@ import type * as feedback from "../feedback.js";
 import type * as http from "../http.js";
 import type * as ingest from "../ingest.js";
 import type * as integrations from "../integrations.js";
+import type * as invitations from "../invitations.js";
 import type * as issues from "../issues.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_net from "../lib/net.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   ingest: typeof ingest;
   integrations: typeof integrations;
+  invitations: typeof invitations;
   issues: typeof issues;
   "lib/auth": typeof lib_auth;
   "lib/net": typeof lib_net;

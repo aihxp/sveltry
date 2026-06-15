@@ -1,10 +1,16 @@
 <script lang="ts">
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
+  import type { Id } from '$convex/_generated/dataModel';
+  import { env } from '$env/dynamic/public';
   import { authClient } from '$lib/auth-client';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
+  import { Input } from '$lib/components/ui/input';
+  import { Label } from '$lib/components/ui/label';
+  import CopyButton from '$lib/components/CopyButton.svelte';
+  import TrashIcon from '@lucide/svelte/icons/trash-2';
 
   const auth = useAuth();
   const client = useConvexClient();
@@ -41,6 +47,44 @@
   );
   const callerRole = $derived(roleData.data?.callerRole ?? 'member');
   const canManage = $derived(callerRole === 'owner' || callerRole === 'admin');
+
+  // Member invitations (admin/owner only).
+  const invitations = useQuery(api.invitations.listInvitations, () =>
+    auth.isAuthenticated && canManage ? {} : ('skip' as const),
+  );
+  const appUrl = $derived((env.PUBLIC_APP_URL ?? '').replace(/\/$/, ''));
+  const inviteLink = (token: string) => `${appUrl}/invite/${token}`;
+  let inviteEmail = $state('');
+  let inviteRole = $state<Role>('member');
+  let inviting = $state(false);
+  let inviteError = $state('');
+  let inviteNotice = $state('');
+
+  async function sendInvite(e: SubmitEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    inviting = true;
+    inviteError = '';
+    inviteNotice = '';
+    try {
+      const res = await client.mutation(api.invitations.createInvitation, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      inviteNotice = res.emailSent
+        ? `Invitation emailed to ${inviteEmail.trim()}.`
+        : `Invitation created. SMTP is not configured, so copy the link below to share it.`;
+      inviteEmail = '';
+    } catch (err) {
+      inviteError = err instanceof Error ? err.message : 'Could not send invitation';
+    } finally {
+      inviting = false;
+    }
+  }
+
+  async function revokeInvite(id: Id<'invitations'>) {
+    await client.mutation(api.invitations.revokeInvitation, { invitationId: id });
+  }
 
   // userId -> assigned role (falls back to default for unassigned members).
   const roleByUser = $derived(
@@ -142,6 +186,70 @@
       {/if}
     </Card.Content>
   </Card.Root>
+
+  {#if canManage}
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Invite members</Card.Title>
+        <Card.Description>
+          Invite teammates by email. They join this organization at the chosen role after accepting.
+          The invite is emailed when SMTP is configured; otherwise share the generated link.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content class="space-y-4">
+        <form class="flex flex-col gap-2 sm:flex-row sm:items-end" onsubmit={sendInvite}>
+          <div class="flex-1 space-y-1.5">
+            <Label for="inviteEmail">Email</Label>
+            <Input
+              id="inviteEmail"
+              type="email"
+              bind:value={inviteEmail}
+              required
+              placeholder="teammate@company.com"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="inviteRole">Role</Label>
+            <select
+              id="inviteRole"
+              bind:value={inviteRole}
+              class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-36"
+            >
+              {#each ROLES as r (r)}
+                <option value={r} disabled={r === 'owner' && callerRole !== 'owner'}>{r}</option>
+              {/each}
+            </select>
+          </div>
+          <Button type="submit" disabled={inviting}>{inviting ? 'Sending…' : 'Send invite'}</Button>
+        </form>
+        {#if inviteError}<p class="text-sm text-destructive">{inviteError}</p>{/if}
+        {#if inviteNotice}<p class="text-sm text-muted-foreground">{inviteNotice}</p>{/if}
+
+        {#if invitations.data && invitations.data.length > 0}
+          <div class="space-y-2">
+            <div class="text-xs uppercase tracking-wide text-muted-foreground">
+              Pending invitations
+            </div>
+            {#each invitations.data as inv (inv.id)}
+              <div class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                <span class="min-w-0 flex-1 truncate">{inv.email}</span>
+                <Badge variant="muted">{inv.role}</Badge>
+                <CopyButton text={inviteLink(inv.token)} />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onclick={() => revokeInvite(inv.id)}
+                  aria-label="Revoke invitation"
+                >
+                  <TrashIcon class="size-4 text-destructive" />
+                </Button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+  {/if}
 
   <Card.Root>
     <Card.Header>
