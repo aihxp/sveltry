@@ -29,6 +29,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Org-wide Stats page and project rename.** A new Stats page aggregates usage across all of an
+  organization's projects: window totals (events / transactions / dropped / filtered), a daily
+  events chart, and a per-project breakdown, over a selectable 7 / 30 / 90-day window
+  (`usage.orgUsage`, backed by a new `usageDaily` by-org index). Projects can also be renamed from
+  their settings page (the slug, which is the ingest/tenant key, stays stable); the rename is
+  recorded in the audit log.
 - **Organization audit log.** Configuration and access changes are now recorded with the actor and
   time: project create/update, DSN key create / enable / disable / allowed-domains, member role
   set/remove, invitation create/revoke, API-token create/revoke, and alert-rule create / delete /

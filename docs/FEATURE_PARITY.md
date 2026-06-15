@@ -70,7 +70,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Multi-tenant organizations | Done | Organizations, members, and roles are modeled natively in Convex (`organizations` / `memberRoles` / `userSettings`); there is no Better Auth organization plugin. |
-| Projects | Done | `projects` table, scoped per organization. |
+| Projects | Done | `projects` table, scoped per organization; renamable from the project settings page (the slug stays stable). Delete / transfer are planned. |
 | DSN / client keys | Done | `projectKeys` per project, resolved at ingest by `resolveIngestKey`. |
 | Org-scoped data access | Done | Every dashboard query calls `requireOrg(ctx)`; Convex verifies RS256 JWTs statelessly against the JWKS served by its own Better Auth component. |
 | Authentication and identity | Done | Better Auth runs on Convex via the `@convex-dev/better-auth` component (Convex-only, no Postgres; email + password). RS256 JWTs are verified against a Convex-served JWKS at `{CONVEX_SITE_URL}/api/auth/convex/jwks`. |
@@ -166,6 +166,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | S3 / R2 storage offload | Done | Optional offload of large blobs (source maps) to an S3-compatible bucket, configured by env vars (no-op when unset). Resolution reads offloaded maps back transparently. Inline event payloads are not yet offloaded. |
 | Spike protection | Done | Optional per-project per-minute cap; excess error events are dropped (still HTTP 200). Applies to error events only; transactions and sessions are not counted or dropped. |
 | Usage accounting | Done | Per-project, per-day event/transaction/dropped/filtered counters, shown as window totals plus a daily events-per-day chart on the project page (selectable 7 / 30 / 90-day window). |
+| Org-wide stats | Done | A Stats page aggregates usage across all of an organization's projects: window totals (events / transactions / dropped / filtered), a daily chart, and a per-project breakdown (selectable 7 / 30 / 90-day window). |
 | Hard quotas | Done | Optional per-project monthly event quota; events over quota are dropped. Configurable on the project page. |
 
 ---

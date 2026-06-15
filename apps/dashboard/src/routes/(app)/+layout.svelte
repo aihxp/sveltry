@@ -17,6 +17,7 @@
   import FlameIcon from '@lucide/svelte/icons/flame';
   import MessageSquareIcon from '@lucide/svelte/icons/message-square';
   import BoxesIcon from '@lucide/svelte/icons/boxes';
+  import BarChart3Icon from '@lucide/svelte/icons/bar-chart-3';
   import UsersIcon from '@lucide/svelte/icons/users';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -33,6 +34,7 @@
     { href: '/replays', label: 'Replays', icon: PlayCircleIcon },
     { href: '/profiles', label: 'Profiles', icon: FlameIcon },
     { href: '/feedback', label: 'Feedback', icon: MessageSquareIcon },
+    { href: '/stats', label: 'Stats', icon: BarChart3Icon },
     { href: '/projects', label: 'Projects', icon: BoxesIcon },
     { href: '/teams', label: 'Teams', icon: UsersIcon },
     { href: '/settings', label: 'Settings', icon: SettingsIcon },
