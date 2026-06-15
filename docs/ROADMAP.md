@@ -89,7 +89,9 @@ Valuable, but a larger surface or a new subsystem:
   on the provider's web UI, URL-only, no token). Still to come: suspect commits from SCM and
   auto-resolve from commit messages.
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
-- **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
+- **Finer percentiles.** p99 ships on the performance views (the stats table and a
+  p50 / p95 / p99 selector on the latency-over-time chart). Still to come: higher-resolution
+  histograms via a richer analytics tier (p99.9 and tighter tail accuracy).
 
 ## Non-goals (for now)
 

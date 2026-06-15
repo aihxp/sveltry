@@ -6,6 +6,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **p99 latency.** The Performance views now surface the p99 percentile: a p99 column on the
+  per-transaction stats table (exact, over the recent-window sample) and a p50 / p95 / p99 selector
+  on the latency-over-time chart (over the hourly histogram rollups, at bucket resolution).
+
 ## [0.4.0] - 2026-06-15
 
 ### Added
