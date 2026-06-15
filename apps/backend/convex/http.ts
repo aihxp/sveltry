@@ -4,6 +4,7 @@ import { httpAction } from './_generated/server';
 import { authComponent, createAuth } from './betterauth';
 import { uploadCommits } from './commits';
 import { ingest } from './ingest';
+import { apiV1 } from './publicApi';
 import { uploadArtifact } from './sourcemaps';
 import { recordDeployHttp } from './usage';
 
@@ -16,6 +17,12 @@ authComponent.registerRoutes(http, createAuth);
 // `/api/<projectId>/store/` (legacy). Match the whole `/api/` prefix and let the
 // ingest action parse the project id and endpoint from the path.
 http.route({ pathPrefix: '/api/', method: 'POST', handler: ingest });
+
+// Public read API (v1), authenticated by an organization API token (Bearer).
+// Mounted on the more specific `/api/v1/` prefix; `/api/` POST ingest is
+// unaffected (different method + shorter prefix). OPTIONS is covered by the
+// `/api/` preflight handler below.
+http.route({ pathPrefix: '/api/v1/', method: 'GET', handler: apiV1 });
 
 // Source-map / build-artifact upload (DSN-key authenticated), used by CI and the
 // SDK uploader to publish a release's bundles + maps for stack-frame resolution.

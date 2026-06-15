@@ -77,7 +77,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Teams | Done | Teams group org members and own projects (assignable per project). Modeled in Convex; managed on the Teams page. |
 | Fine-grained roles / permissions | Done | owner / admin / member / billing roles, enforced in Convex via `requireRole`: admin+ manages projects/teams/alerts, member triages issues, billing is read-only. Managed on the settings page; the first user of a fresh org bootstraps as owner. |
 | Member invitations | Done | An owner/admin invites an email at a role; the invitee opens a tokenized link, signs in or up as that email, and accepts to join. Invites expire after 7 days, are emailed over SMTP (or the link is copied from the settings page when SMTP is unconfigured), and can be revoked. |
-| Public REST API / API tokens | Planned | The HTTP surface is the Sentry-compatible ingest/upload endpoints (DSN-key auth). A general programmatic API with scoped tokens is not built yet. |
+| Public REST API / API tokens | Partial | A read-only v1 API (`GET /api/v1/projects`, `/projects/<slug>/issues`, `/issues/<id>`) authenticated by an organization API token (Bearer). Tokens are managed on the settings page (SHA-1 hashed, shown once, revocable). Write/triage endpoints and broader resource coverage are not built yet. |
 | SSO / SAML / 2FA / audit log | Not planned | Out of scope for now; email + password only. |
 
 ## Alerts and integrations

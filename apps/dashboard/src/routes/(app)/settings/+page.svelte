@@ -86,6 +86,36 @@
     await client.mutation(api.invitations.revokeInvitation, { invitationId: id });
   }
 
+  // API tokens (admin/owner only).
+  const apiTokens = useQuery(api.apiTokens.listApiTokens, () =>
+    auth.isAuthenticated && canManage ? {} : ('skip' as const),
+  );
+  let tokenName = $state('');
+  let creatingToken = $state(false);
+  let tokenError = $state('');
+  let newToken = $state(''); // the raw token, shown once after creation
+
+  async function createToken(e: SubmitEvent) {
+    e.preventDefault();
+    if (!tokenName.trim()) return;
+    creatingToken = true;
+    tokenError = '';
+    newToken = '';
+    try {
+      const res = await client.mutation(api.apiTokens.createApiToken, { name: tokenName.trim() });
+      newToken = res.token;
+      tokenName = '';
+    } catch (err) {
+      tokenError = err instanceof Error ? err.message : 'Could not create token';
+    } finally {
+      creatingToken = false;
+    }
+  }
+
+  async function revokeToken(id: Id<'apiTokens'>) {
+    await client.mutation(api.apiTokens.revokeApiToken, { tokenId: id });
+  }
+
   // userId -> assigned role (falls back to default for unassigned members).
   const roleByUser = $derived(
     new Map((roleData.data?.roles ?? []).map((r) => [r.userId, r.role as Role])),
@@ -240,6 +270,69 @@
                   size="icon"
                   onclick={() => revokeInvite(inv.id)}
                   aria-label="Revoke invitation"
+                >
+                  <TrashIcon class="size-4 text-destructive" />
+                </Button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+  {/if}
+
+  {#if canManage}
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>API tokens</Card.Title>
+        <Card.Description>
+          Read-only tokens for the public API (<code class="font-mono">GET /api/v1/...</code>). Send
+          as <code class="font-mono">Authorization: Bearer &lt;token&gt;</code>. A token grants read
+          access to this organization and is shown only once.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content class="space-y-4">
+        <form class="flex flex-col gap-2 sm:flex-row sm:items-end" onsubmit={createToken}>
+          <div class="flex-1 space-y-1.5">
+            <Label for="tokenName">Name</Label>
+            <Input id="tokenName" bind:value={tokenName} required placeholder="CI pipeline" />
+          </div>
+          <Button type="submit" disabled={creatingToken}>
+            {creatingToken ? 'Creating…' : 'Create token'}
+          </Button>
+        </form>
+        {#if tokenError}<p class="text-sm text-destructive">{tokenError}</p>{/if}
+        {#if newToken}
+          <div class="space-y-1.5 rounded-lg border border-dashed p-3">
+            <p class="text-xs text-muted-foreground">
+              Copy this token now. You will not be able to see it again.
+            </p>
+            <div class="flex items-center gap-2">
+              <code
+                class="min-w-0 flex-1 truncate rounded bg-muted/40 px-2 py-1.5 font-mono text-xs"
+                >{newToken}</code
+              >
+              <CopyButton text={newToken} />
+            </div>
+          </div>
+        {/if}
+
+        {#if apiTokens.data && apiTokens.data.length > 0}
+          <div class="space-y-2">
+            {#each apiTokens.data as t (t.id)}
+              <div class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                <span class="min-w-0 flex-1 truncate">
+                  {t.name}
+                  <code class="ml-1 font-mono text-xs text-muted-foreground">{t.prefix}…</code>
+                </span>
+                <span class="shrink-0 text-xs text-muted-foreground">
+                  {t.lastUsedAt ? 'used' : 'never used'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onclick={() => revokeToken(t.id)}
+                  aria-label="Revoke token"
                 >
                   <TrashIcon class="size-4 text-destructive" />
                 </Button>
