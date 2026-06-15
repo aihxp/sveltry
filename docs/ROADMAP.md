@@ -63,6 +63,10 @@ Most of what the original Next/Later horizons listed now ships. See
   month's events reach a chosen percentage of the monthly quota.
 - **Project delete.** A typed-name confirmation removes a project and purges all of its data across
   every scoped table in a bounded, self-rescheduling background sweep.
+- **Project transfer.** Move a project (and all its data) to another organization you administer.
+  Requires admin on both the source and target org and a typed-name confirmation; the project moves
+  immediately and a bounded, self-rescheduling background sweep re-stamps its scoped data onto the
+  new org.
 - **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
   a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, inbound data filters
   (drop noisy events at ingest), per-key allowed domains (reject browser events from non-listed
@@ -72,8 +76,6 @@ Most of what the original Next/Later horizons listed now ships. See
 
 Highest-value additions that build on the existing tables:
 
-- **Project transfer.** Move a project (and its data) to another organization. The org-level stats
-  page, project rename, project delete, and quota-usage alerts already ship.
 - **Public API, even deeper.** The v1 API now covers projects, releases, members, issues, events
   (list + detail), cursor pagination, issue assignment, and triage writes. Still to come: a
   project-scoped event lookup, deploy/artifact resources, and outbound webhooks for API consumers.

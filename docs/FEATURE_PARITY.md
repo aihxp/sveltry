@@ -70,7 +70,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Multi-tenant organizations | Done | Organizations, members, and roles are modeled natively in Convex (`organizations` / `memberRoles` / `userSettings`); there is no Better Auth organization plugin. |
-| Projects | Done | `projects` table, scoped per organization; renamable from the project settings page (the slug stays stable), and deletable (a typed-name confirm removes the project and purges all its data across every table in a bounded background sweep). Transfer between orgs is planned. |
+| Projects | Done | `projects` table, scoped per organization; renamable from the project settings page (the slug stays stable), deletable (a typed-name confirm removes the project and purges all its data across every table in a bounded background sweep), and transferable to another organization the caller administers (a typed-name confirm moves the project immediately and re-stamps its scoped data onto the new org in a bounded background sweep; the slug is auto-suffixed on collision). |
 | DSN / client keys | Done | `projectKeys` per project, resolved at ingest by `resolveIngestKey`. |
 | Org-scoped data access | Done | Every dashboard query calls `requireOrg(ctx)`; Convex verifies RS256 JWTs statelessly against the JWKS served by its own Better Auth component. |
 | Authentication and identity | Done | Better Auth runs on Convex via the `@convex-dev/better-auth` component (Convex-only, no Postgres; email + password). RS256 JWTs are verified against a Convex-served JWKS at `{CONVEX_SITE_URL}/api/auth/convex/jwks`. |

@@ -6,6 +6,18 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Project transfer.** Move a project (and all of its data) to another organization you administer,
+  from the project settings danger zone. Requires admin on both the source and target org and a
+  typed-name confirmation. The project row and its DSN keys flip to the target immediately (so it
+  leaves the source org and ingest attributes new events to the target at once); a bounded,
+  self-rescheduling background sweep then re-stamps the rest of its scoped data (events,
+  transactions, issues and comments, releases, alerts, and more) onto the new org. The slug is
+  auto-suffixed if it collides in the target org, saved views and dashboard widgets that reference
+  the project are detached (they stay with the source org), and a `project.transfer` entry is
+  recorded in both orgs' audit logs.
+
 ## [0.2.0] - 2026-06-15
 
 ### Changed
