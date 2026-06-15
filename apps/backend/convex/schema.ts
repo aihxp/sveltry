@@ -638,6 +638,8 @@ export default defineSchema({
     ),
     /** For p95_latency: which transaction to watch (empty = all). */
     transactionName: v.optional(v.string()),
+    /** Optional environment scope; when set, the metric is computed over only that environment. */
+    environment: v.optional(v.string()),
     windowMinutes: v.number(),
     /** Latency: ms; error_count: events; crash_free_rate: percent (fires when below). */
     threshold: v.number(),

@@ -28,6 +28,7 @@ export const createMetricAlert = mutation({
     name: v.string(),
     metric: metricValidator,
     transactionName: v.optional(v.string()),
+    environment: v.optional(v.string()),
     windowMinutes: v.number(),
     threshold: v.number(),
     channels: v.array(alertChannelValidator),
@@ -43,6 +44,8 @@ export const createMetricAlert = mutation({
       name: args.name.trim() || 'Metric alert',
       metric: args.metric,
       transactionName: args.transactionName,
+      // Blank environment means "all environments".
+      environment: args.environment?.trim() || undefined,
       windowMinutes: Math.max(5, args.windowMinutes),
       threshold: args.threshold,
       channels: args.channels,
@@ -79,16 +82,31 @@ export const deleteMetricAlert = mutation({
 // Evaluation (cron)
 // ---------------------------------------------------------------------------
 
-/** Compute a metric's current value over its window. */
+/** Nearest-rank percentile of an ascending-sorted number array. */
+function percentile(sortedAsc: number[], p: number): number {
+  const n = sortedAsc.length;
+  if (n === 0) return 0;
+  const idx = Math.min(n - 1, Math.max(0, Math.ceil((p / 100) * n) - 1));
+  return sortedAsc[idx]!;
+}
+
+/**
+ * Compute a metric's current value over its window. When `environment` is set,
+ * the metric is scoped to that environment: error_count and crash_free_rate
+ * filter the scanned rows, and p95_latency is computed from raw transactions
+ * (the precomputed rollups are not split by environment, so the env-scoped path
+ * scans the raw `transactions` table within the window instead).
+ */
 export const metricValue = internalQuery({
   args: {
     metric: metricValidator,
     projectId: v.id('projects'),
     transactionName: v.optional(v.string()),
+    environment: v.optional(v.string()),
     windowMinutes: v.number(),
   },
   returns: v.number(),
-  handler: async (ctx, { metric, projectId, transactionName, windowMinutes }) => {
+  handler: async (ctx, { metric, projectId, transactionName, environment, windowMinutes }) => {
     const since = Date.now() - windowMinutes * 60_000;
 
     if (metric === 'error_count') {
@@ -96,10 +114,31 @@ export const metricValue = internalQuery({
         .query('events')
         .withIndex('by_project', (q) => q.eq('projectId', projectId).gte('timestamp', since))
         .take(5000);
-      return rows.length;
+      return environment ? rows.filter((e) => e.environment === environment).length : rows.length;
     }
 
     if (metric === 'p95_latency') {
+      if (environment) {
+        const rows =
+          transactionName && transactionName.length > 0
+            ? await ctx.db
+                .query('transactions')
+                .withIndex('by_project_name', (q) =>
+                  q.eq('projectId', projectId).eq('name', transactionName).gte('timestamp', since),
+                )
+                .take(5000)
+            : await ctx.db
+                .query('transactions')
+                .withIndex('by_project', (q) =>
+                  q.eq('projectId', projectId).gte('timestamp', since),
+                )
+                .take(5000);
+        const durations = rows
+          .filter((t) => t.environment === environment)
+          .map((t) => t.durationMs)
+          .sort((a, b) => a - b);
+        return percentile(durations, 95);
+      }
       const HOUR = 3_600_000;
       const bucketSince = Math.floor(since / HOUR) * HOUR;
       const rollups =
@@ -124,10 +163,11 @@ export const metricValue = internalQuery({
     }
 
     // crash_free_rate (percent)
-    const sessions = await ctx.db
+    const all = await ctx.db
       .query('sessions')
       .withIndex('by_project', (q) => q.eq('projectId', projectId).gte('lastUpdate', since))
       .take(5000);
+    const sessions = environment ? all.filter((s) => s.environment === environment) : all;
     if (sessions.length === 0) return 100;
     const crashed = sessions.filter((s) => s.status === 'crashed').length;
     return ((sessions.length - crashed) / sessions.length) * 100;
@@ -176,6 +216,7 @@ export const evaluateMetricAlerts = internalAction({
         metric: a.metric,
         projectId: a.projectId,
         transactionName: a.transactionName,
+        environment: a.environment,
         windowMinutes: a.windowMinutes,
       });
       const breached = a.metric === 'crash_free_rate' ? value < a.threshold : value > a.threshold;
@@ -184,9 +225,10 @@ export const evaluateMetricAlerts = internalAction({
       if (a.lastFiredAt && now - a.lastFiredAt < a.windowMinutes * 60_000) continue;
 
       const unit = a.metric === 'p95_latency' ? 'ms' : a.metric === 'crash_free_rate' ? '%' : '';
+      const scope = a.environment ? ` in ${a.environment}` : '';
       const subject = `[${a.projectName}] ${a.name}`;
       const text =
-        `${METRIC_LABEL[a.metric]} is ${value.toFixed(a.metric === 'crash_free_rate' ? 2 : 0)}${unit} ` +
+        `${METRIC_LABEL[a.metric]}${scope} is ${value.toFixed(a.metric === 'crash_free_rate' ? 2 : 0)}${unit} ` +
         `over the last ${a.windowMinutes}m (threshold ${a.threshold}${unit}).`;
 
       for (const channel of a.channels) {
