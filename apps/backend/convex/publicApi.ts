@@ -12,6 +12,8 @@ import type { Doc } from './_generated/dataModel';
 //   GET  /api/v1/releases?project=<slug>&cursor=<c>&limit=<n>
 //   GET  /api/v1/members?cursor=<c>&limit=<n>
 //   GET  /api/v1/projects/<slug>/issues?status=<s>&cursor=<c>&limit=<n>
+//   GET  /api/v1/projects/<slug>/deploys?cursor=<c>&limit=<n>
+//   GET  /api/v1/projects/<slug>/events/<eventId>        (strict, project-scoped)
 //   GET  /api/v1/issues/<id>
 //   GET  /api/v1/events/<eventId>
 //   GET  /api/v1/issues/<id>/events?cursor=<c>&limit=<n>
@@ -79,6 +81,36 @@ function eventListView(e: Doc<'events'>) {
     message: e.message,
     culprit: e.culprit,
     tags: e.tags,
+  };
+}
+
+/** A single event with its full stored payload (frames, breadcrumbs, request, contexts). */
+function eventDetailView(e: Doc<'events'>) {
+  return {
+    id: e._id,
+    eventId: e.eventId,
+    issueId: e.issueId,
+    timestamp: e.timestamp,
+    receivedAt: e.receivedAt,
+    level: e.level,
+    platform: e.platform,
+    environment: e.environment,
+    release: e.release ?? null,
+    message: e.message,
+    culprit: e.culprit,
+    tags: e.tags,
+    payload: e.payload,
+  };
+}
+
+function deployView(d: Doc<'deploys'>) {
+  return {
+    id: d._id,
+    release: d.release,
+    environment: d.environment,
+    name: d.name ?? null,
+    url: d.url ?? null,
+    deployedAt: d.deployedAt,
   };
 }
 
@@ -212,21 +244,47 @@ export const apiEvent = internalQuery({
       )
       .first();
     if (!event) return null;
-    return {
-      id: event._id,
-      eventId: event.eventId,
-      issueId: event.issueId,
-      timestamp: event.timestamp,
-      receivedAt: event.receivedAt,
-      level: event.level,
-      platform: event.platform,
-      environment: event.environment,
-      release: event.release ?? null,
-      message: event.message,
-      culprit: event.culprit,
-      tags: event.tags,
-      payload: event.payload, // full Sentry blob: frames, breadcrumbs, request, contexts
-    };
+    return eventDetailView(event);
+  },
+});
+
+/**
+ * A single event by its Sentry event id within a specific project (the strict,
+ * collision-proof form: `eventId` is unique per project). Returns a discriminated
+ * result so the caller can tell a missing project from a missing event.
+ */
+export const apiProjectEvent = internalQuery({
+  args: { organizationId: v.string(), slug: v.string(), eventId: v.string() },
+  handler: async (ctx, { organizationId, slug, eventId }) => {
+    const project = await ctx.db
+      .query('projects')
+      .withIndex('by_org_slug', (q) => q.eq('organizationId', organizationId).eq('slug', slug))
+      .first();
+    if (!project) return { found: 'no_project' as const };
+    const event = await ctx.db
+      .query('events')
+      .withIndex('by_project_eventId', (q) => q.eq('projectId', project._id).eq('eventId', eventId))
+      .first();
+    if (!event) return { found: 'no_event' as const };
+    return { found: 'ok' as const, event: eventDetailView(event) };
+  },
+});
+
+/** A project's deploys (newest first, paginated), scoped to the org. */
+export const apiDeploys = internalQuery({
+  args: { organizationId: v.string(), slug: v.string(), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { organizationId, slug, paginationOpts }) => {
+    const project = await ctx.db
+      .query('projects')
+      .withIndex('by_org_slug', (q) => q.eq('organizationId', organizationId).eq('slug', slug))
+      .first();
+    if (!project) return null;
+    const res = await ctx.db
+      .query('deploys')
+      .withIndex('by_project', (q) => q.eq('projectId', project._id))
+      .order('desc')
+      .paginate(paginationOpts);
+    return mapPage(res, deployView);
   },
 });
 
@@ -421,6 +479,41 @@ export const apiV1 = httpAction(async (ctx, request) => {
     } catch {
       return json({ error: 'invalid cursor' }, 400, cors);
     }
+  } else if (isGet && parts.length === 3 && parts[0] === 'projects' && parts[2] === 'deploys') {
+    let slug: string;
+    try {
+      slug = decodeURIComponent(parts[1]!);
+    } catch {
+      return json({ error: 'invalid project slug' }, 400, cors);
+    }
+    try {
+      const r = await ctx.runQuery(internal.publicApi.apiDeploys, {
+        organizationId: orgId,
+        slug,
+        paginationOpts: paginationFrom(url),
+      });
+      if (r === null) return json({ error: 'project not found' }, 404, cors);
+      result = { deploys: r.page, nextCursor: nextCursor(r) };
+    } catch {
+      return json({ error: 'invalid cursor' }, 400, cors);
+    }
+  } else if (isGet && parts.length === 4 && parts[0] === 'projects' && parts[2] === 'events') {
+    let slug: string;
+    let eventId: string;
+    try {
+      slug = decodeURIComponent(parts[1]!);
+      eventId = decodeURIComponent(parts[3]!);
+    } catch {
+      return json({ error: 'invalid project slug or event id' }, 400, cors);
+    }
+    const r = await ctx.runQuery(internal.publicApi.apiProjectEvent, {
+      organizationId: orgId,
+      slug,
+      eventId,
+    });
+    if (r.found === 'no_project') return json({ error: 'project not found' }, 404, cors);
+    if (r.found === 'no_event') return json({ error: 'event not found' }, 404, cors);
+    result = r.event;
   } else if (isGet && parts.length === 2 && parts[0] === 'issues') {
     result = await ctx.runQuery(internal.publicApi.apiIssue, {
       organizationId: orgId,

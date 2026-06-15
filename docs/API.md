@@ -29,9 +29,9 @@ revoked token returns `401`.
 
 ## Pagination
 
-The paginated endpoints (`/releases`, `/members`, a project's `/issues`, and an
-issue's `/events`) return at most `limit` items per page and an opaque
-`nextCursor`:
+The paginated endpoints (`/releases`, `/members`, a project's `/issues` and
+`/deploys`, and an issue's `/events`) return at most `limit` items per page and an
+opaque `nextCursor`:
 
 - `limit` - page size (default 50, max 100). Out-of-range or non-numeric values
   are clamped to `[1, 100]` (or fall back to the default), not rejected.
@@ -176,7 +176,36 @@ organization.
 ```
 
 Event ids are unique per project, not globally; this looks up the first match in
-your organization. A strict project-scoped form may be added later.
+your organization. Use the project-scoped form below to disambiguate.
+
+### `GET /api/v1/projects/<slug>/events/<eventId>`
+
+The strict, project-scoped form of the above: a single event by its Sentry event
+id within a specific project (event ids are unique per project, so this is
+collision-proof). Same response shape as `GET /events/<eventId>`. Returns `404
+project not found` for an unknown slug, or `404 event not found` if the event is
+not in that project.
+
+### `GET /api/v1/projects/<slug>/deploys`
+
+A project's deploys, newest first. Paginated (`?cursor=`, `?limit=`). Returns
+`404` if the slug is not a project in the organization.
+
+```json
+{
+  "deploys": [
+    {
+      "id": "...",
+      "release": "web@1.2.3",
+      "environment": "production",
+      "name": "ci-1024",
+      "url": "https://ci.example.com/runs/1024",
+      "deployedAt": 1781493600000
+    }
+  ],
+  "nextCursor": null
+}
+```
 
 ### `GET /api/v1/issues/<id>/events`
 
