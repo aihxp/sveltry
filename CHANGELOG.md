@@ -29,6 +29,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Span operations breakdown.** The transaction detail page now shows where a transaction's time
+  goes by operation category (db / http / cache / ui / ...), computed from each span's self-time
+  (its duration minus the time covered by its children, so nested spans are not double-counted) and
+  rendered as a stacked bar with per-category totals and percentages, plus a slowest-spans list.
+  Frontend-only, over the span data already stored with each transaction.
 - **Project delete.** A project can be deleted from its settings page (danger zone, with a
   typed-name confirmation). The project row is removed immediately (it leaves listings and ingest
   stops resolving its DSN), and a self-rescheduling background sweep purges all of its data across

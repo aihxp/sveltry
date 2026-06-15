@@ -21,12 +21,99 @@
 
   type Span = {
     span_id?: string;
+    parent_span_id?: string;
     op?: string;
     description?: string;
     status?: string;
     start_timestamp?: number;
     timestamp?: number;
   };
+
+  const opCategory = (op: string) => op.split('.')[0] || 'other';
+
+  /**
+   * Where the transaction's time goes, by operation category. Each span's
+   * self-time (its duration minus the time covered by its direct children) is
+   * summed per category; the remainder not covered by any span is the
+   * transaction's own work. Self-times partition the duration, so the percentages
+   * sum to ~100%.
+   */
+  const insights = $derived.by(() => {
+    const t = txn.data;
+    if (!t) return null;
+    const spans = ((t.payload?.spans ?? []) as Span[])
+      .map((s) => ({
+        id: s.span_id,
+        parent: s.parent_span_id,
+        op: s.op ?? 'other',
+        desc: s.description ?? '',
+        start: toMs(s.start_timestamp),
+        end: toMs(s.timestamp),
+      }))
+      .filter((s) => s.start != null && s.end != null) as {
+      id?: string;
+      parent?: string;
+      op: string;
+      desc: string;
+      start: number;
+      end: number;
+    }[];
+
+    const childrenOf = new Map<string, typeof spans>();
+    for (const s of spans) {
+      if (!s.parent) continue;
+      const a = childrenOf.get(s.parent) ?? [];
+      a.push(s);
+      childrenOf.set(s.parent, a);
+    }
+
+    const total = Math.max(1, t.durationMs);
+    const selfByCat = new Map<string, number>();
+    let coveredBySpans = 0;
+    for (const s of spans) {
+      const dur = Math.max(0, s.end - s.start);
+      let childCovered = 0;
+      for (const k of s.id ? (childrenOf.get(s.id) ?? []) : []) {
+        childCovered += Math.max(0, Math.min(k.end, s.end) - Math.max(k.start, s.start));
+      }
+      const self = Math.max(0, dur - childCovered);
+      const cat = opCategory(s.op);
+      selfByCat.set(cat, (selfByCat.get(cat) ?? 0) + self);
+      coveredBySpans += self;
+    }
+    // Time the transaction spent outside any span is its own work.
+    const remainder = Math.max(0, total - coveredBySpans);
+    if (remainder > 0) {
+      const cat = opCategory(t.op);
+      selfByCat.set(cat, (selfByCat.get(cat) ?? 0) + remainder);
+    }
+
+    const breakdown = [...selfByCat.entries()]
+      .map(([category, selfMs]) => ({ category, selfMs, pct: (selfMs / total) * 100 }))
+      .filter((b) => b.selfMs > 0)
+      .sort((a, b) => b.selfMs - a.selfMs);
+
+    const slowest = spans
+      .map((s) => ({ op: s.op, desc: s.desc, durationMs: Math.max(0, s.end - s.start) }))
+      .sort((a, b) => b.durationMs - a.durationMs)
+      .slice(0, 6);
+
+    return { breakdown, slowest };
+  });
+
+  // A stable color per op category for the breakdown bar.
+  const CAT_COLOR: Record<string, string> = {
+    db: 'bg-sky-500',
+    http: 'bg-violet-500',
+    cache: 'bg-amber-500',
+    ui: 'bg-emerald-500',
+    browser: 'bg-emerald-500',
+    resource: 'bg-rose-500',
+    function: 'bg-teal-500',
+    rpc: 'bg-indigo-500',
+    serialize: 'bg-orange-500',
+  };
+  const catColor = (c: string) => CAT_COLOR[c] ?? 'bg-primary/60';
 
   type WaterfallRow = {
     label: string;
@@ -117,6 +204,65 @@
         </Card.Root>
       {/each}
     </div>
+
+    {#if insights && insights.breakdown.length > 0}
+      <div class="grid gap-4 lg:grid-cols-2">
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Operations</Card.Title>
+            <Card.Description>Where this transaction's time goes (span self-time).</Card.Description
+            >
+          </Card.Header>
+          <Card.Content class="space-y-3">
+            <div class="flex h-2.5 w-full overflow-hidden rounded-full">
+              {#each insights.breakdown as b (b.category)}
+                <div
+                  class={cn('h-full', catColor(b.category))}
+                  style={`width:${b.pct}%`}
+                  title={`${b.category} · ${formatDuration(b.selfMs)} (${Math.round(b.pct)}%)`}
+                ></div>
+              {/each}
+            </div>
+            <div class="space-y-1.5">
+              {#each insights.breakdown as b (b.category)}
+                <div class="flex items-center gap-2 text-sm">
+                  <span class={cn('size-2.5 shrink-0 rounded-sm', catColor(b.category))}></span>
+                  <span class="min-w-0 flex-1 truncate font-mono text-xs">{b.category}</span>
+                  <span class="shrink-0 tabular-nums text-muted-foreground"
+                    >{formatDuration(b.selfMs)}</span
+                  >
+                  <span class="w-10 shrink-0 text-right tabular-nums text-muted-foreground"
+                    >{Math.round(b.pct)}%</span
+                  >
+                </div>
+              {/each}
+            </div>
+          </Card.Content>
+        </Card.Root>
+
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>Slowest spans</Card.Title>
+            <Card.Description
+              >The longest individual operations in this transaction.</Card.Description
+            >
+          </Card.Header>
+          <Card.Content class="space-y-2">
+            {#each insights.slowest as s, i (i)}
+              <div class="flex items-center gap-3 text-sm">
+                <span class="shrink-0 font-mono text-xs text-muted-foreground">{s.op}</span>
+                {#if s.desc}
+                  <span class="min-w-0 flex-1 truncate">{s.desc}</span>
+                {:else}
+                  <span class="flex-1"></span>
+                {/if}
+                <span class="shrink-0 tabular-nums">{formatDuration(s.durationMs)}</span>
+              </div>
+            {/each}
+          </Card.Content>
+        </Card.Root>
+      </div>
+    {/if}
 
     <Card.Root>
       <Card.Header><Card.Title>Trace</Card.Title></Card.Header>
