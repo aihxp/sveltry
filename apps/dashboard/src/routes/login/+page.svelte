@@ -10,6 +10,11 @@
   let email = $state('');
   let password = $state('');
   let error = $state('');
+  // Preserve an invite redirect when bouncing to sign-up (e.g. /invite/<token>).
+  const redirectTo = $derived(page.url.searchParams.get('redirectTo'));
+  const signupHref = $derived(
+    redirectTo ? `/signup?redirectTo=${encodeURIComponent(redirectTo)}` : '/signup',
+  );
   let loading = $state(false);
 
   async function submit(e: SubmitEvent) {
@@ -57,6 +62,6 @@
     >
   </form>
   <p class="mt-4 text-center text-sm text-muted-foreground">
-    No account? <a href="/signup" class="text-primary hover:underline">Create one</a>
+    No account? <a href={signupHref} class="text-primary hover:underline">Create one</a>
   </p>
 </AuthShell>

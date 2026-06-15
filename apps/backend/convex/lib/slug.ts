@@ -20,6 +20,18 @@ export function generatePublicKey(): string {
   return s;
 }
 
+/** Generate a 64-char lowercase-hex secret (e.g. an invitation token). */
+export function generateToken(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return (crypto.randomUUID() + crypto.randomUUID() + crypto.randomUUID() + crypto.randomUUID())
+      .replace(/-/g, '')
+      .slice(0, 64);
+  }
+  let s = '';
+  for (let i = 0; i < 64; i++) s += Math.floor(Math.random() * 16).toString(16);
+  return s;
+}
+
 /** Generate a numeric public id for a project (the `/api/<id>/` DSN segment). */
 export function generatePublicId(): string {
   // 9-digit numeric id; uniqueness is verified by the caller against an index.

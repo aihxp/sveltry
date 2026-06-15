@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { authClient } from '$lib/auth-client';
   import AuthShell from '$lib/components/AuthShell.svelte';
   import { Button } from '$lib/components/ui/button';
@@ -11,6 +12,11 @@
   let password = $state('');
   let error = $state('');
   let loading = $state(false);
+  // Preserve an invite redirect when bouncing to sign-in.
+  const redirectTo = $derived(page.url.searchParams.get('redirectTo'));
+  const loginHref = $derived(
+    redirectTo ? `/login?redirectTo=${encodeURIComponent(redirectTo)}` : '/login',
+  );
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -22,7 +28,9 @@
       error = err.message ?? 'Sign up failed';
       return;
     }
-    await goto('/onboarding');
+    // Invitees come in with ?redirectTo=/invite/<token> and accept there instead
+    // of creating a new org.
+    await goto(page.url.searchParams.get('redirectTo') ?? '/onboarding');
   }
 </script>
 
@@ -62,6 +70,6 @@
     >
   </form>
   <p class="mt-4 text-center text-sm text-muted-foreground">
-    Already have an account? <a href="/login" class="text-primary hover:underline">Sign in</a>
+    Already have an account? <a href={loginHref} class="text-primary hover:underline">Sign in</a>
   </p>
 </AuthShell>

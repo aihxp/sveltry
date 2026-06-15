@@ -39,6 +39,8 @@ Most of what the original Next/Later horizons listed now ships. See
   Convex. Postgres remains only as the Convex backend's own storage engine.
 - **Issue triage.** Full-text search, saved views, merge / unmerge, assignment, threaded comments,
   resolve-in-next-release, fine-grained roles (owner / admin / member / billing), and teams.
+- **Member invitations.** Invite teammates by email at a role; they accept a tokenized link to
+  join (emailed over SMTP, or the link is copied when SMTP is unconfigured).
 - **Alerts and integrations.** Email (SMTP), Microsoft Teams, PagerDuty, Opsgenie; metric/threshold
   alerts; environment-scoped issue alerts; and Jira / Linear issue-tracker actions.
 - **Performance and analytics.** Web vitals, distributed tracing across services, Discover, custom
@@ -57,8 +59,6 @@ Highest-value additions that build on the existing tables:
 - **Environment-scoped metric alerts.** Extend the environment scope (already on issue alerts) to
   the metric/threshold alerts so p95-latency / error-count / crash-free rules can target one
   environment.
-- **Member invitations.** Invite teammates by email (reusing the existing SMTP transport) and a
-  join flow, instead of each user self-registering.
 - **Per-key allowed origins.** An optional CORS/referrer allowlist on a DSN key, so a leaked browser
   DSN cannot be used to report from other sites.
 - **Custom data scrubbing.** Per-project custom scrubbing rules and a safe-field allowlist, on top

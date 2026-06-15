@@ -191,6 +191,25 @@ export default defineSchema({
     .index('by_org_user', ['organizationId', 'userId'])
     .index('by_user', ['userId']),
 
+  // Pending email invitations to join an org with a given role. The `token` is the
+  // unguessable secret in the accept link; an invite is accepted by a logged-in
+  // user whose email matches. Accepted/expired rows are retained for the record.
+  invitations: defineTable({
+    organizationId: v.string(),
+    email: v.string(),
+    role: roleValidator,
+    token: v.string(),
+    invitedBy: v.string(),
+    invitedByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+    acceptedBy: v.optional(v.string()),
+  })
+    .index('by_token', ['token'])
+    .index('by_org', ['organizationId'])
+    .index('by_org_email', ['organizationId', 'email']),
+
   // Teams group an org's members and own a subset of its projects (Sentry's teams).
   // Modeled in Convex (alongside projects and all other data) rather than in Better
   // Auth's Postgres, so project/team access logic lives in one place.

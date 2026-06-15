@@ -76,7 +76,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Authentication and identity | Done | Better Auth runs on Convex via the `@convex-dev/better-auth` component (Convex-only, no Postgres; email + password). RS256 JWTs are verified against a Convex-served JWKS at `{CONVEX_SITE_URL}/api/auth/convex/jwks`. |
 | Teams | Done | Teams group org members and own projects (assignable per project). Modeled in Convex; managed on the Teams page. |
 | Fine-grained roles / permissions | Done | owner / admin / member / billing roles, enforced in Convex via `requireRole`: admin+ manages projects/teams/alerts, member triages issues, billing is read-only. Managed on the settings page; the first user of a fresh org bootstraps as owner. |
-| Member invitations | Planned | Members self-register today; email invitations and a join flow are on the roadmap. |
+| Member invitations | Done | An owner/admin invites an email at a role; the invitee opens a tokenized link, signs in or up as that email, and accepts to join. Invites expire after 7 days, are emailed over SMTP (or the link is copied from the settings page when SMTP is unconfigured), and can be revoked. |
 | Public REST API / API tokens | Planned | The HTTP surface is the Sentry-compatible ingest/upload endpoints (DSN-key auth). A general programmatic API with scoped tokens is not built yet. |
 | SSO / SAML / 2FA / audit log | Not planned | Out of scope for now; email + password only. |
 

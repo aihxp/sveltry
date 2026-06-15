@@ -29,6 +29,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Member invitations.** An owner or admin can invite teammates by email at a chosen role from the
+  settings page, instead of each person self-registering into a new org. The invitee opens a
+  tokenized link, signs in or signs up as that email, and accepts to join the org. Invites are
+  emailed over the existing SMTP transport (or the link is copied from the settings page when SMTP
+  is unconfigured), expire after 7 days, cap at the inviter's own role, require the accepting user's
+  email to match, and can be revoked. Pending invitations are listed on the settings page.
 - **Usage over time.** The project page's Usage card now charts events per day across a selectable
   7 / 30 / 90-day window (gap-filled so empty days show), with a per-day tooltip breaking down
   events / transactions / dropped / filtered. `usage.projectUsage` takes an optional `windowDays`
