@@ -209,6 +209,20 @@ export default defineSchema({
   // Organization API tokens for the public read API (Bearer auth). Only the SHA-1
   // hash of the token is stored; the raw value is shown once at creation. A token
   // grants read access scoped to its organization.
+  // Organization audit log: a record of who changed what (config, access,
+  // credentials). Append-only; surfaced to admins on the settings page.
+  auditLog: defineTable({
+    organizationId: v.string(),
+    actorId: v.string(),
+    actorEmail: v.optional(v.string()),
+    /** A dotted action key, e.g. `role.set`, `token.create`, `key.disable`. */
+    action: v.string(),
+    /** Human-readable target (a name, slug, or email). */
+    target: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  }).index('by_org', ['organizationId']),
+
   apiTokens: defineTable({
     organizationId: v.string(),
     name: v.string(),

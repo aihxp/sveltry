@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { sha1Hex } from '@sveltry/protocol';
 import { internalMutation, internalQuery, mutation, query } from './_generated/server';
+import { recordAudit } from './lib/audit';
 import { requireRole } from './lib/auth';
 import { generateToken } from './lib/slug';
 
@@ -32,6 +33,12 @@ export const createApiToken = mutation({
       createdByEmail: caller.email,
       createdAt: Date.now(),
     });
+    await recordAudit(
+      ctx,
+      caller,
+      'token.create',
+      `${name.trim() || 'API token'} (${scope ?? 'read'})`,
+    );
     return { token: raw };
   },
 });
@@ -68,6 +75,7 @@ export const revokeApiToken = mutation({
     if (!row || row.organizationId !== caller.activeOrganizationId)
       throw new Error('Token not found');
     await ctx.db.delete(tokenId);
+    await recordAudit(ctx, caller, 'token.revoke', row.name);
   },
 });
 

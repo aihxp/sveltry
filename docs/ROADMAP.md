@@ -51,6 +51,8 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Public API.** A token-authenticated `/api/v1/...` for projects, issues, and an issue's events,
   plus triage writes (resolve / ignore / unresolve). Org-scoped API tokens with read or read+write
   scope, managed on the settings page.
+- **Organization audit log.** Config and access changes (projects, keys, roles, alerts, invitations,
+  tokens) are recorded with the actor and time and shown to admins on the settings page.
 - **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
   a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, inbound data filters
   (drop noisy events at ingest), per-key allowed domains (reject browser events from non-listed
@@ -62,8 +64,8 @@ Highest-value additions that build on the existing tables:
 
 - **Public API, deeper.** Build on the v1 slice: more resources (releases, members), pagination
   cursors, issue assignment, and event detail.
-- **Organization audit log.** Record configuration changes (projects, keys, roles, alerts,
-  invitations) so admins can see who changed what.
+- **Org operations.** Project rename / transfer / delete, an org-level stats page (events accepted /
+  dropped / filtered across all projects), and usage/quota threshold alerts.
 
 ## Later
 
@@ -74,8 +76,6 @@ Valuable, but a larger surface or a new subsystem:
 - **Performance insights.** Per-op span breakdowns (DB / HTTP / cache / queues), a trace explorer /
   span search, and n+1 / slow-span detection.
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
-- **Org operations.** Project rename / transfer / delete, an org-level stats page, and usage/quota
-  threshold alerts.
 - **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
 
 ## Non-goals (for now)
