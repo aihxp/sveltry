@@ -163,7 +163,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Data retention | Done | Daily `sweepRetention` prunes events past each project's retention, bounded per run. |
 | S3 / R2 storage offload | Done | Optional offload of large blobs (source maps) to an S3-compatible bucket, configured by env vars (no-op when unset). Resolution reads offloaded maps back transparently. Inline event payloads are not yet offloaded. |
 | Spike protection | Done | Optional per-project per-minute cap; excess error events are dropped (still HTTP 200). Applies to error events only; transactions and sessions are not counted or dropped. |
-| Usage accounting | Done | Per-project, per-day event/transaction/dropped/filtered counters (30-day totals on the project page). |
+| Usage accounting | Done | Per-project, per-day event/transaction/dropped/filtered counters, shown as window totals plus a daily events-per-day chart on the project page (selectable 7 / 30 / 90-day window). |
 | Hard quotas | Done | Optional per-project monthly event quota; events over quota are dropped. Configurable on the project page. |
 
 ---

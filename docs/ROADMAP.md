@@ -46,15 +46,14 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
 - **Releases.** Deeper release health (aggregated `sessions` buckets), suspect commits, and deploy
   tracking.
-- **Data controls.** Hard quotas, spike protection, usage accounting, optional S3 / R2 storage
-  offload, and inbound data filters (drop noisy events at ingest).
+- **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
+  a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, and inbound data filters
+  (drop noisy events at ingest).
 
 ## Next
 
 Highest-value additions that build on the existing tables:
 
-- **Usage over time.** A daily usage time-series chart with an arbitrary date range on the project
-  page (the per-day series is already returned by `usage.projectUsage`).
 - **Environment-scoped metric alerts.** Extend the environment scope (already on issue alerts) to
   the metric/threshold alerts so p95-latency / error-count / crash-free rules can target one
   environment.

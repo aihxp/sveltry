@@ -46,14 +46,19 @@ export const recordUsage = internalMutation({
   },
 });
 
-/** Per-project usage over the last 30 days, plus a daily series. */
+/**
+ * Per-project usage over a window (default 30 days, clamped to 1-90), plus a
+ * daily series. The series is sparse (only days with activity); the dashboard
+ * gap-fills zero days across the window.
+ */
 export const projectUsage = query({
-  args: { projectId: v.id('projects') },
-  handler: async (ctx, { projectId }) => {
+  args: { projectId: v.id('projects'), windowDays: v.optional(v.number()) },
+  handler: async (ctx, { projectId, windowDays }) => {
     const { activeOrganizationId } = await requireOrg(ctx);
     const project = await ctx.db.get(projectId);
     if (!project || project.organizationId !== activeOrganizationId) return null;
-    const since = Math.floor((Date.now() - 30 * DAY_MS) / DAY_MS) * DAY_MS;
+    const window = Math.min(90, Math.max(1, Math.round(windowDays ?? 30)));
+    const since = Math.floor((Date.now() - window * DAY_MS) / DAY_MS) * DAY_MS;
     const rows = await ctx.db
       .query('usageDaily')
       .withIndex('by_project_day', (q) => q.eq('projectId', projectId).gte('day', since))
@@ -68,6 +73,7 @@ export const projectUsage = query({
       { events: 0, transactions: 0, dropped: 0, filtered: 0 },
     );
     return {
+      windowDays: window,
       totals,
       days: rows
         .map((r) => ({
