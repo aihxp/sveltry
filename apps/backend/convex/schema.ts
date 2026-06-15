@@ -255,6 +255,8 @@ export default defineSchema({
     createdAt: v.number(),
     rateLimitCount: v.optional(v.number()),
     rateLimitWindowSeconds: v.optional(v.number()),
+    /** Optional allowed-origin patterns (Sentry's "Allowed Domains"); empty = any. */
+    allowedOrigins: v.optional(v.array(v.string())),
   })
     .index('by_publicKey', ['publicKey'])
     .index('by_project', ['projectId']),

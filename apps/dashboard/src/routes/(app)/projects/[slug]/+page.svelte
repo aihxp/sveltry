@@ -73,6 +73,30 @@
     auth.isAuthenticated ? {} : ('skip' as const),
   );
 
+  // Per-key allowed domains (one pattern per line). Seeded once per key from the
+  // loaded keys; saving an empty list clears the restriction.
+  let originDrafts = $state<Record<string, string>>({});
+  $effect(() => {
+    const keys = proj.data?.keys;
+    if (!keys) return;
+    for (const k of keys) {
+      if (!(k._id in originDrafts)) originDrafts[k._id] = (k.allowedOrigins ?? []).join('\n');
+    }
+  });
+  let savingOrigins = $state<string | null>(null);
+  async function saveOrigins(keyId: Id<'projectKeys'>) {
+    savingOrigins = keyId;
+    try {
+      const allowedOrigins = (originDrafts[keyId] ?? '')
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await client.mutation(api.projects.setKeyAllowedOrigins, { keyId, allowedOrigins });
+    } finally {
+      savingOrigins = null;
+    }
+  }
+
   // Owning team assignment.
   let assigningTeam = $state(false);
   async function assignTeam(value: string) {
@@ -366,6 +390,27 @@
                 >{dsn}</code
               >
               <CopyButton text={dsn} />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-xs text-muted-foreground" for={`origins-${key._id}`}>
+                Allowed domains (one per line; blank = any). Restricts which sites this browser DSN
+                may report from.
+              </label>
+              <textarea
+                id={`origins-${key._id}`}
+                bind:value={originDrafts[key._id]}
+                rows="2"
+                placeholder={'https://app.example.com\n*.example.com'}
+                class="flex w-full rounded-md border border-input bg-transparent px-2 py-1.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              ></textarea>
+              <Button
+                size="sm"
+                variant="outline"
+                onclick={() => saveOrigins(key._id)}
+                disabled={savingOrigins === key._id}
+              >
+                {savingOrigins === key._id ? 'Saving…' : 'Save domains'}
+              </Button>
             </div>
           </div>
         {/each}

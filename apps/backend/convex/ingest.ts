@@ -17,9 +17,11 @@ import {
   normalizeSession,
   normalizeSessionAggregates,
   normalizeTransaction,
+  originAllowed,
   parseEnvelope,
   projectIdFromPath,
   rateLimited,
+  requestOrigin,
   splitReplayRecording,
   corsHeaders,
 } from '@sveltry/protocol';
@@ -80,6 +82,17 @@ export const ingest = httpAction(async (ctx, request) => {
   });
   if (!resolved) {
     return ingestError(401, 'invalid dsn', ['unknown or revoked key for this project'], cors);
+  }
+
+  // Optional per-key allowed origins (Sentry's "Allowed Domains"). When the key
+  // restricts origins and the browser request comes from a non-listed Origin/
+  // Referer, reject with 403 (a permanent failure, so the SDK does not retry).
+  // Server-side requests carry no Origin and are unaffected.
+  if (resolved.allowedOrigins && resolved.allowedOrigins.length > 0) {
+    const origin = requestOrigin(request.headers.get('origin'), request.headers.get('referer'));
+    if (!originAllowed(origin, resolved.allowedOrigins)) {
+      return ingestError(403, 'origin not allowed', [origin ?? 'no origin'], cors);
+    }
   }
 
   // Optional per-key rate limiting (fixed window).
