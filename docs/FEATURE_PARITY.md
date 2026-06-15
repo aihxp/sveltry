@@ -129,7 +129,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Trace view (span waterfall) | Done | The transaction detail page renders the span waterfall. |
 | Span operations breakdown | Done | The transaction detail page shows where the time went by operation category (db / http / cache / ...), computed from each span's self-time (duration minus its children), plus a slowest-spans list. |
 | Slowest operations (cross-transaction) | Done | The Performance page aggregates spans across recent transactions, grouped by operation and description, ranked by total time spent (count / avg / p95 / total), with an operation-category filter. A recent-window sample (no columnar store yet). |
-| N+1 detection | Done | The transaction detail page flags a potential N+1 when the same db / cache operation repeats many times in one transaction (a query in a loop), showing the operation, repeat count, and total time. A trace explorer / span search is not built yet. |
+| N+1 detection | Done | The transaction detail page flags a potential N+1 when the same db / cache operation repeats many times in one transaction (a query in a loop), showing the operation, repeat count, and total time. |
+| Trace explorer / span search | Done | A Span search page finds individual spans across recent transactions by operation or description, ranked by duration, each linking back to its transaction. The "Slowest operations" rows drill into it. A recent-window sample (no columnar store yet). |
 | Profiling (flamegraph) | Done | `profile` items are persisted; samples/stacks/frames are aggregated into a flamegraph on the Profiles page. |
 | Web vitals | Done | LCP/INP/CLS/FCP/FID/TTFB p75 from transaction `measurements`, on the Performance page. |
 | Distributed tracing | Done | Transactions sharing a trace id are stitched into one waterfall (the trace view). |

@@ -93,6 +93,67 @@ export const spanOperations = query({
 });
 
 /**
+ * Trace explorer / span search: finds individual spans across the most recent
+ * {@link SPAN_SAMPLE} transactions whose op or description contains a (case-
+ * insensitive) substring, ranked by span duration. Drills down from the
+ * "slowest operations" view to the specific transactions running a given query
+ * or call. A recent-window approximation (no columnar store yet).
+ */
+export const spanSearch = query({
+  args: { query: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { query: search, limit }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const needle = search.trim().toLowerCase();
+    if (needle.length === 0) {
+      return { sampleSize: 0, total: 0, matches: [] };
+    }
+
+    const recent = await ctx.db
+      .query('transactions')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .order('desc')
+      .take(SPAN_SAMPLE);
+
+    const cap = Math.min(200, Math.max(1, limit ?? 50));
+    const matches: {
+      transactionId: string;
+      transactionName: string;
+      op: string;
+      description: string;
+      spanDurationMs: number;
+      timestamp: number;
+    }[] = [];
+
+    for (const t of recent) {
+      const spans = ((t.payload as { spans?: RawSpan[] } | null)?.spans ?? []) as RawSpan[];
+      for (const s of spans) {
+        const op = typeof s.op === 'string' ? s.op : 'other';
+        const description = typeof s.description === 'string' ? s.description : '';
+        if (!op.toLowerCase().includes(needle) && !description.toLowerCase().includes(needle)) {
+          continue;
+        }
+        const start = spanMs(s.start_timestamp);
+        const end = spanMs(s.timestamp);
+        if (start == null || end == null) continue;
+        matches.push({
+          transactionId: t._id,
+          transactionName: t.name,
+          op,
+          description,
+          spanDurationMs: Math.round(Math.max(0, end - start)),
+          // The span's own start time, not the transaction's (a span can run
+          // well into a long transaction).
+          timestamp: Math.round(start),
+        });
+      }
+    }
+
+    matches.sort((a, b) => b.spanDurationMs - a.spanDurationMs);
+    return { sampleSize: recent.length, total: matches.length, matches: matches.slice(0, cap) };
+  },
+});
+
+/**
  * Per-transaction-name performance aggregates over the most recent
  * {@link STATS_SAMPLE} transactions in the organization. Percentiles are a
  * recent-window approximation (Sveltry has no columnar store yet), which is
