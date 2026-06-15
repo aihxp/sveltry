@@ -18,11 +18,12 @@ authComponent.registerRoutes(http, createAuth);
 // ingest action parse the project id and endpoint from the path.
 http.route({ pathPrefix: '/api/', method: 'POST', handler: ingest });
 
-// Public read API (v1), authenticated by an organization API token (Bearer).
-// Mounted on the more specific `/api/v1/` prefix; `/api/` POST ingest is
-// unaffected (different method + shorter prefix). OPTIONS is covered by the
-// `/api/` preflight handler below.
+// Public API (v1), authenticated by an organization API token (Bearer). GET is
+// read-only; POST is for triage (write-scoped). Mounted on the more specific
+// `/api/v1/` prefix; `/api/` POST ingest is unaffected (longer prefix wins for
+// `/api/v1/` paths). OPTIONS is covered by the `/api/` preflight handler below.
 http.route({ pathPrefix: '/api/v1/', method: 'GET', handler: apiV1 });
+http.route({ pathPrefix: '/api/v1/', method: 'POST', handler: apiV1 });
 
 // Source-map / build-artifact upload (DSN-key authenticated), used by CI and the
 // SDK uploader to publish a release's bundles + maps for stack-frame resolution.

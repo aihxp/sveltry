@@ -1,17 +1,18 @@
 import { v } from 'convex/values';
 import { corsHeaders } from '@sveltry/protocol';
 import { internal } from './_generated/api';
-import { httpAction, internalQuery } from './_generated/server';
+import { httpAction, internalMutation, internalQuery } from './_generated/server';
 import { issueStatusValidator } from './schema';
 import type { Doc } from './_generated/dataModel';
 
 // ---------------------------------------------------------------------------
-// Public read API (v1), authenticated by an organization API token (Bearer).
-// Routes under `/api/v1/`:
-//   GET /api/v1/projects
-//   GET /api/v1/projects/<slug>/issues?status=<s>&limit=<n>
-//   GET /api/v1/issues/<id>
-// Everything is scoped to the token's organization. Read-only for now.
+// Public API (v1), authenticated by an organization API token (Bearer). Routes:
+//   GET  /api/v1/projects
+//   GET  /api/v1/projects/<slug>/issues?status=<s>&limit=<n>
+//   GET  /api/v1/issues/<id>
+//   GET  /api/v1/issues/<id>/events?limit=<n>
+//   POST /api/v1/issues/<id>/{resolve,ignore,unresolve}   (write-scoped token)
+// Everything is scoped to the token's organization.
 // ---------------------------------------------------------------------------
 
 const MAX_LIMIT = 100;
@@ -103,6 +104,63 @@ export const apiIssue = internalQuery({
   },
 });
 
+/** Recent events for an issue (newest first), scoped to the org. */
+export const apiIssueEvents = internalQuery({
+  args: { organizationId: v.string(), issueId: v.string(), limit: v.number() },
+  handler: async (ctx, { organizationId, issueId, limit }) => {
+    let issue: Doc<'issues'> | null = null;
+    try {
+      issue = await ctx.db.get(issueId as Doc<'issues'>['_id']);
+    } catch {
+      return null;
+    }
+    if (!issue || issue.organizationId !== organizationId) return null;
+    const take = Math.min(MAX_LIMIT, Math.max(1, limit));
+    const events = await ctx.db
+      .query('events')
+      .withIndex('by_issue', (q) => q.eq('issueId', issue._id))
+      .order('desc')
+      .take(take);
+    return {
+      events: events.map((e) => ({
+        eventId: e.eventId,
+        timestamp: e.timestamp,
+        level: e.level,
+        platform: e.platform,
+        environment: e.environment,
+        release: e.release ?? null,
+        message: e.message,
+        culprit: e.culprit,
+        tags: e.tags,
+      })),
+    };
+  },
+});
+
+/** Set an issue's status (resolve / ignore / unresolve), scoped to the org. */
+export const apiSetIssueStatus = internalMutation({
+  args: { organizationId: v.string(), issueId: v.string(), status: issueStatusValidator },
+  returns: v.boolean(),
+  handler: async (ctx, { organizationId, issueId, status }) => {
+    let issue: Doc<'issues'> | null = null;
+    try {
+      issue = await ctx.db.get(issueId as Doc<'issues'>['_id']);
+    } catch {
+      return false;
+    }
+    if (!issue || issue.organizationId !== organizationId) return false;
+    // Mirror the dashboard's default substatus per status (see issues.setIssueStatus).
+    const substatus =
+      status === 'resolved' ? 'ongoing' : status === 'ignored' ? 'archived_forever' : 'ongoing';
+    await ctx.db.patch(issue._id, {
+      status,
+      substatus,
+      resolvedInRelease: undefined,
+    });
+    return true;
+  },
+});
+
 function json(body: unknown, status: number, cors: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -110,7 +168,17 @@ function json(body: unknown, status: number, cors: Record<string, string>): Resp
   });
 }
 
-/** The `/api/v1/` read API. Bearer-authenticated by an organization API token. */
+/** Map a POST triage action to the issue status it sets. */
+const TRIAGE_STATUS: Record<string, 'resolved' | 'ignored' | 'unresolved'> = {
+  resolve: 'resolved',
+  ignore: 'ignored',
+  unresolve: 'unresolved',
+};
+
+/**
+ * The `/api/v1/` API. Bearer-authenticated by an organization API token. GET is
+ * read-only; POST triage endpoints require a `write`-scoped token.
+ */
 export const apiV1 = httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const cors = corsHeaders(request.headers.get('origin') ?? '*');
@@ -126,14 +194,15 @@ export const apiV1 = httpAction(async (ctx, request) => {
   // Path after the `/api/v1/` prefix, split into segments.
   const rest = url.pathname.replace(/^\/api\/v1\/?/, '').replace(/\/+$/, '');
   const parts = rest.length ? rest.split('/') : [];
+  const isGet = request.method === 'GET';
 
   let result: unknown = null;
 
-  if (parts.length === 1 && parts[0] === 'projects') {
+  if (isGet && parts.length === 1 && parts[0] === 'projects') {
     result = {
       projects: await ctx.runQuery(internal.publicApi.apiProjects, { organizationId: orgId }),
     };
-  } else if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'issues') {
+  } else if (isGet && parts.length === 3 && parts[0] === 'projects' && parts[2] === 'issues') {
     // A malformed percent-encoding (e.g. `my%ZZ`) would otherwise throw a 500.
     let slug: string;
     try {
@@ -154,12 +223,35 @@ export const apiV1 = httpAction(async (ctx, request) => {
       limit,
     });
     if (result === null) return json({ error: 'project not found' }, 404, cors);
-  } else if (parts.length === 2 && parts[0] === 'issues') {
+  } else if (isGet && parts.length === 2 && parts[0] === 'issues') {
     result = await ctx.runQuery(internal.publicApi.apiIssue, {
       organizationId: orgId,
       issueId: parts[1]!,
     });
     if (result === null) return json({ error: 'issue not found' }, 404, cors);
+  } else if (isGet && parts.length === 3 && parts[0] === 'issues' && parts[2] === 'events') {
+    const limit = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT) || DEFAULT_LIMIT;
+    result = await ctx.runQuery(internal.publicApi.apiIssueEvents, {
+      organizationId: orgId,
+      issueId: parts[1]!,
+      limit,
+    });
+    if (result === null) return json({ error: 'issue not found' }, 404, cors);
+  } else if (
+    request.method === 'POST' &&
+    parts.length === 3 &&
+    parts[0] === 'issues' &&
+    parts[2]! in TRIAGE_STATUS
+  ) {
+    if (resolved.scope !== 'write') return json({ error: 'token is read-only' }, 403, cors);
+    const newStatus = TRIAGE_STATUS[parts[2]!]!;
+    const ok = await ctx.runMutation(internal.publicApi.apiSetIssueStatus, {
+      organizationId: orgId,
+      issueId: parts[1]!,
+      status: newStatus,
+    });
+    if (!ok) return json({ error: 'issue not found' }, 404, cors);
+    result = { ok: true, status: newStatus };
   } else {
     return json({ error: 'unknown endpoint' }, 404, cors);
   }

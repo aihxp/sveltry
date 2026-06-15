@@ -48,8 +48,9 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
 - **Releases.** Deeper release health (aggregated `sessions` buckets), suspect commits, and deploy
   tracking.
-- **Public read API.** A token-authenticated `GET /api/v1/...` for projects and issues, with
-  org-scoped API tokens managed on the settings page (read-only first slice).
+- **Public API.** A token-authenticated `/api/v1/...` for projects, issues, and an issue's events,
+  plus triage writes (resolve / ignore / unresolve). Org-scoped API tokens with read or read+write
+  scope, managed on the settings page.
 - **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
   a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, inbound data filters
   (drop noisy events at ingest), per-key allowed domains (reject browser events from non-listed
@@ -59,8 +60,8 @@ Most of what the original Next/Later horizons listed now ships. See
 
 Highest-value additions that build on the existing tables:
 
-- **Public API, deeper.** Build on the read-only v1 slice: more resources (events, releases,
-  members), pagination cursors, and write/triage endpoints (resolve / ignore / assign).
+- **Public API, deeper.** Build on the v1 slice: more resources (releases, members), pagination
+  cursors, issue assignment, and event detail.
 - **Organization audit log.** Record configuration changes (projects, keys, roles, alerts,
   invitations) so admins can see who changed what.
 

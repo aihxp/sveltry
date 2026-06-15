@@ -29,12 +29,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
-- **Public read API and API tokens.** A read-only `GET /api/v1/...` surface authenticated by an
-  organization API token (`Authorization: Bearer <token>`): `GET /api/v1/projects`,
-  `GET /api/v1/projects/<slug>/issues` (with `?status=` and `?limit=`), and `GET /api/v1/issues/<id>`,
-  so issues can be queried from CI and other tools. Tokens are created, listed, and revoked on the
-  settings page (admin/owner); only a SHA-1 hash is stored and the raw token is shown once. Every
-  response is scoped to the token's organization. See [docs/API.md](docs/API.md).
+- **Public API and API tokens.** An `/api/v1/...` surface authenticated by an organization API token
+  (`Authorization: Bearer <token>`), so issues can be queried and triaged from CI and other tools.
+  Read endpoints: `GET /api/v1/projects`, `/projects/<slug>/issues` (with `?status=` and `?limit=`),
+  `/issues/<id>`, and `/issues/<id>/events`. Write endpoints (a `read+write` token): `POST
+  /issues/<id>/{resolve,ignore,unresolve}` (a read-only token gets `403`). Tokens are created,
+  listed, and revoked on the settings page (admin/owner) with a read or read+write scope; only a
+  SHA-1 hash is stored and the raw token is shown once. Every response is scoped to the token's
+  organization. See [docs/API.md](docs/API.md).
 - **Custom PII scrubbing.** The default ingest scrubber (credit cards, SSNs, bearer tokens,
   secret-named fields) is now customizable per project: add extra sensitive field-name keywords, an
   allowlist of safe fields that are never redacted (so a field like `auth_method` survives the

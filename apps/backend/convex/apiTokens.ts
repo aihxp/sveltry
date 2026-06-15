@@ -17,9 +17,9 @@ const TOKEN_RE = /^svtry_[0-9a-f]{64}$/;
 
 /** Create an API token for the active org. Returns the raw token once. */
 export const createApiToken = mutation({
-  args: { name: v.string() },
+  args: { name: v.string(), scope: v.optional(v.union(v.literal('read'), v.literal('write'))) },
   returns: v.object({ token: v.string() }),
-  handler: async (ctx, { name }) => {
+  handler: async (ctx, { name, scope }) => {
     const caller = await requireRole(ctx, 'admin');
     const raw = `${TOKEN_PREFIX}${generateToken()}`;
     await ctx.db.insert('apiTokens', {
@@ -27,6 +27,7 @@ export const createApiToken = mutation({
       name: name.trim() || 'API token',
       tokenHash: sha1Hex(raw),
       tokenPrefix: raw.slice(0, TOKEN_PREFIX.length + 8),
+      scope: scope ?? 'read',
       createdBy: caller.subject,
       createdByEmail: caller.email,
       createdAt: Date.now(),
@@ -50,6 +51,7 @@ export const listApiTokens = query({
         id: r._id,
         name: r.name,
         prefix: r.tokenPrefix,
+        scope: r.scope ?? 'read',
         createdByEmail: r.createdByEmail ?? null,
         createdAt: r.createdAt,
         lastUsedAt: r.lastUsedAt ?? null,
@@ -69,10 +71,17 @@ export const revokeApiToken = mutation({
   },
 });
 
-/** Resolve a raw Bearer token to its org (for the public API HTTP action). */
+/** Resolve a raw Bearer token to its org + scope (for the public API HTTP action). */
 export const resolveApiToken = internalQuery({
   args: { rawToken: v.string() },
-  returns: v.union(v.null(), v.object({ tokenId: v.id('apiTokens'), organizationId: v.string() })),
+  returns: v.union(
+    v.null(),
+    v.object({
+      tokenId: v.id('apiTokens'),
+      organizationId: v.string(),
+      scope: v.union(v.literal('read'), v.literal('write')),
+    }),
+  ),
   handler: async (ctx, { rawToken }) => {
     // Reject anything that is not shaped like a token before touching the index.
     if (!TOKEN_RE.test(rawToken)) return null;
@@ -84,7 +93,7 @@ export const resolveApiToken = internalQuery({
       .withIndex('by_hash', (q) => q.eq('tokenHash', sha1Hex(rawToken)))
       .first();
     if (!row) return null;
-    return { tokenId: row._id, organizationId: row.organizationId };
+    return { tokenId: row._id, organizationId: row.organizationId, scope: row.scope ?? 'read' };
   },
 });
 

@@ -5,14 +5,20 @@ CI, scripts, and other tools. It is authenticated by an organization API token
 and is served from the same origin as ingest (the Convex backend's HTTP-actions
 origin, e.g. `https://ingest.your-domain.com`).
 
-This is an early, read-only slice. Write/triage endpoints and broader resource
-coverage are on the [roadmap](./ROADMAP.md).
+Broader resource coverage (events, releases, members) and pagination cursors are
+on the [roadmap](./ROADMAP.md).
 
 ## Authentication
 
 Create a token on the dashboard: **Settings -> API tokens -> Create token**
-(owner or admin only). The raw token is shown once; copy it then. Only a SHA-1
-hash is stored, so a lost token cannot be recovered, only revoked and re-created.
+(owner or admin only). Choose an access level:
+
+- **Read only** - the `GET` endpoints.
+- **Read & write** - also the `POST` triage endpoints (resolve / ignore /
+  unresolve). A `read` token that calls a write endpoint gets `403`.
+
+The raw token is shown once; copy it then. Only a SHA-1 hash is stored, so a lost
+token cannot be recovered, only revoked and re-created.
 
 Send it as a bearer token:
 
@@ -76,6 +82,38 @@ Query parameters:
 A single issue by id (the `id` from the lists above), with its project. Returns
 `404` if the issue is not in the organization.
 
+### `GET /api/v1/issues/<id>/events`
+
+Recent events for an issue, newest first. `?limit=` (default 50, max 100).
+
+```json
+{
+  "events": [
+    {
+      "eventId": "c1c1...",
+      "timestamp": 1781493600000,
+      "level": "error",
+      "platform": "javascript",
+      "environment": "production",
+      "release": null,
+      "message": "TypeError: undefined is not a function",
+      "culprit": "render (app/main.js)",
+      "tags": { "release": "web@1.2.3" }
+    }
+  ]
+}
+```
+
+### `POST /api/v1/issues/<id>/resolve` · `/ignore` · `/unresolve`
+
+Triage an issue (requires a **write** token). Sets the issue's status; returns
+`{ "ok": true, "status": "resolved" }`. `403` for a read-only token, `404` if the
+issue is not in the organization.
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/issues/<id>/resolve"
+```
+
 ## Examples
 
 ```bash
@@ -92,5 +130,7 @@ curl -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/issues/<id>"
 | Status | Meaning |
 | --- | --- |
 | `401` | Missing, malformed, or revoked token. |
+| `403` | A read-only token called a write (triage) endpoint. |
 | `404` | Unknown endpoint, project, or issue (or an issue outside your org). |
+| `400` | A malformed project slug. |
 | `200` | Success. |
