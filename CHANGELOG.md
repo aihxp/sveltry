@@ -29,6 +29,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Organization audit log.** Configuration and access changes are now recorded with the actor and
+  time: project create/update, DSN key create / enable / disable / allowed-domains, member role
+  set/remove, invitation create/revoke, API-token create/revoke, and alert-rule create / delete /
+  enable / disable. Admins see the recent activity on the settings page. Append-only, org-scoped,
+  written from the mutating paths via a shared `recordAudit` helper.
 - **Public API and API tokens.** An `/api/v1/...` surface authenticated by an organization API token
   (`Authorization: Bearer <token>`), so issues can be queried and triaged from CI and other tools.
   Read endpoints: `GET /api/v1/projects`, `/projects/<slug>/issues` (with `?status=` and `?limit=`),

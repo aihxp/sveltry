@@ -10,6 +10,7 @@
 
 import type * as alerts from "../alerts.js";
 import type * as apiTokens from "../apiTokens.js";
+import type * as audit from "../audit.js";
 import type * as betterauth from "../betterauth.js";
 import type * as commits from "../commits.js";
 import type * as crons from "../crons.js";
@@ -23,6 +24,7 @@ import type * as ingest from "../ingest.js";
 import type * as integrations from "../integrations.js";
 import type * as invitations from "../invitations.js";
 import type * as issues from "../issues.js";
+import type * as lib_audit from "../lib/audit.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_net from "../lib/net.js";
 import type * as lib_slug from "../lib/slug.js";
@@ -54,6 +56,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
   apiTokens: typeof apiTokens;
+  audit: typeof audit;
   betterauth: typeof betterauth;
   commits: typeof commits;
   crons: typeof crons;
@@ -67,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   invitations: typeof invitations;
   issues: typeof issues;
+  "lib/audit": typeof lib_audit;
   "lib/auth": typeof lib_auth;
   "lib/net": typeof lib_net;
   "lib/slug": typeof lib_slug;

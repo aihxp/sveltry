@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { internalQuery, mutation, query } from './_generated/server';
 import { ingestFiltersValidator, scrubConfigValidator } from './schema';
+import { recordAudit } from './lib/audit';
 import { requireOrg, requireRole } from './lib/auth';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
@@ -78,7 +79,8 @@ export const createProject = mutation({
     publicKey: v.string(),
   }),
   handler: async (ctx, { name, platform }) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
+    const { activeOrganizationId } = caller;
     const now = Date.now();
 
     // Lazily mirror the organization for project-scoped settings.
@@ -125,6 +127,7 @@ export const createProject = mutation({
       createdAt: now,
     });
 
+    await recordAudit(ctx, caller, 'project.create', name.trim() || slug);
     return { projectId, slug, publicId, publicKey };
   },
 });
@@ -181,20 +184,21 @@ export const getProjectBySlug = query({
 export const createProjectKey = mutation({
   args: { projectId: v.id('projects'), label: v.string() },
   handler: async (ctx, { projectId, label }) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(projectId);
-    if (!project || project.organizationId !== activeOrganizationId) {
+    if (!project || project.organizationId !== caller.activeOrganizationId) {
       throw new Error('Project not found');
     }
     const publicKey = generatePublicKey();
     await ctx.db.insert('projectKeys', {
       projectId,
-      organizationId: activeOrganizationId,
+      organizationId: caller.activeOrganizationId,
       label: label.trim() || 'Key',
       publicKey,
       isActive: true,
       createdAt: Date.now(),
     });
+    await recordAudit(ctx, caller, 'key.create', `${project.name}: ${label.trim() || 'Key'}`);
     return { publicKey };
   },
 });
@@ -203,10 +207,12 @@ export const createProjectKey = mutation({
 export const setProjectKeyActive = mutation({
   args: { keyId: v.id('projectKeys'), isActive: v.boolean() },
   handler: async (ctx, { keyId, isActive }) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const key = await ctx.db.get(keyId);
-    if (!key || key.organizationId !== activeOrganizationId) throw new Error('Key not found');
+    if (!key || key.organizationId !== caller.activeOrganizationId)
+      throw new Error('Key not found');
     await ctx.db.patch(keyId, { isActive });
+    await recordAudit(ctx, caller, isActive ? 'key.enable' : 'key.disable', key.label);
   },
 });
 
@@ -217,11 +223,13 @@ export const setProjectKeyActive = mutation({
 export const setKeyAllowedOrigins = mutation({
   args: { keyId: v.id('projectKeys'), allowedOrigins: v.array(v.string()) },
   handler: async (ctx, { keyId, allowedOrigins }) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const key = await ctx.db.get(keyId);
-    if (!key || key.organizationId !== activeOrganizationId) throw new Error('Key not found');
+    if (!key || key.organizationId !== caller.activeOrganizationId)
+      throw new Error('Key not found');
     const cleaned = allowedOrigins.map((o) => o.trim()).filter(Boolean);
     await ctx.db.patch(keyId, { allowedOrigins: cleaned.length ? cleaned : undefined });
+    await recordAudit(ctx, caller, 'key.origins', key.label);
   },
 });
 
@@ -237,9 +245,9 @@ export const updateProjectSettings = mutation({
     ingestFilters: v.optional(v.union(ingestFiltersValidator, v.null())),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(args.projectId);
-    if (!project || project.organizationId !== activeOrganizationId) {
+    if (!project || project.organizationId !== caller.activeOrganizationId) {
       throw new Error('Project not found');
     }
     const patch: Record<string, unknown> = {};
@@ -255,5 +263,6 @@ export const updateProjectSettings = mutation({
     // null clears all filters; an object replaces them wholesale.
     if (args.ingestFilters !== undefined) patch.ingestFilters = args.ingestFilters ?? undefined;
     await ctx.db.patch(args.projectId, patch);
+    await recordAudit(ctx, caller, 'project.update', project.name);
   },
 });

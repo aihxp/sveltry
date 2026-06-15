@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { type MutationCtx, mutation, query } from './_generated/server';
 import { internal } from './_generated/api';
+import { recordAudit } from './lib/audit';
 import { ROLE_RANK, type Role, requireRole, requireUser } from './lib/auth';
 import { generateToken } from './lib/slug';
 import { roleValidator } from './schema';
@@ -95,6 +96,7 @@ export const createInvitation = mutation({
       ].join('\n'),
     });
 
+    await recordAudit(ctx, caller, 'invite.create', `${email} (${args.role})`);
     return { token, emailSent: emailConfigured };
   },
 });
@@ -133,6 +135,7 @@ export const revokeInvitation = mutation({
     if (!row || row.organizationId !== caller.activeOrganizationId)
       throw new Error('Invitation not found');
     await ctx.db.delete(invitationId);
+    await recordAudit(ctx, caller, 'invite.revoke', row.email);
   },
 });
 

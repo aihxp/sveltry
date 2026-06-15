@@ -78,7 +78,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Fine-grained roles / permissions | Done | owner / admin / member / billing roles, enforced in Convex via `requireRole`: admin+ manages projects/teams/alerts, member triages issues, billing is read-only. Managed on the settings page; the first user of a fresh org bootstraps as owner. |
 | Member invitations | Done | An owner/admin invites an email at a role; the invitee opens a tokenized link, signs in or up as that email, and accepts to join. Invites expire after 7 days, are emailed over SMTP (or the link is copied from the settings page when SMTP is unconfigured), and can be revoked. |
 | Public REST API / API tokens | Partial | A v1 API authenticated by org API tokens (Bearer, `read` or `read+write` scope, managed on the settings page): `GET /projects`, `/projects/<slug>/issues`, `/issues/<id>`, `/issues/<id>/events`, and `POST /issues/<id>/{resolve,ignore,unresolve}` (write scope). Broader resource coverage (releases, members) and pagination cursors are not built yet. |
-| SSO / SAML / 2FA / audit log | Not planned | Out of scope for now; email + password only. |
+| Organization audit log | Done | Config and access changes (projects, DSN keys, roles, alerts, invitations, API tokens) are recorded with the actor and time, and shown to admins on the settings page. |
+| SSO / SAML / 2FA | Not planned | Out of scope for now; email + password only. |
 
 ## Alerts and integrations
 

@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { recordAudit } from './lib/audit';
 import { requireRole, roleFor, type Role } from './lib/auth';
 import { roleValidator } from './schema';
 
@@ -104,6 +105,7 @@ export const setMemberRole = mutation({
       if (owners.length <= 1) throw new Error('Cannot demote the only owner.');
     }
 
+    await recordAudit(ctx, caller, 'role.set', `${email ?? name ?? userId} -> ${role}`);
     if (target) {
       await ctx.db.patch(target._id, { role, email, name, updatedAt: Date.now() });
       return target._id;
@@ -137,5 +139,6 @@ export const removeMemberRole = mutation({
       if (owners.length <= 1) throw new Error('Cannot remove the only owner.');
     }
     await ctx.db.delete(roleId);
+    await recordAudit(ctx, caller, 'role.remove', row.email ?? row.name ?? row.userId);
   },
 });

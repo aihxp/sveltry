@@ -11,6 +11,7 @@
   import { Label } from '$lib/components/ui/label';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
+  import { relativeTime } from '$lib/utils';
 
   const auth = useAuth();
   const client = useConvexClient();
@@ -118,6 +119,16 @@
 
   async function revokeToken(id: Id<'apiTokens'>) {
     await client.mutation(api.apiTokens.revokeApiToken, { tokenId: id });
+  }
+
+  // Audit log (admin/owner only).
+  const auditLog = useQuery(api.audit.listAuditLog, () =>
+    auth.isAuthenticated && canManage ? { limit: 50 } : ('skip' as const),
+  );
+  // `domain.verb` -> "verb domain" for a readable label.
+  function auditLabel(action: string): string {
+    const [domain, verb] = action.split('.');
+    return verb ? `${verb} ${domain}` : action;
   }
 
   // userId -> assigned role (falls back to default for unassigned members).
@@ -357,6 +368,41 @@
               </div>
             {/each}
           </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+  {/if}
+
+  {#if canManage}
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Audit log</Card.Title>
+        <Card.Description>
+          Recent configuration and access changes in this organization.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content>
+        {#if auditLog.data && auditLog.data.length > 0}
+          <div class="divide-y rounded-lg border text-sm">
+            {#each auditLog.data as e (e.id)}
+              <div class="flex items-center gap-3 px-3 py-2">
+                <span class="shrink-0 font-medium">{auditLabel(e.action)}</span>
+                {#if e.target}
+                  <span class="min-w-0 flex-1 truncate text-muted-foreground">{e.target}</span>
+                {:else}
+                  <span class="flex-1"></span>
+                {/if}
+                <span class="shrink-0 truncate text-xs text-muted-foreground"
+                  >{e.actorEmail ?? 'unknown'}</span
+                >
+                <span class="shrink-0 text-xs text-muted-foreground"
+                  >{relativeTime(e.createdAt)}</span
+                >
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-sm text-muted-foreground">No activity recorded yet.</p>
         {/if}
       </Card.Content>
     </Card.Root>

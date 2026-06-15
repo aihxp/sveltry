@@ -8,6 +8,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
+import { recordAudit } from './lib/audit';
 import { requireOrg, requireRole } from './lib/auth';
 import { safeFetch } from './lib/net';
 import { alertChannelValidator, alertTriggerValidator, levelValidator } from './schema';
@@ -43,16 +44,17 @@ export const createAlertRule = mutation({
     channels: v.array(alertChannelValidator),
   },
   handler: async (ctx, args) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const project = await ctx.db.get(args.projectId);
-    if (!project || project.organizationId !== activeOrganizationId)
+    if (!project || project.organizationId !== caller.activeOrganizationId)
       throw new Error('Project not found');
     // Blank environment means "all environments".
     const environment = args.environment?.trim() || undefined;
-    return ctx.db.insert('alertRules', {
-      organizationId: activeOrganizationId,
+    const name = args.name.trim() || 'Alert';
+    const ruleId = await ctx.db.insert('alertRules', {
+      organizationId: caller.activeOrganizationId,
       projectId: args.projectId,
-      name: args.name.trim() || 'Alert',
+      name,
       trigger: args.trigger,
       threshold: args.threshold,
       windowMinutes: args.windowMinutes,
@@ -62,26 +64,32 @@ export const createAlertRule = mutation({
       isEnabled: true,
       createdAt: Date.now(),
     });
+    await recordAudit(ctx, caller, 'alert.create', `${project.name}: ${name}`);
+    return ruleId;
   },
 });
 
 export const setAlertRuleEnabled = mutation({
   args: { ruleId: v.id('alertRules'), isEnabled: v.boolean() },
   handler: async (ctx, { ruleId, isEnabled }) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const rule = await ctx.db.get(ruleId);
-    if (!rule || rule.organizationId !== activeOrganizationId) throw new Error('Rule not found');
+    if (!rule || rule.organizationId !== caller.activeOrganizationId)
+      throw new Error('Rule not found');
     await ctx.db.patch(ruleId, { isEnabled });
+    await recordAudit(ctx, caller, isEnabled ? 'alert.enable' : 'alert.disable', rule.name);
   },
 });
 
 export const deleteAlertRule = mutation({
   args: { ruleId: v.id('alertRules') },
   handler: async (ctx, { ruleId }) => {
-    const { activeOrganizationId } = await requireRole(ctx, 'admin');
+    const caller = await requireRole(ctx, 'admin');
     const rule = await ctx.db.get(ruleId);
-    if (!rule || rule.organizationId !== activeOrganizationId) throw new Error('Rule not found');
+    if (!rule || rule.organizationId !== caller.activeOrganizationId)
+      throw new Error('Rule not found');
     await ctx.db.delete(ruleId);
+    await recordAudit(ctx, caller, 'alert.delete', rule.name);
   },
 });
 
