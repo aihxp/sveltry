@@ -29,6 +29,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **N+1 detection.** The transaction detail page now flags a potential N+1 when the same database
+  or cache operation repeats many times within one transaction (the classic query-in-a-loop),
+  showing the operation, its repeat count, and the total time, with a hint to batch or eager-load.
+  Frontend-only, over the span data already stored with each transaction.
 - **Slowest operations (cross-transaction).** The Performance page now aggregates spans across the
   recent transactions, grouped by operation and description and ranked by total time spent (with
   count, average, and p95), so you can see which database queries, HTTP calls, etc. cost the most

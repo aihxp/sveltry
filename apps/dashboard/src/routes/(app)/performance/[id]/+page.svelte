@@ -6,6 +6,7 @@
   import * as Card from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
   import { cn, formatDuration, relativeTime } from '$lib/utils';
+  import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 
   const auth = useAuth();
   const transactionId = $derived(page.params.id as Id<'transactions'>);
@@ -101,6 +102,36 @@
     return { breakdown, slowest };
   });
 
+  // Potential N+1: the same db / cache operation repeated many times in one
+  // transaction (the classic "query in a loop"). High-signal and self-contained.
+  const N1_THRESHOLD = 4;
+  const N1_CATEGORIES = new Set(['db', 'cache']);
+  const nPlusOne = $derived.by(() => {
+    const t = txn.data;
+    if (!t) return [];
+    const spans = (t.payload?.spans ?? []) as Span[];
+    const groups = new Map<
+      string,
+      { op: string; description: string; count: number; totalMs: number }
+    >();
+    for (const s of spans) {
+      const op = s.op ?? '';
+      if (!N1_CATEGORIES.has(opCategory(op))) continue;
+      const description = s.description ?? '';
+      const start = toMs(s.start_timestamp);
+      const end = toMs(s.timestamp);
+      const dur = start != null && end != null ? Math.max(0, end - start) : 0;
+      const key = `${op}\n${description}`;
+      const g = groups.get(key) ?? { op, description, count: 0, totalMs: 0 };
+      g.count += 1;
+      g.totalMs += dur;
+      groups.set(key, g);
+    }
+    return [...groups.values()]
+      .filter((g) => g.count >= N1_THRESHOLD)
+      .sort((a, b) => b.count - a.count);
+  });
+
   // A stable color per op category for the breakdown bar.
   const CAT_COLOR: Record<string, string> = {
     db: 'bg-sky-500',
@@ -193,6 +224,33 @@
         >
       {/if}
     </div>
+
+    {#if nPlusOne.length > 0}
+      <div class="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+        <div
+          class="flex items-center gap-2 text-sm font-semibold text-amber-600 dark:text-amber-400"
+        >
+          <TriangleAlertIcon class="size-4" />
+          Potential N+1
+        </div>
+        <p class="text-xs text-muted-foreground">
+          The same operation repeats many times in this transaction, which often means a query in a
+          loop. Consider batching or eager-loading.
+        </p>
+        <div class="space-y-1.5">
+          {#each nPlusOne as g (g.op + '\n' + g.description)}
+            <div class="flex items-center gap-2 text-sm">
+              <Badge variant="muted" class="shrink-0 font-mono">{g.op}</Badge>
+              <span class="min-w-0 flex-1 truncate">{g.description || '(no description)'}</span>
+              <span class="shrink-0 font-medium tabular-nums">{g.count}&times;</span>
+              <span class="w-16 shrink-0 text-right tabular-nums text-muted-foreground"
+                >{formatDuration(g.totalMs)}</span
+              >
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       {#each [{ label: 'Duration', value: formatDuration(t.durationMs) }, { label: 'Spans', value: String(t.spanCount) }, { label: 'Environment', value: t.environment }, { label: 'Release', value: t.release ?? 'none' }] as m (m.label)}
