@@ -642,11 +642,13 @@ export const recordEvent = internalMutation({
       }
     }
 
-    // Fan out alert evaluation without blocking the ingest path.
+    // Fan out alert evaluation without blocking the ingest path. The triggering
+    // event's environment lets environment-scoped rules match.
     await ctx.scheduler.runAfter(0, internal.alerts.dispatchForEvent, {
       issueId,
       isNew,
       isRegression,
+      environment: args.environment,
     });
 
     return { eventId: args.eventId };

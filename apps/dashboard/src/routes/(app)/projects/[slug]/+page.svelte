@@ -252,6 +252,7 @@
   let ruleName = $state('');
   let trigger = $state<'new_issue' | 'regression' | 'event_frequency'>('new_issue');
   let threshold = $state(10);
+  let ruleEnvironment = $state('');
   let channelType = $state<
     'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
   >('webhook');
@@ -277,10 +278,12 @@
         name: ruleName || `${trigger} alert`,
         trigger,
         threshold: trigger === 'event_frequency' ? threshold : undefined,
+        environment: ruleEnvironment.trim() || undefined,
         channels: [{ type: channelType, target: channelTarget }],
       });
       ruleName = '';
       channelTarget = '';
+      ruleEnvironment = '';
     } finally {
       savingRule = false;
     }
@@ -612,7 +615,9 @@
                 <div class="min-w-0">
                   <div class="text-sm font-medium">{rule.name}</div>
                   <div class="truncate text-xs text-muted-foreground">
-                    {rule.trigger}{rule.threshold ? ` ≥ ${rule.threshold}` : ''} ·
+                    {rule.trigger}{rule.threshold ? ` ≥ ${rule.threshold}` : ''}{rule.environment
+                      ? ` · env: ${rule.environment}`
+                      : ''} ·
                     {rule.channels.map((c) => c.type).join(', ')}
                   </div>
                 </div>
@@ -650,11 +655,15 @@
               </select>
             </div>
             {#if trigger === 'event_frequency'}
-              <div class="space-y-1.5">
+              <div class="space-y-1.5 sm:col-span-2">
                 <Label for="threshold">Threshold (events)</Label>
                 <Input id="threshold" type="number" min="1" bind:value={threshold} />
               </div>
             {/if}
+            <div class="space-y-1.5">
+              <Label for="ruleEnvironment">Environment (blank = all)</Label>
+              <Input id="ruleEnvironment" bind:value={ruleEnvironment} placeholder="production" />
+            </div>
             <div class="space-y-1.5">
               <Label for="channelType">Channel</Label>
               <select

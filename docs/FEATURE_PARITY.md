@@ -84,10 +84,11 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Alert rules | Done | `alertRules` per project with optional threshold and `minLevel`. |
+| Alert rules | Done | `alertRules` per project with optional threshold, `minLevel`, and environment scope. |
 | New-issue trigger | Done | `new_issue`. |
 | Regression trigger | Done | `regression`. |
 | Event-frequency trigger | Done | `event_frequency`. |
+| Environment-scoped alerts | Done | A rule can be scoped to one environment; only events from that environment fire it (event-frequency counts only that environment's events). Unscoped rules match all environments. |
 | Webhook delivery | Done | Generic `fetch` POST. |
 | Discord delivery | Done | Via webhook. |
 | Slack delivery | Done | Via webhook. |
