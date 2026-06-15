@@ -79,10 +79,10 @@ Valuable, but a larger surface or a new subsystem:
 
 - **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links,
   suspect commits from SCM, and auto-resolve from commit messages.
-- **Performance insights, deeper.** A per-transaction span operations breakdown (time by op
-  category) and slowest-spans already ship on the transaction detail page; still to come are
-  cross-transaction insight modules (aggregated DB / HTTP / cache / queues), a trace explorer / span
-  search, and n+1 / slow-span detection.
+- **Performance insights, deeper.** A per-transaction span operations breakdown, slowest-spans, and
+  a cross-transaction "slowest operations" view (aggregated spans grouped by operation, ranked by
+  total time, with a category filter) already ship; still to come are a trace explorer / span
+  search and n+1 / slow-span detection.
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
 - **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
 

@@ -127,7 +127,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Latency percentiles (p50/p95) | Done | Per-transaction p50/p95/avg/max. The summary table uses a recent-window sample; the latency-over-time chart uses hourly histogram rollups, giving percentiles over arbitrary windows at bucket resolution. |
 | Latency trend over time | Done | An hourly p95 chart on the Performance page, backed by precomputed duration-histogram rollups (a cron aggregates raw transactions). |
 | Trace view (span waterfall) | Done | The transaction detail page renders the span waterfall. |
-| Span operations breakdown | Done | The transaction detail page shows where the time went by operation category (db / http / cache / ...), computed from each span's self-time (duration minus its children), plus a slowest-spans list. Cross-transaction insight modules (aggregated DB / HTTP / cache / queues) are not built yet. |
+| Span operations breakdown | Done | The transaction detail page shows where the time went by operation category (db / http / cache / ...), computed from each span's self-time (duration minus its children), plus a slowest-spans list. |
+| Slowest operations (cross-transaction) | Done | The Performance page aggregates spans across recent transactions, grouped by operation and description, ranked by total time spent (count / avg / p95 / total), with an operation-category filter. A recent-window sample (no columnar store yet); a trace explorer / span search and n+1 detection are not built yet. |
 | Profiling (flamegraph) | Done | `profile` items are persisted; samples/stacks/frames are aggregated into a flamegraph on the Profiles page. |
 | Web vitals | Done | LCP/INP/CLS/FCP/FID/TTFB p75 from transaction `measurements`, on the Performance page. |
 | Distributed tracing | Done | Transactions sharing a trace id are stitched into one waterfall (the trace view). |

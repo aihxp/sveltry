@@ -3,6 +3,7 @@
   import { api } from '$convex/_generated/api';
   import * as Card from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
+  import { Button } from '$lib/components/ui/button';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { cn, formatDuration, relativeTime } from '$lib/utils';
@@ -21,6 +22,12 @@
     auth.isAuthenticated ? {} : ('skip' as const),
   );
   const maxP95 = $derived(Math.max(1, ...(trend.data ?? []).map((d) => d.p95Ms)));
+
+  // Cross-transaction "slowest operations", with an optional op-category filter.
+  let opCategory = $state('');
+  const spanOps = useQuery(api.transactions.spanOperations, () =>
+    auth.isAuthenticated ? { category: opCategory || undefined, limit: 25 } : ('skip' as const),
+  );
 
   // Web Vitals thresholds (good / needs-improvement / poor) per Google.
   const VITAL_META: Record<string, { label: string; unit: string; good: number; poor: number }> = {
@@ -120,6 +127,72 @@
           <span>p95 up to {formatDuration(maxP95)}</span>
           <span>{hourLabel(trend.data[trend.data.length - 1]!.bucketStart)}</span>
         </div>
+      {/if}
+    </Card.Content>
+  </Card.Root>
+
+  <Card.Root>
+    <Card.Header>
+      <Card.Title>Slowest operations</Card.Title>
+      <Card.Description>
+        Spans across recent transactions, grouped by operation and ranked by total time spent.
+      </Card.Description>
+    </Card.Header>
+    <Card.Content class="space-y-4">
+      {#if spanOps.data && (spanOps.data.categories.length > 0 || spanOps.data.rows.length > 0)}
+        {#if spanOps.data.categories.length > 0}
+          <div class="flex flex-wrap gap-1">
+            <Button
+              variant={opCategory === '' ? 'default' : 'outline'}
+              size="sm"
+              onclick={() => (opCategory = '')}>All</Button
+            >
+            {#each spanOps.data.categories as c (c)}
+              <Button
+                variant={opCategory === c ? 'default' : 'outline'}
+                size="sm"
+                onclick={() => (opCategory = c)}>{c}</Button
+              >
+            {/each}
+          </div>
+        {/if}
+        {#if spanOps.data.rows.length > 0}
+          <div
+            class="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4 gap-y-1 text-sm"
+          >
+            <div class="text-xs uppercase tracking-wide text-muted-foreground">Operation</div>
+            <div class="text-right text-xs uppercase tracking-wide text-muted-foreground">
+              Count
+            </div>
+            <div class="text-right text-xs uppercase tracking-wide text-muted-foreground">Avg</div>
+            <div class="text-right text-xs uppercase tracking-wide text-muted-foreground">p95</div>
+            <div class="text-right text-xs uppercase tracking-wide text-muted-foreground">
+              Total
+            </div>
+            {#each spanOps.data.rows as r (r.op + '\n' + r.description)}
+              <div class="flex min-w-0 items-center gap-2 border-t py-1.5">
+                <Badge variant="muted" class="shrink-0 font-mono">{r.op}</Badge>
+                <span class="min-w-0 truncate text-muted-foreground"
+                  >{r.description || '(no description)'}</span
+                >
+              </div>
+              <div class="border-t py-1.5 text-right tabular-nums">{r.count.toLocaleString()}</div>
+              <div class="border-t py-1.5 text-right tabular-nums">{formatDuration(r.avgMs)}</div>
+              <div class={cn('border-t py-1.5 text-right tabular-nums', latencyClass(r.p95Ms))}>
+                {formatDuration(r.p95Ms)}
+              </div>
+              <div class="border-t py-1.5 text-right font-medium tabular-nums">
+                {formatDuration(r.totalMs)}
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-sm text-muted-foreground">No operations in this category.</p>
+        {/if}
+      {:else}
+        <p class="text-sm text-muted-foreground">
+          No spans yet. Operations appear once transactions with spans are ingested.
+        </p>
       {/if}
     </Card.Content>
   </Card.Root>

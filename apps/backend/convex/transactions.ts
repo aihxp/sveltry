@@ -15,6 +15,82 @@ function percentile(sortedAsc: number[], p: number): number {
 
 const STATS_SAMPLE = 2000;
 const RECENT_LIMIT = 50;
+const SPAN_SAMPLE = 1000;
+
+/** Sentry span timestamps are unix seconds (floats); normalize to ms. */
+function spanMs(ts: unknown): number | null {
+  if (typeof ts !== 'number') return null;
+  return ts > 1e12 ? ts : ts * 1000;
+}
+
+interface RawSpan {
+  op?: unknown;
+  description?: unknown;
+  start_timestamp?: unknown;
+  timestamp?: unknown;
+}
+
+/**
+ * Cross-transaction "slowest operations": flattens the spans of the most recent
+ * {@link SPAN_SAMPLE} transactions, groups them by (op, description), and ranks by
+ * total time spent, so you can see which database queries / HTTP calls / etc. cost
+ * the most across the app. A recent-window approximation (no columnar store yet).
+ */
+export const spanOperations = query({
+  args: { category: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (ctx, { category, limit }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const recent = await ctx.db
+      .query('transactions')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .order('desc')
+      .take(SPAN_SAMPLE);
+
+    const groups = new Map<string, { op: string; description: string; durations: number[] }>();
+    for (const t of recent) {
+      const spans = ((t.payload as { spans?: RawSpan[] } | null)?.spans ?? []) as RawSpan[];
+      for (const s of spans) {
+        const op = typeof s.op === 'string' ? s.op : 'other';
+        const start = spanMs(s.start_timestamp);
+        const end = spanMs(s.timestamp);
+        if (start == null || end == null) continue;
+        const description = typeof s.description === 'string' ? s.description : '';
+        const key = `${op}\n${description}`;
+        let g = groups.get(key);
+        if (!g) {
+          g = { op, description, durations: [] };
+          groups.set(key, g);
+        }
+        g.durations.push(Math.max(0, end - start));
+      }
+    }
+
+    // Categories across all spans (for the filter UI), independent of the filter.
+    const categories = [...new Set([...groups.values()].map((g) => g.op.split('.')[0] || 'other'))]
+      .sort()
+      .slice(0, 30);
+
+    const rows = [...groups.values()]
+      .filter((g) => !category || (g.op.split('.')[0] || 'other') === category)
+      .map((g) => {
+        const sorted = g.durations.slice().sort((a, b) => a - b);
+        const sum = sorted.reduce((acc, d) => acc + d, 0);
+        return {
+          op: g.op,
+          description: g.description,
+          count: sorted.length,
+          totalMs: Math.round(sum),
+          avgMs: Math.round(sum / sorted.length),
+          p95Ms: Math.round(percentile(sorted, 95)),
+          maxMs: Math.round(sorted[sorted.length - 1] ?? 0),
+        };
+      })
+      .sort((a, b) => b.totalMs - a.totalMs)
+      .slice(0, Math.min(100, Math.max(1, limit ?? 50)));
+
+    return { sampleSize: recent.length, categories, rows };
+  },
+});
 
 /**
  * Per-transaction-name performance aggregates over the most recent
