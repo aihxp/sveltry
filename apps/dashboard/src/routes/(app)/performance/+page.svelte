@@ -23,7 +23,14 @@
   const vitals = useQuery(api.transactions.webVitals, () =>
     auth.isAuthenticated ? {} : ('skip' as const),
   );
-  const maxP95 = $derived(Math.max(1, ...(trend.data ?? []).map((d) => d.p95Ms)));
+  // Latency-over-time chart: which percentile to plot.
+  type TrendPctl = 'p50' | 'p95' | 'p99';
+  let trendPctl = $state<TrendPctl>('p95');
+  const TREND_PCTLS: TrendPctl[] = ['p50', 'p95', 'p99'];
+  function trendVal(d: { p50Ms: number; p95Ms: number; p99Ms: number }): number {
+    return trendPctl === 'p50' ? d.p50Ms : trendPctl === 'p99' ? d.p99Ms : d.p95Ms;
+  }
+  const maxTrend = $derived(Math.max(1, ...(trend.data ?? []).map(trendVal)));
 
   // Cross-transaction "slowest operations", with an optional op-category filter.
   let opCategory = $state('');
@@ -48,7 +55,7 @@
     return 'text-destructive';
   }
 
-  // Color a p95 cell by latency band for an at-a-glance read.
+  // Color a latency cell (p95 / p99) by band for an at-a-glance read.
   function latencyClass(ms: number): string {
     if (ms >= 1000) return 'text-destructive';
     if (ms >= 300) return 'text-amber-600 dark:text-amber-400';
@@ -114,7 +121,18 @@
   {/if}
 
   <Card.Root>
-    <Card.Header><Card.Title>Latency over time (24h, p95)</Card.Title></Card.Header>
+    <Card.Header class="flex-row items-center justify-between gap-4 space-y-0">
+      <Card.Title>Latency over time (24h, {trendPctl})</Card.Title>
+      <div class="flex gap-1">
+        {#each TREND_PCTLS as p (p)}
+          <Button
+            variant={trendPctl === p ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => (trendPctl = p)}>{p}</Button
+          >
+        {/each}
+      </div>
+    </Card.Header>
     <Card.Content>
       {#if auth.isLoading || trend.isLoading}
         <Skeleton class="h-32 w-full" />
@@ -127,18 +145,18 @@
           {#each trend.data as pt (pt.bucketStart)}
             <div
               class="flex-1"
-              title={`${hourLabel(pt.bucketStart)} · p95 ${formatDuration(pt.p95Ms)} · p50 ${formatDuration(pt.p50Ms)} · ${pt.count} txns`}
+              title={`${hourLabel(pt.bucketStart)} · ${trendPctl} ${formatDuration(trendVal(pt))} · p50 ${formatDuration(pt.p50Ms)} · ${pt.count} txns`}
             >
               <div
-                class={cn('rounded-t', barColor(pt.p95Ms))}
-                style={`height:${Math.max(2, (pt.p95Ms / maxP95) * 100)}%`}
+                class={cn('rounded-t', barColor(trendVal(pt)))}
+                style={`height:${Math.max(2, (trendVal(pt) / maxTrend) * 100)}%`}
               ></div>
             </div>
           {/each}
         </div>
         <div class="mt-1 flex justify-between text-xs text-muted-foreground">
           <span>{hourLabel(trend.data[0]!.bucketStart)}</span>
-          <span>p95 up to {formatDuration(maxP95)}</span>
+          <span>{trendPctl} up to {formatDuration(maxTrend)}</span>
           <span>{hourLabel(trend.data[trend.data.length - 1]!.bucketStart)}</span>
         </div>
       {/if}
@@ -240,6 +258,7 @@
                 <th class="px-3 py-2 text-right font-medium">Count</th>
                 <th class="px-3 py-2 text-right font-medium">p50</th>
                 <th class="px-3 py-2 text-right font-medium">p95</th>
+                <th class="px-3 py-2 text-right font-medium">p99</th>
                 <th class="px-3 py-2 text-right font-medium">Max</th>
                 <th class="px-6 py-2 text-right font-medium">Fail %</th>
               </tr>
@@ -260,6 +279,14 @@
                     )}
                   >
                     {formatDuration(row.p95Ms)}
+                  </td>
+                  <td
+                    class={cn(
+                      'px-3 py-2 text-right font-medium tabular-nums',
+                      latencyClass(row.p99Ms),
+                    )}
+                  >
+                    {formatDuration(row.p99Ms)}
                   </td>
                   <td class="px-3 py-2 text-right tabular-nums text-muted-foreground">
                     {formatDuration(row.maxMs)}

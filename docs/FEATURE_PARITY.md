@@ -125,7 +125,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Transactions and spans | Done | `transaction` items are persisted with their spans; a Performance page lists them. |
-| Latency percentiles (p50/p95) | Done | Per-transaction p50/p95/avg/max. The summary table uses a recent-window sample; the latency-over-time chart uses hourly histogram rollups, giving percentiles over arbitrary windows at bucket resolution. |
+| Latency percentiles (p50/p95/p99) | Done | Per-transaction p50/p95/p99/avg/max. The summary table uses a recent-window sample (exact percentiles); the latency-over-time chart uses hourly histogram rollups with a p50 / p95 / p99 selector, giving percentiles over arbitrary windows at bucket resolution. |
 | Latency trend over time | Done | An hourly p95 chart on the Performance page, backed by precomputed duration-histogram rollups (a cron aggregates raw transactions). |
 | Trace view (span waterfall) | Done | The transaction detail page renders the span waterfall. |
 | Span operations breakdown | Done | The transaction detail page shows where the time went by operation category (db / http / cache / ...), computed from each span's self-time (duration minus its children), plus a slowest-spans list. |

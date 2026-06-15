@@ -374,6 +374,7 @@ export const transactionStats = query({
         avgMs: Math.round(sum / sorted.length),
         p50Ms: Math.round(percentile(sorted, 50)),
         p95Ms: Math.round(percentile(sorted, 95)),
+        p99Ms: Math.round(percentile(sorted, 99)),
         maxMs: Math.round(sorted[sorted.length - 1] ?? 0),
         failureRate: g.failures / sorted.length,
       };
@@ -408,8 +409,8 @@ export const recentTransactions = query({
 });
 
 /**
- * Hourly latency trend from the precomputed rollups: count, avg, p50, and p95 per
- * hour over the requested window (optionally filtered to one transaction name).
+ * Hourly latency trend from the precomputed rollups: count, avg, p50, p95, and p99
+ * per hour over the requested window (optionally filtered to one transaction name).
  * Percentiles are exact within the histogram's bucket resolution.
  */
 export const transactionTrend = query({
@@ -450,6 +451,7 @@ export const transactionTrend = query({
           avgMs: b.count > 0 ? Math.round(b.sum / b.count) : 0,
           p50Ms: percentileFromHistogram(merged, 50),
           p95Ms: percentileFromHistogram(merged, 95),
+          p99Ms: percentileFromHistogram(merged, 99),
         };
       })
       .sort((a, b) => a.bucketStart - b.bucketStart);
