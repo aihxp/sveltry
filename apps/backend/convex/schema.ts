@@ -29,6 +29,19 @@ export const ingestFiltersValidator = v.object({
   filterBots: v.optional(v.boolean()),
 });
 
+/**
+ * Per-project custom PII scrubbing, layered on the default ruleset (applies only
+ * when `scrubPii` is on). See `@sveltry/protocol` `scrub`.
+ */
+export const scrubConfigValidator = v.object({
+  /** Extra key-name substrings to redact, beyond the defaults. */
+  extraFields: v.optional(v.array(v.string())),
+  /** Key-name substrings that must never be redacted (allowlist). */
+  safeFields: v.optional(v.array(v.string())),
+  /** Also redact IP-address fields (`user.ip_address`, `REMOTE_ADDR`, ...). */
+  scrubIp: v.optional(v.boolean()),
+});
+
 /** Sveltry member roles, ranked owner > admin > member > billing. */
 export const roleValidator = v.union(
   v.literal('owner'),
@@ -129,6 +142,8 @@ export default defineSchema({
     createdAt: v.number(),
     eventRetentionDays: v.number(),
     scrubPii: v.boolean(),
+    /** Optional custom scrubbing rules layered on the default ruleset (when scrubPii is on). */
+    scrubConfig: v.optional(scrubConfigValidator),
     /** Optional hard cap on events accepted per calendar month (drops excess). */
     monthlyEventQuota: v.optional(v.number()),
     /** Optional automatic spike protection: max events accepted per minute. */

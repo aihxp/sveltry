@@ -50,29 +50,29 @@ Most of what the original Next/Later horizons listed now ships. See
   tracking.
 - **Data controls.** Hard quotas, spike protection, usage accounting (with a daily usage chart and
   a selectable 7 / 30 / 90-day window), optional S3 / R2 storage offload, inbound data filters
-  (drop noisy events at ingest), and per-key allowed domains (reject browser events from non-listed
-  origins).
+  (drop noisy events at ingest), per-key allowed domains (reject browser events from non-listed
+  origins), and custom PII scrubbing (extra fields, a safe-field allowlist, and IP scrubbing).
 
 ## Next
 
 Highest-value additions that build on the existing tables:
 
-- **Custom data scrubbing.** Per-project custom scrubbing rules and a safe-field allowlist, on top
-  of the current default ruleset.
+- **Public REST API.** Programmatic read access to issues / events / projects / releases, with
+  scoped API tokens, so issues can be queried and triaged from CI and other tools.
+- **Organization audit log.** Record configuration changes (projects, keys, roles, alerts,
+  invitations) so admins can see who changed what.
 
 ## Later
 
 Valuable, but a larger surface or a new subsystem:
 
-- **Public REST API.** Programmatic read access to issues / events / projects / releases, with
-  scoped API tokens.
 - **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links,
   suspect commits from SCM, and auto-resolve from commit messages.
 - **Performance insights.** Per-op span breakdowns (DB / HTTP / cache / queues), a trace explorer /
   span search, and n+1 / slow-span detection.
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
-- **Org operations.** An organization audit log, project rename / transfer / delete, an org-level
-  stats page, and usage/quota threshold alerts.
+- **Org operations.** Project rename / transfer / delete, an org-level stats page, and usage/quota
+  threshold alerts.
 - **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
 
 ## Non-goals (for now)

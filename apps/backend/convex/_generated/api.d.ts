@@ -24,7 +24,6 @@ import type * as invitations from "../invitations.js";
 import type * as issues from "../issues.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_net from "../lib/net.js";
-import type * as lib_scrub from "../lib/scrub.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as maintenance from "../maintenance.js";
 import type * as metricAlerts from "../metricAlerts.js";
@@ -67,7 +66,6 @@ declare const fullApi: ApiFromModules<{
   issues: typeof issues;
   "lib/auth": typeof lib_auth;
   "lib/net": typeof lib_net;
-  "lib/scrub": typeof lib_scrub;
   "lib/slug": typeof lib_slug;
   maintenance: typeof maintenance;
   metricAlerts: typeof metricAlerts;

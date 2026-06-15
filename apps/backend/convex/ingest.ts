@@ -22,6 +22,7 @@ import {
   projectIdFromPath,
   rateLimited,
   requestOrigin,
+  scrubPayload,
   splitReplayRecording,
   corsHeaders,
 } from '@sveltry/protocol';
@@ -40,7 +41,6 @@ import { internal } from './_generated/api';
 import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { levelValidator } from './schema';
-import { scrubPayload } from './lib/scrub';
 
 const decoder = new TextDecoder();
 
@@ -274,7 +274,7 @@ export const ingest = httpAction(async (ctx, request) => {
   for (const payload of events) {
     const normalized = normalizeEvent(payload, { receivedAt });
     const grouping = computeGrouping(payload, normalized);
-    const storedPayload = resolved.scrubPii ? scrubPayload(payload) : payload;
+    const storedPayload = resolved.scrubPii ? scrubPayload(payload, resolved.scrubConfig) : payload;
     if (!firstId) firstId = normalized.eventId;
 
     await ctx.runMutation(internal.ingest.recordEvent, {
@@ -300,7 +300,7 @@ export const ingest = httpAction(async (ctx, request) => {
 
   for (const payload of transactions) {
     const t = normalizeTransaction(payload, { receivedAt });
-    const storedPayload = resolved.scrubPii ? scrubPayload(payload) : payload;
+    const storedPayload = resolved.scrubPii ? scrubPayload(payload, resolved.scrubConfig) : payload;
     if (!firstId) firstId = t.eventId;
     await ctx.runMutation(internal.ingest.recordTransaction, {
       projectId: resolved.projectId,
@@ -412,7 +412,7 @@ export const ingest = httpAction(async (ctx, request) => {
       release: p.release,
       environment: p.environment,
       timestamp: p.timestamp,
-      payload: resolved.scrubPii ? scrubPayload(payload) : payload,
+      payload: resolved.scrubPii ? scrubPayload(payload, resolved.scrubConfig) : payload,
     });
   }
 

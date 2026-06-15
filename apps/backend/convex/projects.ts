@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { internalQuery, mutation, query } from './_generated/server';
-import { ingestFiltersValidator } from './schema';
+import { ingestFiltersValidator, scrubConfigValidator } from './schema';
 import { requireOrg, requireRole } from './lib/auth';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
 
@@ -20,6 +20,7 @@ export const resolveIngestKey = internalQuery({
       organizationId: v.string(),
       keyId: v.id('projectKeys'),
       scrubPii: v.boolean(),
+      scrubConfig: v.optional(scrubConfigValidator),
       rateLimitCount: v.optional(v.number()),
       rateLimitWindowSeconds: v.optional(v.number()),
       monthlyEventQuota: v.optional(v.number()),
@@ -43,6 +44,7 @@ export const resolveIngestKey = internalQuery({
       organizationId: project.organizationId,
       keyId: key._id,
       scrubPii: project.scrubPii,
+      scrubConfig: project.scrubConfig,
       rateLimitCount: key.rateLimitCount,
       rateLimitWindowSeconds: key.rateLimitWindowSeconds,
       monthlyEventQuota: project.monthlyEventQuota,
@@ -229,6 +231,7 @@ export const updateProjectSettings = mutation({
     projectId: v.id('projects'),
     eventRetentionDays: v.optional(v.number()),
     scrubPii: v.optional(v.boolean()),
+    scrubConfig: v.optional(v.union(scrubConfigValidator, v.null())),
     monthlyEventQuota: v.optional(v.union(v.number(), v.null())),
     spikeThresholdPerMinute: v.optional(v.union(v.number(), v.null())),
     ingestFilters: v.optional(v.union(ingestFiltersValidator, v.null())),
@@ -242,6 +245,8 @@ export const updateProjectSettings = mutation({
     const patch: Record<string, unknown> = {};
     if (args.eventRetentionDays !== undefined) patch.eventRetentionDays = args.eventRetentionDays;
     if (args.scrubPii !== undefined) patch.scrubPii = args.scrubPii;
+    // null clears the custom scrub rules; an object replaces them.
+    if (args.scrubConfig !== undefined) patch.scrubConfig = args.scrubConfig ?? undefined;
     // null clears the limit; a number sets it.
     if (args.monthlyEventQuota !== undefined)
       patch.monthlyEventQuota = args.monthlyEventQuota ?? undefined;
