@@ -29,6 +29,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Slowest operations (cross-transaction).** The Performance page now aggregates spans across the
+  recent transactions, grouped by operation and description and ranked by total time spent (with
+  count, average, and p95), so you can see which database queries, HTTP calls, etc. cost the most
+  across the app. Includes an operation-category filter (db / http / cache / ...). A recent-window
+  sample, consistent with the existing latency percentiles.
 - **Span operations breakdown.** The transaction detail page now shows where a transaction's time
   goes by operation category (db / http / cache / ui / ...), computed from each span's self-time
   (its duration minus the time covered by its children, so nested spans are not double-counted) and
