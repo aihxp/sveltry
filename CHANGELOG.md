@@ -6,6 +6,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-15
+
 ### Added
 
 - **p99 latency.** The Performance views now surface the p99 percentile: a p99 column on the
@@ -307,7 +309,8 @@ The first release: a complete, Sentry-wire-compatible error-tracking vertical sl
 - **Tooling**: Bun workspaces with a shared dependency catalog, CI (test/type-check/build/format),
   Changesets-based releases, and a publishable SDK package.
 
-[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/aihxp/sveltry/releases/tag/v0.5.0
 [0.4.0]: https://github.com/aihxp/sveltry/releases/tag/v0.4.0
 [0.3.0]: https://github.com/aihxp/sveltry/releases/tag/v0.3.0
 [0.2.0]: https://github.com/aihxp/sveltry/releases/tag/v0.2.0
