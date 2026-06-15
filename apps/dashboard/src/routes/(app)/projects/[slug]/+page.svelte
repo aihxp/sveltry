@@ -253,6 +253,43 @@
     }
   }
 
+  // Transfer project (danger zone): move it (and all its data) to another org the
+  // caller administers. The picker lists the caller's admin/owner orgs except the
+  // current (active) one.
+  const myOrgs = useQuery(api.organizations.listMyOrganizations, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+  const transferOrgs = $derived(
+    (myOrgs.data ?? []).filter((o) => !o.isActive && (o.role === 'admin' || o.role === 'owner')),
+  );
+  let transferTarget = $state('');
+  let transferConfirm = $state('');
+  let transferring = $state(false);
+  let transferError = $state('');
+  const transferArmed = $derived(
+    !!proj.data?.project && !!transferTarget && transferConfirm.trim() === proj.data.project.name,
+  );
+  async function transferProject() {
+    if (!projectId || !transferArmed) return;
+    transferring = true;
+    transferError = '';
+    try {
+      await client.mutation(api.projectLifecycle.transferProject, {
+        projectId,
+        targetOrganizationId: transferTarget,
+        confirmName: transferConfirm.trim(),
+      });
+    } catch (err) {
+      transferring = false;
+      transferError = err instanceof Error ? err.message : 'Could not transfer the project';
+      return;
+    }
+    // The transfer committed; the project has left this org (and its slug may have
+    // changed in the target), so leave the now-stale project view. Navigation runs
+    // outside the try so a navigation hiccup never reads as a transfer failure.
+    await goto('/projects');
+  }
+
   // Inbound data filters (one glob pattern per line). Seeded once from the project.
   let filterErrors = $state('');
   let filterReleases = $state('');
@@ -1120,6 +1157,52 @@
             <code class="font-mono">@aihxp/sveltry-sdk</code> uploader or a direct POST to
             <code class="font-mono">/artifacts/upload</code>.
           </p>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root class="border-destructive/40">
+      <Card.Header>
+        <Card.Title class="text-destructive">Transfer project</Card.Title>
+        <Card.Description>
+          Move <span class="font-medium">{project.name}</span> and all of its data to another organization
+          you administer. The project leaves this organization immediately; re-stamping its data runs
+          in the background. Type the project name to confirm.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content class="space-y-3">
+        {#if transferOrgs.length === 0}
+          <p class="text-sm text-muted-foreground">
+            You do not administer another organization to transfer this project to.
+          </p>
+        {:else}
+          <div class="space-y-1.5">
+            <Label for="transferTarget">Destination organization</Label>
+            <select
+              id="transferTarget"
+              bind:value={transferTarget}
+              class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-72"
+            >
+              <option value="" disabled>Select an organization…</option>
+              {#each transferOrgs as o (o.id)}
+                <option value={o.id}>{o.name}</option>
+              {/each}
+            </select>
+          </div>
+          <Input
+            bind:value={transferConfirm}
+            placeholder={project.name}
+            aria-label="Confirm project name to transfer"
+          />
+          {#if transferError}<p class="text-sm text-destructive">{transferError}</p>{/if}
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={!transferArmed || transferring}
+            onclick={transferProject}
+          >
+            {transferring ? 'Transferring…' : 'Transfer this project'}
+          </Button>
         {/if}
       </Card.Content>
     </Card.Root>
