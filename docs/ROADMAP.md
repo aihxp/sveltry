@@ -84,8 +84,10 @@ Highest-value additions that build on the existing tables:
 
 Valuable, but a larger surface or a new subsystem:
 
-- **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links,
-  suspect commits from SCM, and auto-resolve from commit messages.
+- **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links
+  already ship (a per-project repo config builds a link from each in-app frame to its file and line
+  on the provider's web UI, URL-only, no token). Still to come: suspect commits from SCM and
+  auto-resolve from commit messages.
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
 - **Finer percentiles.** p99 and higher-resolution histograms via a richer analytics tier.
 

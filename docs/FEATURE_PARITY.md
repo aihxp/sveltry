@@ -38,6 +38,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | --- | --- | --- |
 | Full event storage | Done | Entire normalized Sentry payload stored in the `events.payload` blob (nodestore-equivalent). |
 | Stack traces | Done | Frames preserved in the stored payload; in-app frames drive default grouping. |
+| Source-code links ("open in repo") | Done | A per-project repository config (GitHub / GitLab / Bitbucket: provider, repo URL, default branch, optional source-root prefix) adds an "open in repo" link to each in-app stack frame, opening the file and line on the provider's web UI. URL construction only (no provider API call or token); pins to the default branch unless the event's release is a commit SHA. |
 | Breadcrumbs | Done | Stored as part of the event payload. |
 | Tags | Done | Stored and indexed (`events.tags`) for later filtering. |
 | Contexts and request data | Done | Preserved in the stored payload. |

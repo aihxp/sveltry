@@ -14,6 +14,7 @@
   import { buildDsn, formatBytes, relativeTime } from '$lib/utils';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import FileCode2Icon from '@lucide/svelte/icons/file-code-2';
+  import GitBranchIcon from '@lucide/svelte/icons/git-branch';
 
   const auth = useAuth();
   const client = useConvexClient();
@@ -338,6 +339,76 @@
       });
     } finally {
       savingFilters = false;
+    }
+  }
+
+  // Source repository for "open in repo" stack-frame links. Seeded once from the project.
+  let repoProvider = $state<'' | 'github' | 'gitlab' | 'bitbucket'>('');
+  let repoBaseUrl = $state('');
+  let repoDefaultBranch = $state('');
+  let repoSourceRoot = $state('');
+  let savingRepo = $state(false);
+  let repoError = $state('');
+  let repoSeeded = false;
+  $effect(() => {
+    const r = proj.data?.project?.repoConfig;
+    if (proj.data?.project && !repoSeeded) {
+      repoSeeded = true;
+      repoProvider = r?.provider ?? '';
+      repoBaseUrl = r?.baseUrl ?? '';
+      repoDefaultBranch = r?.defaultBranch ?? '';
+      repoSourceRoot = r?.sourceRoot ?? '';
+    }
+  });
+  async function saveRepo(e: SubmitEvent) {
+    e.preventDefault();
+    if (!projectId) return;
+    repoError = '';
+    if (repoProvider) {
+      let ok = false;
+      try {
+        ok = new URL(repoBaseUrl.trim()).protocol === 'https:';
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        repoError = 'Repository URL must be a valid https URL.';
+        return;
+      }
+    }
+    savingRepo = true;
+    try {
+      const repoConfig = repoProvider
+        ? {
+            provider: repoProvider,
+            baseUrl: repoBaseUrl.trim().replace(/\/+$/, ''),
+            defaultBranch: repoDefaultBranch.trim() || 'main',
+            sourceRoot: repoSourceRoot.trim() || undefined,
+          }
+        : null;
+      await client.mutation(api.projects.updateProjectSettings, { projectId, repoConfig });
+    } catch (err) {
+      repoError = err instanceof Error ? err.message : 'Failed to save repository config.';
+    } finally {
+      savingRepo = false;
+    }
+  }
+  async function removeRepo() {
+    if (!projectId) return;
+    repoError = '';
+    savingRepo = true;
+    try {
+      await client.mutation(api.projects.updateProjectSettings, { projectId, repoConfig: null });
+      // Clear the fields only after the clear actually persisted, so a failure
+      // never leaves the form contradicting the still-saved config.
+      repoProvider = '';
+      repoBaseUrl = '';
+      repoDefaultBranch = '';
+      repoSourceRoot = '';
+    } catch (err) {
+      repoError = err instanceof Error ? err.message : 'Failed to remove repository config.';
+    } finally {
+      savingRepo = false;
     }
   }
 
@@ -1158,6 +1229,70 @@
             <code class="font-mono">/artifacts/upload</code>.
           </p>
         {/if}
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title class="flex items-center gap-2">
+          <GitBranchIcon class="size-4" />
+          Repository
+        </Card.Title>
+        <Card.Description>
+          Link this project to its source repo so in-app stack frames get an "open in repo" link.
+          Sveltry only builds the URL; it never calls your provider.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content>
+        <form class="space-y-3" onsubmit={saveRepo}>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="repoProvider">Provider</Label>
+              <select
+                id="repoProvider"
+                bind:value={repoProvider}
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">None</option>
+                <option value="github">GitHub</option>
+                <option value="gitlab">GitLab</option>
+                <option value="bitbucket">Bitbucket</option>
+              </select>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="repoDefaultBranch">Default branch</Label>
+              <Input id="repoDefaultBranch" bind:value={repoDefaultBranch} placeholder="main" />
+            </div>
+            <div class="space-y-1.5 sm:col-span-2">
+              <Label for="repoBaseUrl">Repository URL</Label>
+              <Input
+                id="repoBaseUrl"
+                type="url"
+                bind:value={repoBaseUrl}
+                placeholder="https://github.com/acme/web"
+              />
+            </div>
+            <div class="space-y-1.5 sm:col-span-2">
+              <Label for="repoSourceRoot">Source-root prefix (optional)</Label>
+              <Input id="repoSourceRoot" bind:value={repoSourceRoot} placeholder="apps/web/" />
+            </div>
+          </div>
+          {#if repoError}<p class="text-sm text-destructive">{repoError}</p>{/if}
+          <div class="flex gap-2">
+            <Button type="submit" size="sm" disabled={savingRepo}>
+              {savingRepo ? 'Saving…' : 'Save repository'}
+            </Button>
+            {#if proj.data?.project?.repoConfig}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={savingRepo}
+                onclick={removeRepo}>Remove</Button
+              >
+            {/if}
+          </div>
+        </form>
       </Card.Content>
     </Card.Root>
 
