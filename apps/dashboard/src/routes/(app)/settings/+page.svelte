@@ -91,6 +91,7 @@
     auth.isAuthenticated && canManage ? {} : ('skip' as const),
   );
   let tokenName = $state('');
+  let tokenScope = $state<'read' | 'write'>('read');
   let creatingToken = $state(false);
   let tokenError = $state('');
   let newToken = $state(''); // the raw token, shown once after creation
@@ -102,7 +103,10 @@
     tokenError = '';
     newToken = '';
     try {
-      const res = await client.mutation(api.apiTokens.createApiToken, { name: tokenName.trim() });
+      const res = await client.mutation(api.apiTokens.createApiToken, {
+        name: tokenName.trim(),
+        scope: tokenScope,
+      });
       newToken = res.token;
       tokenName = '';
     } catch (err) {
@@ -297,6 +301,17 @@
             <Label for="tokenName">Name</Label>
             <Input id="tokenName" bind:value={tokenName} required placeholder="CI pipeline" />
           </div>
+          <div class="space-y-1.5">
+            <Label for="tokenScope">Access</Label>
+            <select
+              id="tokenScope"
+              bind:value={tokenScope}
+              class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-36"
+            >
+              <option value="read">Read only</option>
+              <option value="write">Read &amp; write</option>
+            </select>
+          </div>
           <Button type="submit" disabled={creatingToken}>
             {creatingToken ? 'Creating…' : 'Create token'}
           </Button>
@@ -325,6 +340,9 @@
                   {t.name}
                   <code class="ml-1 font-mono text-xs text-muted-foreground">{t.prefix}…</code>
                 </span>
+                <Badge variant={t.scope === 'write' ? 'default' : 'muted'} class="shrink-0">
+                  {t.scope === 'write' ? 'read/write' : 'read'}
+                </Badge>
                 <span class="shrink-0 text-xs text-muted-foreground">
                   {t.lastUsedAt ? 'used' : 'never used'}
                 </span>

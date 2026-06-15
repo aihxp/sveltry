@@ -215,6 +215,8 @@ export default defineSchema({
     tokenHash: v.string(),
     /** First chars of the raw token (e.g. `svtry_1a2b3c4d`), for display only. */
     tokenPrefix: v.string(),
+    /** Access level: `read` (default) or `write` (read + triage). Optional for back-compat. */
+    scope: v.optional(v.union(v.literal('read'), v.literal('write'))),
     createdBy: v.string(),
     createdByEmail: v.optional(v.string()),
     createdAt: v.number(),
