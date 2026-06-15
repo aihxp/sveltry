@@ -6,6 +6,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-15
+
 ### Changed
 
 - **Sveltry is now Convex-only (Postgres removed).** Auth runs entirely on Convex: identity uses
@@ -273,4 +275,6 @@ The first release: a complete, Sentry-wire-compatible error-tracking vertical sl
 - **Tooling**: Bun workspaces with a shared dependency catalog, CI (test/type-check/build/format),
   Changesets-based releases, and a publishable SDK package.
 
+[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/aihxp/sveltry/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aihxp/sveltry/releases/tag/v0.1.0
