@@ -42,7 +42,7 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Member invitations.** Invite teammates by email at a role; they accept a tokenized link to
   join (emailed over SMTP, or the link is copied when SMTP is unconfigured).
 - **Alerts and integrations.** Email (SMTP), Microsoft Teams, PagerDuty, Opsgenie; metric/threshold
-  alerts; environment-scoped issue alerts; and Jira / Linear issue-tracker actions.
+  alerts; environment-scoped issue and metric alerts; and Jira / Linear issue-tracker actions.
 - **Performance and analytics.** Web vitals, distributed tracing across services, Discover, custom
   dashboards, and debug-ID artifact bundles.
 - **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
@@ -57,9 +57,6 @@ Most of what the original Next/Later horizons listed now ships. See
 
 Highest-value additions that build on the existing tables:
 
-- **Environment-scoped metric alerts.** Extend the environment scope (already on issue alerts) to
-  the metric/threshold alerts so p95-latency / error-count / crash-free rules can target one
-  environment.
 - **Custom data scrubbing.** Per-project custom scrubbing rules and a safe-field allowlist, on top
   of the current default ruleset.
 

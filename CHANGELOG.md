@@ -29,6 +29,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Environment-scoped metric alerts.** A metric/threshold alert (p95 latency, error count, or
+  crash-free rate) can now be scoped to a single environment, matching the environment scope already
+  on issue alerts. The metric is computed over only that environment's data (error-count and
+  crash-free filter the scanned rows; the env-scoped p95 path reads raw transactions, since the
+  precomputed rollups are not split by environment), and the alert message names the environment.
+  Unscoped alerts still span all environments. Set it on the project page's metric-alert form.
 - **Per-key allowed domains.** A DSN key can carry an optional origin allowlist (Sentry's "Allowed
   Domains"). When set, a browser ingest request whose `Origin` (or `Referer`) is not listed is
   rejected with HTTP 403, so a leaked public browser DSN cannot report from another site. Patterns

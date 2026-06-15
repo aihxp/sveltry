@@ -268,6 +268,7 @@
   let maMetric = $state<'p95_latency' | 'error_count' | 'crash_free_rate'>('p95_latency');
   let maThreshold = $state(1000);
   let maTransaction = $state('');
+  let maEnvironment = $state('');
   let maWindow = $state(60);
   let maChannelType = $state<
     'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
@@ -290,11 +291,13 @@
         name: `${metricLabel[maMetric]} alert`,
         metric: maMetric,
         transactionName: maMetric === 'p95_latency' && maTransaction ? maTransaction : undefined,
+        environment: maEnvironment.trim() || undefined,
         windowMinutes: maWindow,
         threshold: maThreshold,
         channels: [{ type: maChannelType, target: maTarget }],
       });
       maTarget = '';
+      maEnvironment = '';
     } finally {
       savingMetric = false;
     }
@@ -823,7 +826,9 @@
                   <div class="truncate text-xs text-muted-foreground">
                     {metricLabel[a.metric]}
                     {a.metric === 'crash_free_rate' ? '<' : '>'}
-                    {a.threshold} over {a.windowMinutes}m
+                    {a.threshold} over {a.windowMinutes}m{a.environment
+                      ? ` · env: ${a.environment}`
+                      : ''}
                     {#if a.lastValue != null}· last {Math.round(a.lastValue)}{/if}
                   </div>
                 </div>
@@ -868,6 +873,10 @@
             <div class="space-y-1.5">
               <Label for="maWindow">Window (minutes)</Label>
               <Input id="maWindow" type="number" min="5" bind:value={maWindow} />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="maEnvironment">Environment (blank = all)</Label>
+              <Input id="maEnvironment" bind:value={maEnvironment} placeholder="production" />
             </div>
             <div class="space-y-1.5">
               <Label for="maChannel">Channel</Label>
