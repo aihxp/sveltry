@@ -594,6 +594,8 @@ export default defineSchema({
     threshold: v.optional(v.number()),
     windowMinutes: v.optional(v.number()),
     minLevel: v.optional(levelValidator),
+    /** Optional environment scope; when set, only events from this environment fire the rule. */
+    environment: v.optional(v.string()),
     channels: v.array(alertChannelValidator),
     isEnabled: v.boolean(),
     createdAt: v.number(),

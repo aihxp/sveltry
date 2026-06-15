@@ -29,6 +29,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Environment-scoped alerts.** An issue alert rule can be scoped to a single environment, so it
+  fires only for events from that environment (e.g. notify on new production issues but stay quiet
+  for staging). Event-frequency rules count only the scoped environment's events, and the
+  notification body now includes the triggering environment. Unscoped rules still match every
+  environment, so existing rules are unchanged. Set it on the project page's alert-rule form.
 - **Inbound data filters.** Per-project rules that drop matching error events at ingest, before
   they are stored, grouped, or counted against a quota (still HTTP 200, so SDKs do not retry).
   Filter by error message/type, release, environment, or stack-frame path (case-insensitive globs,

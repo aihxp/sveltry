@@ -40,7 +40,7 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Issue triage.** Full-text search, saved views, merge / unmerge, assignment, threaded comments,
   resolve-in-next-release, fine-grained roles (owner / admin / member / billing), and teams.
 - **Alerts and integrations.** Email (SMTP), Microsoft Teams, PagerDuty, Opsgenie; metric/threshold
-  alerts; and Jira / Linear issue-tracker actions.
+  alerts; environment-scoped issue alerts; and Jira / Linear issue-tracker actions.
 - **Performance and analytics.** Web vitals, distributed tracing across services, Discover, custom
   dashboards, and debug-ID artifact bundles.
 - **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
@@ -53,9 +53,11 @@ Most of what the original Next/Later horizons listed now ships. See
 
 Highest-value additions that build on the existing tables:
 
-- **Environment-scoped alerts.** Fire an alert only for a chosen environment (e.g. production).
 - **Usage over time.** A daily usage time-series chart with an arbitrary date range on the project
   page (the per-day series is already returned by `usage.projectUsage`).
+- **Environment-scoped metric alerts.** Extend the environment scope (already on issue alerts) to
+  the metric/threshold alerts so p95-latency / error-count / crash-free rules can target one
+  environment.
 - **Member invitations.** Invite teammates by email (reusing the existing SMTP transport) and a
   join flow, instead of each user self-registering.
 - **Per-key allowed origins.** An optional CORS/referrer allowlist on a DSN key, so a leaked browser

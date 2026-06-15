@@ -39,6 +39,7 @@ export const createAlertRule = mutation({
     threshold: v.optional(v.number()),
     windowMinutes: v.optional(v.number()),
     minLevel: v.optional(levelValidator),
+    environment: v.optional(v.string()),
     channels: v.array(alertChannelValidator),
   },
   handler: async (ctx, args) => {
@@ -46,6 +47,8 @@ export const createAlertRule = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project || project.organizationId !== activeOrganizationId)
       throw new Error('Project not found');
+    // Blank environment means "all environments".
+    const environment = args.environment?.trim() || undefined;
     return ctx.db.insert('alertRules', {
       organizationId: activeOrganizationId,
       projectId: args.projectId,
@@ -54,6 +57,7 @@ export const createAlertRule = mutation({
       threshold: args.threshold,
       windowMinutes: args.windowMinutes,
       minLevel: args.minLevel,
+      environment,
       channels: args.channels,
       isEnabled: true,
       createdAt: Date.now(),
@@ -102,16 +106,21 @@ export const rulesForIssue = internalQuery({
   },
 });
 
-/** Count an issue's events since `since` (epoch ms), bounded for the alert check. */
+/**
+ * Count an issue's events since `since` (epoch ms), bounded for the alert check.
+ * When `environment` is set, only events from that environment are counted (so an
+ * environment-scoped frequency rule measures that environment's rate).
+ */
 export const countEventsSince = internalQuery({
-  args: { issueId: v.id('issues'), since: v.number() },
+  args: { issueId: v.id('issues'), since: v.number(), environment: v.optional(v.string()) },
   returns: v.number(),
-  handler: async (ctx, { issueId, since }) => {
+  handler: async (ctx, { issueId, since, environment }) => {
     const recent = await ctx.db
       .query('events')
       .withIndex('by_issue', (q) => q.eq('issueId', issueId).gte('timestamp', since))
       .take(1000);
-    return recent.length;
+    if (!environment) return recent.length;
+    return recent.filter((e) => e.environment === environment).length;
   },
 });
 
@@ -148,8 +157,14 @@ export const recordDelivery = internalMutation({
 
 /** Evaluate alert rules for a freshly ingested event and dispatch notifications. */
 export const dispatchForEvent = internalAction({
-  args: { issueId: v.id('issues'), isNew: v.boolean(), isRegression: v.boolean() },
-  handler: async (ctx, { issueId, isNew, isRegression }) => {
+  args: {
+    issueId: v.id('issues'),
+    isNew: v.boolean(),
+    isRegression: v.boolean(),
+    /** The triggering event's environment, for environment-scoped rules. */
+    environment: v.optional(v.string()),
+  },
+  handler: async (ctx, { issueId, isNew, isRegression, environment }) => {
     const data = await ctx.runQuery(internal.alerts.rulesForIssue, { issueId });
     if (!data) return;
     const { issue, project, rules } = data;
@@ -170,6 +185,10 @@ export const dispatchForEvent = internalAction({
     const issueUrl = siteUrl ? `${siteUrl}/issues/${issueId}` : undefined;
 
     for (const rule of rules) {
+      // Environment scope: skip the rule unless the triggering event came from
+      // the rule's environment (an unscoped rule matches every environment).
+      if (rule.environment && rule.environment !== environment) continue;
+
       if (rule.minLevel && (LEVEL_RANK[issue.level] ?? 0) < (LEVEL_RANK[rule.minLevel] ?? 0))
         continue;
 
@@ -181,12 +200,14 @@ export const dispatchForEvent = internalAction({
       } else if (rule.trigger === 'event_frequency' && rule.threshold != null) {
         // Fire when the event count within the rolling window reaches the
         // threshold, and at most once per window (so a busy issue does not
-        // re-alert on every event once it is over the line).
+        // re-alert on every event once it is over the line). An environment-scoped
+        // rule counts only that environment's events.
         const windowMs = (rule.windowMinutes ?? 60) * 60_000;
         const since = now - windowMs;
         const recentCount = await ctx.runQuery(internal.alerts.countEventsSince, {
           issueId,
           since,
+          environment: rule.environment,
         });
         if (recentCount >= rule.threshold) {
           const alreadyFired = await ctx.runQuery(internal.alerts.firedSince, {
@@ -207,6 +228,7 @@ export const dispatchForEvent = internalAction({
         culprit: issue.culprit,
         level: issue.level,
         count: issue.count,
+        environment,
         issueUrl,
       };
 
@@ -254,6 +276,7 @@ interface AlertContent {
   culprit: string;
   level: string;
   count: number;
+  environment?: string;
   issueUrl?: string;
 }
 
@@ -263,6 +286,7 @@ function alertBody(content: AlertContent): string {
     `[${content.projectName}] ${content.issueTitle}`,
     `Culprit: ${content.culprit}`,
     `Level: ${content.level} · Events: ${content.count} · Trigger: ${content.trigger}`,
+    content.environment ? `Environment: ${content.environment}` : '',
     content.issueUrl ? `View: ${content.issueUrl}` : '',
   ]
     .filter(Boolean)
