@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { corsHeaders, extractAuth, ingestError } from '@sveltry/protocol';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
+import type { Id } from './_generated/dataModel';
 import { requireOrg } from './lib/auth';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,6 +85,77 @@ export const projectUsage = query({
           filtered: r.filteredCount ?? 0,
         }))
         .sort((a, b) => a.day - b.day),
+    };
+  },
+});
+
+interface UsageTotals {
+  events: number;
+  transactions: number;
+  dropped: number;
+  filtered: number;
+}
+const emptyTotals = (): UsageTotals => ({ events: 0, transactions: 0, dropped: 0, filtered: 0 });
+
+/**
+ * Org-wide usage over a window (default 30 days, clamped to 1-90): totals, a
+ * daily series summed across all projects, and a per-project breakdown. Visible
+ * to any member (the Stats page).
+ */
+export const orgUsage = query({
+  args: { windowDays: v.optional(v.number()) },
+  handler: async (ctx, { windowDays }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const window = Math.min(90, Math.max(1, Math.round(windowDays ?? 30)));
+    const since = Math.floor((Date.now() - window * DAY_MS) / DAY_MS) * DAY_MS;
+    const rows = await ctx.db
+      .query('usageDaily')
+      .withIndex('by_org_day', (q) =>
+        q.eq('organizationId', activeOrganizationId).gte('day', since),
+      )
+      .collect();
+
+    const totals = emptyTotals();
+    const byDay = new Map<number, UsageTotals>();
+    const byProject = new Map<string, UsageTotals>();
+    for (const r of rows) {
+      const f = r.filteredCount ?? 0;
+      totals.events += r.eventCount;
+      totals.transactions += r.transactionCount;
+      totals.dropped += r.droppedCount;
+      totals.filtered += f;
+      const day = byDay.get(r.day) ?? emptyTotals();
+      day.events += r.eventCount;
+      day.transactions += r.transactionCount;
+      day.dropped += r.droppedCount;
+      day.filtered += f;
+      byDay.set(r.day, day);
+      const proj = byProject.get(r.projectId) ?? emptyTotals();
+      proj.events += r.eventCount;
+      proj.transactions += r.transactionCount;
+      proj.dropped += r.droppedCount;
+      proj.filtered += f;
+      byProject.set(r.projectId, proj);
+    }
+
+    const projects = await Promise.all(
+      [...byProject.entries()].map(async ([projectId, agg]) => {
+        const project = await ctx.db.get(projectId as Id<'projects'>);
+        return {
+          id: projectId,
+          name: project?.name ?? '(deleted)',
+          slug: project?.slug ?? null,
+          ...agg,
+        };
+      }),
+    );
+    projects.sort((a, b) => b.events - a.events);
+
+    return {
+      windowDays: window,
+      totals,
+      days: [...byDay.entries()].map(([day, t]) => ({ day, ...t })).sort((a, b) => a.day - b.day),
+      projects,
     };
   },
 });

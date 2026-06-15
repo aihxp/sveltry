@@ -180,6 +180,7 @@
   }
 
   // Project limits/settings (seeded once from the loaded project)
+  let projectName = $state('');
   let retention = $state(90);
   let scrub = $state(true);
   let scrubExtra = $state('');
@@ -193,6 +194,7 @@
     const p = proj.data?.project;
     if (p && !seeded) {
       seeded = true;
+      projectName = p.name;
       retention = p.eventRetentionDays;
       scrub = p.scrubPii;
       scrubExtra = (p.scrubConfig?.extraFields ?? []).join('\n');
@@ -215,6 +217,7 @@
           : null;
       await client.mutation(api.projects.updateProjectSettings, {
         projectId,
+        name: projectName.trim() || undefined,
         eventRetentionDays: Number(retention),
         scrubPii: scrub,
         scrubConfig,
@@ -550,6 +553,10 @@
       <Card.Content>
         <form class="space-y-3" onsubmit={saveSettings}>
           <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5 sm:col-span-2">
+              <Label for="projectName">Project name</Label>
+              <Input id="projectName" bind:value={projectName} placeholder="Web App" />
+            </div>
             <div class="space-y-1.5">
               <Label for="retention">Event retention (days)</Label>
               <Input id="retention" type="number" min="1" bind:value={retention} />

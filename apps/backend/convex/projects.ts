@@ -237,6 +237,7 @@ export const setKeyAllowedOrigins = mutation({
 export const updateProjectSettings = mutation({
   args: {
     projectId: v.id('projects'),
+    name: v.optional(v.string()),
     eventRetentionDays: v.optional(v.number()),
     scrubPii: v.optional(v.boolean()),
     scrubConfig: v.optional(v.union(scrubConfigValidator, v.null())),
@@ -251,6 +252,8 @@ export const updateProjectSettings = mutation({
       throw new Error('Project not found');
     }
     const patch: Record<string, unknown> = {};
+    // Rename keeps the slug stable (the slug is the ingest/tenant key).
+    if (args.name !== undefined && args.name.trim()) patch.name = args.name.trim();
     if (args.eventRetentionDays !== undefined) patch.eventRetentionDays = args.eventRetentionDays;
     if (args.scrubPii !== undefined) patch.scrubPii = args.scrubPii;
     // null clears the custom scrub rules; an object replaces them.

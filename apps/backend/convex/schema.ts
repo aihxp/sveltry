@@ -623,7 +623,9 @@ export default defineSchema({
     droppedCount: v.number(),
     /** Error events dropped by inbound data filters (see `projects.ingestFilters`). */
     filteredCount: v.optional(v.number()),
-  }).index('by_project_day', ['projectId', 'day']),
+  })
+    .index('by_project_day', ['projectId', 'day'])
+    .index('by_org_day', ['organizationId', 'day']),
 
   // Uploaded build artifacts (minified bundles and their source maps) used to
   // resolve minified production stack frames back to original source. Bytes live
