@@ -29,6 +29,16 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Public API, deeper.** The v1 REST API gains resources and writes: `GET /api/v1/releases`
+  (org-scoped, with an optional `?project=<slug>` filter), `GET /api/v1/members`, `GET
+  /api/v1/events/<eventId>` (a single event with its full stored payload), and `POST
+  /api/v1/issues/<id>/assign` (write scope; body `{ assigneeId }`, validated to be a member of the
+  org, `null` to unassign). The list endpoints for releases, members, a project's issues, and an
+  issue's events now support opaque cursor pagination: pass `?cursor=` and `?limit=` (default 50,
+  max 100) and read the additive `nextCursor` field (`null` when exhausted). Pagination is
+  backward-compatible (existing array keys are unchanged, `nextCursor` is additive, and `/projects`
+  stays unbounded); an invalid cursor returns `400`. Adds `releases.by_org` and `events.by_org_eventId`
+  indexes to back the new releases listing and the single-event lookup.
 - **Performance issues list.** A new Performance issues page (linked from the Performance header)
   surfaces detected performance problems across recent transactions: N+1 queries (the same database
   or cache operation repeated within one transaction), slow database queries, and slow outbound HTTP

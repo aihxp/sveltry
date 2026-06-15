@@ -379,7 +379,11 @@ export default defineSchema({
     .index('by_eventId', ['eventId'])
     // Selective lookup used to make ingestion idempotent per project: an SDK
     // retry resending the same `event_id` must not double-count.
-    .index('by_project_eventId', ['projectId', 'eventId']),
+    .index('by_project_eventId', ['projectId', 'eventId'])
+    // Org-scoped lookup by Sentry event id (the public API fetches a single event
+    // by id without a project in the path). `eventId` is unique per project, not
+    // globally, so the lookup must be org-scoped to return the caller's own row.
+    .index('by_org_eventId', ['organizationId', 'eventId']),
 
   // Distinct (issue, user) pairs, so `issues.userCount` reflects unique users
   // affected rather than the number of events that carried a user.
@@ -606,7 +610,8 @@ export default defineSchema({
     lastEventAt: v.optional(v.number()),
   })
     .index('by_project_version', ['projectId', 'version'])
-    .index('by_project', ['projectId', 'createdAt']),
+    .index('by_project', ['projectId', 'createdAt'])
+    .index('by_org', ['organizationId', 'createdAt']),
 
   // Deploys recorded against a release (via the deploy API).
   deploys: defineTable({

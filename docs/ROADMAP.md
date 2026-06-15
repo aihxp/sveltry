@@ -51,9 +51,10 @@ Most of what the original Next/Later horizons listed now ships. See
 - **Crons and uptime.** Missed-check-in detection and HTTP uptime monitors.
 - **Releases.** Deeper release health (aggregated `sessions` buckets), suspect commits, and deploy
   tracking.
-- **Public API.** A token-authenticated `/api/v1/...` for projects, issues, and an issue's events,
-  plus triage writes (resolve / ignore / unresolve). Org-scoped API tokens with read or read+write
-  scope, managed on the settings page.
+- **Public API.** A token-authenticated `/api/v1/...` for projects, releases, members, issues,
+  events (list and full detail), with opaque cursor pagination on the list endpoints, plus write
+  actions: issue assignment and triage (resolve / ignore / unresolve). Org-scoped API tokens with
+  read or read+write scope, managed on the settings page.
 - **Organization audit log.** Config and access changes (projects, keys, roles, alerts, invitations,
   tokens) are recorded with the actor and time and shown to admins on the settings page.
 - **Org-wide stats and project rename.** A Stats page aggregates usage across all projects (totals,
@@ -71,10 +72,11 @@ Most of what the original Next/Later horizons listed now ships. See
 
 Highest-value additions that build on the existing tables:
 
-- **Public API, deeper.** Build on the v1 slice: more resources (releases, members), pagination
-  cursors, issue assignment, and event detail.
 - **Project transfer.** Move a project (and its data) to another organization. The org-level stats
   page, project rename, project delete, and quota-usage alerts already ship.
+- **Public API, even deeper.** The v1 API now covers projects, releases, members, issues, events
+  (list + detail), cursor pagination, issue assignment, and triage writes. Still to come: a
+  project-scoped event lookup, deploy/artifact resources, and outbound webhooks for API consumers.
 
 ## Later
 
