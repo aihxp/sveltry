@@ -189,7 +189,9 @@ export default defineSchema({
     projectId: v.optional(v.id('projects')),
     filters: v.optional(v.array(v.object({ field: v.string(), value: v.string() }))),
     order: v.number(),
-  }).index('by_dashboard', ['dashboardId', 'order']),
+  })
+    .index('by_dashboard', ['dashboardId', 'order'])
+    .index('by_project', ['projectId']),
 
   // Sveltry's own per-member roles, layered on Better Auth org membership and keyed
   // by the Better Auth user id. Enforced in Convex (see lib/auth `requireRole`). An
@@ -419,7 +421,9 @@ export default defineSchema({
     crashed: v.number(),
     abnormal: v.number(),
     receivedAt: v.number(),
-  }).index('by_org', ['organizationId', 'bucketStart']),
+  })
+    .index('by_org', ['organizationId', 'bucketStart'])
+    .index('by_project', ['projectId']),
 
   // Performance transactions (envelope items with `type: "transaction"`). The
   // full payload (including spans) is kept in `payload`; the columns are the
@@ -478,7 +482,9 @@ export default defineSchema({
     size: v.number(),
     storageId: v.id('_storage'),
     createdAt: v.number(),
-  }).index('by_event', ['eventId']),
+  })
+    .index('by_event', ['eventId'])
+    .index('by_project', ['projectId']),
 
   // User feedback (envelope items `user_report` or `feedback`).
   feedback: defineTable({
@@ -491,7 +497,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_org', ['organizationId', 'createdAt'])
-    .index('by_event', ['eventId']),
+    .index('by_event', ['eventId'])
+    .index('by_project', ['projectId']),
 
   // Sampled performance profiles (envelope items with `type: "profile"`). The
   // full samples/stacks/frames payload is kept for flamegraph construction.
@@ -553,7 +560,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_org', ['organizationId'])
-    .index('by_enabled', ['enabled']),
+    .index('by_enabled', ['enabled'])
+    .index('by_project', ['projectId']),
 
   // Cron monitors: one row per (project, slug), tracking the latest check-in.
   monitors: defineTable({
@@ -732,7 +740,9 @@ export default defineSchema({
     ok: v.boolean(),
     detail: v.optional(v.string()),
     deliveredAt: v.number(),
-  }).index('by_issue', ['issueId']),
+  })
+    .index('by_issue', ['issueId'])
+    .index('by_project', ['projectId']),
 
   // History of issue merges, so a merge can be undone. Captures the merged-away
   // (source) issue's identifying snapshot and the events that moved into the target,
@@ -756,7 +766,9 @@ export default defineSchema({
     }),
     movedEventIds: v.array(v.id('events')),
     mergedAt: v.number(),
-  }).index('by_target', ['targetIssueId']),
+  })
+    .index('by_target', ['targetIssueId'])
+    .index('by_project', ['projectId']),
 
   // Commit metadata uploaded with a release (Sentry's `set-commits`). Used to find
   // an issue's "suspect commit": the most recent commit that changed a file in the
@@ -787,7 +799,9 @@ export default defineSchema({
     level: v.optional(levelValidator),
     projectId: v.optional(v.id('projects')),
     createdAt: v.number(),
-  }).index('by_org', ['organizationId']),
+  })
+    .index('by_org', ['organizationId'])
+    .index('by_project', ['projectId']),
 
   // A lightweight fixed-window rate limiter for ingestion, keyed per DSN key.
   // `by_window` lets a daily cron prune windows that have rolled over.

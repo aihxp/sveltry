@@ -29,6 +29,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Project delete.** A project can be deleted from its settings page (danger zone, with a
+  typed-name confirmation). The project row is removed immediately (it leaves listings and ingest
+  stops resolving its DSN), and a self-rescheduling background sweep purges all of its data across
+  every scoped table (issues and their comments/users, events, transactions, sessions, replays,
+  profiles, monitors, releases, usage, alerts, and more) in bounded batches, including the file
+  storage blobs for attachments, replay recordings, and artifacts. Admin-only and audited.
 - **Quota-usage alerts.** A per-project alert that fires when this calendar month's events reach a
   chosen percentage of the project's monthly event quota. An hourly cron evaluates enabled alerts
   and delivers to any channel (webhook / Slack / Discord / email / Teams / PagerDuty / Opsgenie) via
