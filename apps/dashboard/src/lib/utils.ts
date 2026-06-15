@@ -69,3 +69,64 @@ export function buildDsn(ingestUrl: string, publicKey: string, publicId: string)
     return `${ingestUrl.replace(/\/$/, '')}/${publicId}`;
   }
 }
+
+export type RepoProvider = 'github' | 'gitlab' | 'bitbucket';
+
+export interface RepoConfig {
+  provider: RepoProvider;
+  baseUrl: string;
+  defaultBranch: string;
+  sourceRoot?: string;
+}
+
+export interface RepoFrame {
+  filename?: string;
+  lineno?: number;
+  /** Optional release commit SHA to pin instead of the default branch. */
+  ref?: string;
+}
+
+/**
+ * Build an "open in repo" web URL for a stack frame. Pure string construction:
+ * no network calls, no token. Returns null when there is no usable file + line.
+ *
+ *   github:    <baseUrl>/blob/<ref>/<path>#L<lineno>
+ *   gitlab:    <baseUrl>/-/blob/<ref>/<path>#L<lineno>
+ *   bitbucket: <baseUrl>/src/<ref>/<path>#lines-<lineno>
+ *
+ * `<ref>`  = frame.ref (a release commit SHA) if present, else config.defaultBranch.
+ * `<path>` = frame.filename with sourceRoot stripped, backslashes normalized, and
+ *            any leading slash removed (best-effort: a non-matching sourceRoot
+ *            leaves the path intact rather than dropping the link).
+ */
+export function buildRepoFileUrl(config: RepoConfig, frame: RepoFrame): string | null {
+  if (!frame.filename || frame.lineno == null || frame.lineno < 1) return null;
+
+  const ref = frame.ref || config.defaultBranch;
+  const base = config.baseUrl.replace(/\/+$/, '');
+
+  let path = frame.filename.replace(/\\/g, '/');
+  if (config.sourceRoot) {
+    let root = config.sourceRoot.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!root.endsWith('/')) root += '/';
+    const normalized = path.replace(/^\/+/, '');
+    if (normalized.startsWith(root)) path = normalized.slice(root.length);
+  }
+  path = path.replace(/^\/+/, '');
+  if (!path) return null;
+
+  // Encode per path segment so a branch like `release/1.x` keeps its slash while
+  // special chars (#, ?, space) cannot corrupt the URL. SHA refs are already safe.
+  const refPath = ref.split('/').map(encodeURIComponent).join('/');
+  const encoded = path.split('/').map(encodeURIComponent).join('/');
+  switch (config.provider) {
+    case 'github':
+      return `${base}/blob/${refPath}/${encoded}#L${frame.lineno}`;
+    case 'gitlab':
+      return `${base}/-/blob/${refPath}/${encoded}#L${frame.lineno}`;
+    case 'bitbucket':
+      return `${base}/src/${refPath}/${encoded}#lines-${frame.lineno}`;
+    default:
+      return null;
+  }
+}

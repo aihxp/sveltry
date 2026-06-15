@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { cn } from '$lib/utils';
+  import { cn, buildRepoFileUrl, type RepoConfig } from '$lib/utils';
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 
   type Frame = {
     filename?: string;
@@ -20,7 +21,11 @@
     stacktrace?: { frames?: Frame[] };
   };
 
-  let { payload }: { payload: unknown } = $props();
+  let {
+    payload,
+    repoConfig = null,
+    repoRef = null,
+  }: { payload: unknown; repoConfig?: RepoConfig | null; repoRef?: string | null } = $props();
 
   function exceptionValues(p: any): ExceptionValue[] {
     const ex = p?.exception;
@@ -81,6 +86,25 @@
                   <span class="text-muted-foreground"> in {frameLocation(frame)}</span>
                 </span>
                 <div class="flex shrink-0 items-center gap-1.5">
+                  {#if repoConfig && frame.in_app}
+                    {@const repoUrl = buildRepoFileUrl(repoConfig, {
+                      filename: frame.filename ?? frame.abs_path,
+                      lineno: frame.lineno,
+                      ref: repoRef ?? undefined,
+                    })}
+                    {#if repoUrl}
+                      <a
+                        href={repoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open in repository"
+                        aria-label="Open this frame in the source repository"
+                        class="text-muted-foreground hover:text-foreground"
+                      >
+                        <ExternalLinkIcon class="size-3.5" />
+                      </a>
+                    {/if}
+                  {/if}
                   {#if frame.sveltry_resolved}
                     <span
                       class="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400"

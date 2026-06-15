@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { internalQuery, mutation, query } from './_generated/server';
-import { ingestFiltersValidator, scrubConfigValidator } from './schema';
+import { ingestFiltersValidator, repoConfigValidator, scrubConfigValidator } from './schema';
 import { recordAudit } from './lib/audit';
 import { requireOrg, requireRole } from './lib/auth';
 import { generatePublicId, generatePublicKey, slugify } from './lib/slug';
@@ -180,6 +180,18 @@ export const getProjectBySlug = query({
   },
 });
 
+/** A project's source-repo config (or null), scoped to the active org. Used by the
+ * issue detail page to build "open in repo" stack-frame links. */
+export const getProjectRepoConfig = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const project = await ctx.db.get(projectId);
+    if (!project || project.organizationId !== activeOrganizationId) return null;
+    return project.repoConfig ?? null;
+  },
+});
+
 /** Mint an additional DSN key for a project. */
 export const createProjectKey = mutation({
   args: { projectId: v.id('projects'), label: v.string() },
@@ -244,6 +256,7 @@ export const updateProjectSettings = mutation({
     monthlyEventQuota: v.optional(v.union(v.number(), v.null())),
     spikeThresholdPerMinute: v.optional(v.union(v.number(), v.null())),
     ingestFilters: v.optional(v.union(ingestFiltersValidator, v.null())),
+    repoConfig: v.optional(v.union(repoConfigValidator, v.null())),
   },
   handler: async (ctx, args) => {
     const caller = await requireRole(ctx, 'admin');
@@ -265,6 +278,29 @@ export const updateProjectSettings = mutation({
       patch.spikeThresholdPerMinute = args.spikeThresholdPerMinute ?? undefined;
     // null clears all filters; an object replaces them wholesale.
     if (args.ingestFilters !== undefined) patch.ingestFilters = args.ingestFilters ?? undefined;
+    // null clears the repo link; an object sets it (with a validated https base URL).
+    if (args.repoConfig !== undefined) {
+      if (args.repoConfig === null) {
+        patch.repoConfig = undefined;
+      } else {
+        const { provider, baseUrl, defaultBranch, sourceRoot } = args.repoConfig;
+        let url: URL;
+        try {
+          url = new URL(baseUrl);
+        } catch {
+          throw new Error('Repository URL must be a valid URL');
+        }
+        if (url.protocol !== 'https:') {
+          throw new Error('Repository URL must be an https URL');
+        }
+        patch.repoConfig = {
+          provider,
+          baseUrl: baseUrl.trim().replace(/\/+$/, ''),
+          defaultBranch: defaultBranch.trim() || 'main',
+          sourceRoot: sourceRoot?.trim() || undefined,
+        };
+      }
+    }
     await ctx.db.patch(args.projectId, patch);
     await recordAudit(ctx, caller, 'project.update', project.name);
   },

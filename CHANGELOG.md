@@ -6,6 +6,16 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Source-code integration: "open in repo" stack-frame links.** Configure a project's source
+  repository (GitHub, GitLab, or Bitbucket) under Project Settings -> Repository (provider, repo
+  URL, default branch, and an optional source-root prefix to strip from frame paths). Each in-app
+  stack frame on an issue then gets an "open in repo" link that opens the file and line on your
+  provider's web UI. This is URL construction only: Sveltry never calls your provider, so no token
+  or network access is required. Frame links pin to the configured default branch, unless the
+  event's release looks like a commit SHA (then that SHA is used).
+
 ## [0.3.0] - 2026-06-15
 
 ### Added

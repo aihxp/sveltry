@@ -43,6 +43,19 @@
       ? { projectId: issue.data.projectId }
       : ('skip' as const),
   );
+  // Source-repo config (for "open in repo" stack-frame links).
+  const repoConfig = useQuery(api.projects.getProjectRepoConfig, () =>
+    auth.isAuthenticated && issue.data?.projectId
+      ? { projectId: issue.data.projectId }
+      : ('skip' as const),
+  );
+  // Pin frame links to the release only when it looks like a commit SHA; a plain
+  // version string (e.g. "1.2.3") is not a valid git ref, so fall back to the branch.
+  const repoRef = $derived(
+    typeof event.data?.release === 'string' && /^[0-9a-f]{7,40}$/i.test(event.data.release)
+      ? event.data.release
+      : null,
+  );
   let creatingTicket = $state(false);
   let ticketError = $state('');
   async function createTicket() {
@@ -317,7 +330,7 @@
         {#if auth.isLoading || event.isLoading}
           <p class="text-sm text-muted-foreground">Loading latest event…</p>
         {:else if event.data}
-          <StackTrace payload={event.data.payload} />
+          <StackTrace payload={event.data.payload} repoConfig={repoConfig.data ?? null} {repoRef} />
         {:else}
           <p class="text-sm text-muted-foreground">No events recorded.</p>
         {/if}

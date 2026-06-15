@@ -29,6 +29,17 @@ export const ingestFiltersValidator = v.object({
   filterBots: v.optional(v.boolean()),
 });
 
+/** Per-project source-repo config, used to build "open in repo" links for stack frames. */
+export const repoConfigValidator = v.object({
+  provider: v.union(v.literal('github'), v.literal('gitlab'), v.literal('bitbucket')),
+  /** Repo web base URL, e.g. `https://github.com/aihxp/sveltry` (https, trailing slash stripped). */
+  baseUrl: v.string(),
+  /** Branch to link when no release commit SHA is available. */
+  defaultBranch: v.string(),
+  /** Optional path prefix stripped from a frame filename to map it to a repo-relative path. */
+  sourceRoot: v.optional(v.string()),
+});
+
 /**
  * Per-project custom PII scrubbing, layered on the default ruleset (applies only
  * when `scrubPii` is on). See `@sveltry/protocol` `scrub`.
@@ -150,6 +161,8 @@ export default defineSchema({
     spikeThresholdPerMinute: v.optional(v.number()),
     /** Optional inbound data filters: drop matching error events at ingest. */
     ingestFilters: v.optional(ingestFiltersValidator),
+    /** Optional source-repo config for building "open in repo" links on stack frames. */
+    repoConfig: v.optional(repoConfigValidator),
     /** Optional owning team (see the `teams` table); null = org-wide. */
     teamId: v.optional(v.id('teams')),
   })
