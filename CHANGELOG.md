@@ -29,6 +29,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Usage over time.** The project page's Usage card now charts events per day across a selectable
+  7 / 30 / 90-day window (gap-filled so empty days show), with a per-day tooltip breaking down
+  events / transactions / dropped / filtered. `usage.projectUsage` takes an optional `windowDays`
+  (clamped to 1-90); the totals and chart follow the chosen window.
 - **Environment-scoped alerts.** An issue alert rule can be scoped to a single environment, so it
   fires only for events from that environment (e.g. notify on new production issues but stay quiet
   for staging). Event-frequency rules count only the scoped environment's events, and the
