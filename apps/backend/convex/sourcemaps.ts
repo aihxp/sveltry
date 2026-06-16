@@ -6,7 +6,6 @@ import {
   debugIdForRef,
   debugIdFromSourceMap,
   debugMetaImages,
-  extractAuth,
   frameRef,
   ingestError,
   matchSourcemap,
@@ -29,6 +28,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrg } from './lib/auth';
+import { resolveDsnRequest } from './lib/dsnAuth';
 
 // Blobs larger than this stay in Convex file storage (above the Node action's
 // argument-size limit, which is how bytes reach the S3 upload action).
@@ -45,19 +45,14 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
   const cors = corsHeaders(request.headers.get('origin') ?? '*');
   const params = url.searchParams;
 
-  const auth = extractAuth(request.headers.get('x-sentry-auth'), params);
-  const publicKey = auth.sentry_key;
-  const publicId = params.get('o') ?? '';
   const release = params.get('release') ?? '';
   const name = params.get('name') ?? '';
-
-  if (!publicKey) return ingestError(401, 'missing sentry_key', [], cors);
-  if (!publicId) return ingestError(400, 'missing project id (o=<publicId>)', [], cors);
   if (!release) return ingestError(400, 'missing release', [], cors);
   if (!name) return ingestError(400, 'missing artifact name', [], cors);
 
-  const resolved = await ctx.runQuery(internal.projects.resolveIngestKey, { publicId, publicKey });
-  if (!resolved) return ingestError(401, 'invalid dsn', ['unknown or revoked key'], cors);
+  const auth = await resolveDsnRequest(ctx, request, url, cors);
+  if (!auth.ok) return auth.response;
+  const resolved = auth.resolved;
 
   const declaredLen = Number(request.headers.get('content-length') ?? '');
   if (Number.isFinite(declaredLen) && declaredLen > MAX_REQUEST_BODY_BYTES) {

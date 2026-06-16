@@ -4,6 +4,7 @@ import { mutation, query } from './_generated/server';
 import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import { requireOrg, requireRole } from './lib/auth';
+import { applyIssueStatusTransition } from './lib/issueStatus';
 import { generateShortId } from './lib/slug';
 import { issueStatusValidator, issueSubstatusValidator, levelValidator } from './schema';
 
@@ -207,33 +208,9 @@ export const setIssueStatus = mutation({
     const { activeOrganizationId } = await requireRole(ctx, 'member');
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.organizationId !== activeOrganizationId) throw new Error('Issue not found');
-
-    const defaultSubstatus =
-      status === 'resolved' ? 'ongoing' : status === 'ignored' ? 'archived_forever' : 'ongoing';
-
-    await ctx.db.patch(issueId, {
-      status,
-      substatus: substatus ?? defaultSubstatus,
-      resolvedInRelease: status === 'resolved' ? resolvedInRelease : undefined,
-    });
-    // Fire a lifecycle webhook only when the status actually changed.
-    if (issue.status !== status) {
-      await ctx.scheduler.runAfter(0, internal.webhooks.dispatch, {
-        organizationId: issue.organizationId,
-        projectId: issue.projectId,
-        event: WEBHOOK_STATUS_EVENT[status],
-        issueId,
-      });
-    }
+    await applyIssueStatusTransition(ctx, issue, status, { substatus, resolvedInRelease });
   },
 });
-
-/** Maps an issue status to its outbound-webhook lifecycle event. */
-const WEBHOOK_STATUS_EVENT: Record<'unresolved' | 'resolved' | 'ignored', string> = {
-  resolved: 'issue.resolved',
-  ignored: 'issue.ignored',
-  unresolved: 'issue.unresolved',
-};
 
 /** Assign or unassign an issue. */
 export const assignIssue = mutation({

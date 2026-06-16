@@ -5,6 +5,7 @@ import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery } from './_generated/server';
 import { issueStatusValidator } from './schema';
 import type { Doc } from './_generated/dataModel';
+import { applyIssueStatusTransition } from './lib/issueStatus';
 
 // ---------------------------------------------------------------------------
 // Public API (v1), authenticated by an organization API token (Bearer). Routes:
@@ -313,13 +314,6 @@ export const apiIssueEvents = internalQuery({
   },
 });
 
-/** Maps an issue status to its outbound-webhook lifecycle event. */
-const WEBHOOK_STATUS_EVENT: Record<'unresolved' | 'resolved' | 'ignored', string> = {
-  resolved: 'issue.resolved',
-  ignored: 'issue.ignored',
-  unresolved: 'issue.unresolved',
-};
-
 /** Set an issue's status (resolve / ignore / unresolve), scoped to the org. */
 export const apiSetIssueStatus = internalMutation({
   args: { organizationId: v.string(), issueId: v.string(), status: issueStatusValidator },
@@ -332,22 +326,9 @@ export const apiSetIssueStatus = internalMutation({
       return false;
     }
     if (!issue || issue.organizationId !== organizationId) return false;
-    // Mirror the dashboard's default substatus per status (see issues.setIssueStatus).
-    const substatus =
-      status === 'resolved' ? 'ongoing' : status === 'ignored' ? 'archived_forever' : 'ongoing';
-    await ctx.db.patch(issue._id, {
-      status,
-      substatus,
-      resolvedInRelease: undefined,
-    });
-    if (issue.status !== status) {
-      await ctx.scheduler.runAfter(0, internal.webhooks.dispatch, {
-        organizationId,
-        projectId: issue.projectId,
-        event: WEBHOOK_STATUS_EVENT[status],
-        issueId: issue._id,
-      });
-    }
+    // Shared transition: same substatus defaulting + lifecycle webhook as the
+    // dashboard's issues.setIssueStatus, so the two transports cannot drift.
+    await applyIssueStatusTransition(ctx, issue, status);
     return true;
   },
 });

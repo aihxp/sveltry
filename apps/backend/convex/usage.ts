@@ -1,9 +1,10 @@
 import { v } from 'convex/values';
-import { corsHeaders, extractAuth, ingestError } from '@sveltry/protocol';
+import { corsHeaders, ingestError } from '@sveltry/protocol';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { requireOrg } from './lib/auth';
+import { resolveDsnRequest } from './lib/dsnAuth';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
@@ -235,14 +236,9 @@ export const listDeploys = query({
 export const recordDeployHttp = httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const cors = corsHeaders(request.headers.get('origin') ?? '*');
-  const auth = extractAuth(request.headers.get('x-sentry-auth'), url.searchParams);
-  const publicKey = auth.sentry_key;
-  const publicId = url.searchParams.get('o') ?? '';
-  if (!publicKey) return ingestError(401, 'missing sentry_key', [], cors);
-  if (!publicId) return ingestError(400, 'missing project id (o=<publicId>)', [], cors);
-
-  const resolved = await ctx.runQuery(internal.projects.resolveIngestKey, { publicId, publicKey });
-  if (!resolved) return ingestError(401, 'invalid dsn', [], cors);
+  const auth = await resolveDsnRequest(ctx, request, url, cors);
+  if (!auth.ok) return auth.response;
+  const resolved = auth.resolved;
 
   let body: { release?: string; environment?: string; name?: string; url?: string };
   try {
