@@ -17,6 +17,20 @@ All notable changes to Sveltry are documented here. The format is based on
   (`safeFetch`), runs off the triggering mutation (a failing endpoint never blocks it), has an 8s
   timeout, and every attempt is logged. Managing webhooks is admin-gated and audited.
 
+### Security
+
+- **Outbound SSRF guard now checks the resolved IP, not just the hostname.** The shared `safeFetch`
+  (used by webhooks, alerts, metric/usage alerts, and tracker integrations) previously validated
+  only the literal hostname string, so a target whose DNS record pointed at the cloud-metadata /
+  link-local range (e.g. `attacker.example` -> `169.254.169.254`) slipped through. It now resolves
+  the host (via DNS-over-HTTPS, since the Convex runtime has no `node:dns`) and rejects when any
+  resolved address is in the blocked range. The resolver is configurable (`SSRF_DOH_RESOLVER`, set
+  to `off` to disable), fails open on a resolver outage (the literal guard still applies), and leaves
+  RFC1918 / loopback intentionally reachable. `safeFetch` also no longer replays a non-GET request
+  body across a `301`/`302`/`303` redirect (only `307`/`308`, which preserve method + body, are
+  followed for POST), and the API-token / DSN-key secret generators no longer fall back to a
+  non-cryptographic source if `crypto` is unavailable -- they fail loudly instead.
+
 ## [0.8.0] - 2026-06-15
 
 ### Added
