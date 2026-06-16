@@ -95,7 +95,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verification: Adversarially verified; holds at High/Confirmed. All six claims checked false against code and sibling docs: 45 vs 169 tests; 9 vs 44 tables; email a logged no-op vs nodemailer SMTP actually wired; 2 vs 9 crons; only-event-persisted vs eight item types stored; DecompressionStream vs fflate. It is the first doc linked from the README and carries no version caveat.
 - Related: none
 
-### [ERR-001] Cron-driven metric and usage alert delivery failures are silently swallowed and never recorded
+### [ERR-001] ~~Cron-driven metric and usage alert delivery failures are silently swallowed and never recorded~~ [RESOLVED - Slice 3]
+- Status: RESOLVED (Slice 3). metric/usage alert crons now capture per-channel ok/detail, write a `notificationDeliveries` row per attempt, log failures, and advance the fired marker (lastFiredAt / lastFiredMonth) only when at least one channel delivered. Mirrors the issue-alert `alerts.ts` pattern.
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: Error Handling & Resilience
 - Location: `apps/backend/convex/metricAlerts.ts:234-263`, `apps/backend/convex/usageAlerts.ts:146-170`
 - Evidence: In evaluateMetricAlerts the per-channel send is wrapped in `try { ... } catch { /* Best-effort delivery; do not block other channels/alerts. */ }` (metricAlerts.ts:235-256) with no record of success or failure. recordMetricFiring (258-262) then sets lastFiredAt UNCONDITIONALLY, even when every channel threw or the webhook returned non-2xx (safeFetch's Response is never inspected for `.ok`). Because the next evaluation suppresses re-firing while `now - lastFiredAt < windowMinutes*60_000` (line 225), one failed delivery marks the alert 'fired' and silences it for the whole window. usageAlerts.ts:146-170 is the identical pattern (fires at most once per month: a single swallowed failure suppresses the alert for the rest of the calendar month). Unlike alerts.ts, there is no alertDeliveries-equivalent row, so an operator querying the DB has zero signal a metric/quota alert ever failed.
@@ -115,7 +116,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verification: Adversarially verified; holds at High. Each envelope item is a separate non-retried transaction ending in one recordUsage write, and only events/transactions dedupe on eventId, so a full-batch SDK retry double-counts usage (driving false quota throttling) and duplicates attachment/replay/feedback rows and blobs. Evidence correction: the dominant trigger is not an OCC write-conflict (Convex auto-retries those) but ctx.storage.store failures, action timeouts, and non-OCC errors producing partial commits.
 - Related: none
 
-### [OBS-002] Notification and uptime-probe failures are swallowed by bare catch blocks with no log and no delivery record
+### [OBS-002] ~~Notification and uptime-probe failures are swallowed by bare catch blocks with no log and no delivery record~~ [RESOLVED - Slice 3]
+- Status: RESOLVED (Slice 3). metric/usage paths record outcomes + `console.error` on failure; uptime probes store the failure cause on the check-in (`detail`) and `console.warn`; tracker auto-create logs failures; cron handlers log run summaries. The backend now has logging at these boundaries.
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: Observability & Operability
 - Location: `apps/backend/convex/metricAlerts.ts:254-256`, `apps/backend/convex/usageAlerts.ts:162-164`, `apps/backend/convex/monitors.ts:286-288`, `apps/backend/convex/integrations.ts:242`
 - Evidence: Only the issue-alert path (alerts.ts:243-274) records per-channel delivery outcomes. metricAlerts.evaluateMetricAlerts wraps channel delivery in `catch { /* Best-effort delivery */ }` and then unconditionally calls recordMetricFiring (metricAlerts.ts:258), marking the alert fired regardless of delivery; usageAlerts does the same (usageAlerts.ts:162). runUptimeChecks catches a thrown fetch as ok=false, indistinguishable from a genuine non-expected-status result, with no log of the cause (monitors.ts:286). None write a delivery record or log line. Backend has zero console.* calls overall.
@@ -240,7 +242,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Create an uptime monitor for a hostname that resolves to an RFC1918/metadata address (not in BLOCKED_UPTIME_HOSTS) and confirm the probe is refused; confirm a normal https monitor still works.
 - Related: none
 
-### [OBS-003] Delivery-log tables are written but never surfaced to an operator through any dashboard query
+### [OBS-003] ~~Delivery-log tables are written but never surfaced to an operator through any dashboard query~~ [RESOLVED - Slice 3]
+- Status: RESOLVED (Slice 3). Added `notifications.listRecent` (metric/usage alert deliveries) and `webhooks.recentDeliveries` (webhook deliveries with ok/status/detail), surfaced as a "Notification deliveries" panel and an inline "Recent deliveries" list under Project Settings.
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Observability & Operability
 - Location: `apps/backend/convex/alerts.ts:149-164`, `apps/backend/convex/webhooks.ts:146-160`, `apps/backend/convex/schema.ts:764-811`
 - Evidence: alertDeliveries is read only by firedSince (alerts.ts:140, internal dedup) and projectLifecycle cascade delete (262/525). webhookDeliveries is read by no query at all. Grep of all backend *.ts confirms no dashboard-facing query() over either table; the only operator-visible delivery signal is webhooks.lastDeliveryAt (a bare timestamp, no ok/status) via listWebhooks (webhooks.ts:44-51) and monitors.latestStatus. There is no alerts page under routes/(app)/ and no delivery-history view.
@@ -249,7 +252,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: From the dashboard, trigger an alert and a webhook (one success, one failure) and confirm both outcomes including the failure detail are visible in the UI without opening the Convex admin console.
 - Related: Surfaces the data captured by OBS-002 and recordDelivery.
 
-### [OBS-004] Cron health is invisible in-app: handlers return result objects nobody reads or surfaces
+### [OBS-004] ~~Cron health is invisible in-app: handlers return result objects nobody reads or surfaces~~ [RESOLVED - Slice 3]
+- Status: RESOLVED (Slice 3). The metric/usage/uptime crons and the retention + missed-check-in sweeps now emit `console.log`/`console.warn` run summaries (visible in Convex logs), and notification failures are persisted to `notificationDeliveries` (surfaced in the UI).
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Observability & Operability
 - Location: `apps/backend/convex/crons.ts:1-51`, `apps/backend/convex/maintenance.ts:34`, `apps/backend/convex/monitors.ts:305`, `apps/backend/convex/metricAlerts.ts:265`
 - Evidence: All 9 cron handlers return summary objects ({deleted}/{updated}/{upserts}/{missed}/{checked}/{fired}), but nothing persists or reads those returns and there is no log line. There is no cronRuns/jobHealth table, no last-run timestamp, and no dashboard surface. A cron that silently stops producing results (retention sweep capped at 2000 rows/run never catching up, or rollupTransactions throwing for one org) is undetectable from inside the app; the only backstop is the out-of-band Convex platform scheduled-function view, which the ops docs do not mention.
@@ -590,9 +594,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 ## Remediation plan
 
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), `QUAL-001`, `DOC-001`.
-- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), `ERR-001`, `OBS-002`, `ERR-002`, `TEST-001`.
+- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), `ERR-002`, `TEST-001`.
 - **Verify first** (Suspected / assumption-dependent): `DEP-001` (confirm the transitive `cookie` version and advisory applicability with the ecosystem audit tool, and that a Kit patch bump clears it).
-- **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, `OBS-003`, `OBS-004`, `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)
+- **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, ~~`OBS-003`~~ (done, Slice 3), ~~`OBS-004`~~ (done, Slice 3), `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)
 
 Note that several Medium findings (`ERR-003`, `ERR-005`, `OBS-004`) are members of the same systemic patterns as the High items above; fixing the root cause closes them together rather than one at a time. (~~`SEC-secrets-001`~~, ~~`ERR-003`~~, ~~`ERR-005`~~ done, Slices 1-2.)
 

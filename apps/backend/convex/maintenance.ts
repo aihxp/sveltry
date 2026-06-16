@@ -31,6 +31,7 @@ export const sweepRetention = internalMutation({
         deleted += 1;
       }
     }
+    if (deleted) console.log(`sweepRetention: deleted ${deleted} expired events`);
     return { deleted };
   },
 });
@@ -170,6 +171,7 @@ export const detectMissedCheckIns = internalMutation({
         }
       }
     }
+    if (missed) console.warn(`detectMissedCheckIns: ${missed} monitor(s) marked missed`);
     return { missed };
   },
 });

@@ -231,10 +231,23 @@ export const evaluateMetricAlerts = internalAction({
         `${METRIC_LABEL[a.metric]}${scope} is ${value.toFixed(a.metric === 'crash_free_rate' ? 2 : 0)}${unit} ` +
         `over the last ${a.windowMinutes}m (threshold ${a.threshold}${unit}).`;
 
+      // Deliver to each channel, recording the outcome of every attempt. We only
+      // advance lastFiredAt (which suppresses re-firing for the window) when at
+      // least one channel actually delivered, so a broken endpoint no longer
+      // silences a real regression for the whole window. Mirrors alerts.ts.
+      let deliveredOk = a.channels.length === 0;
       for (const channel of a.channels) {
+        let ok = false;
+        let detail: string | undefined;
         try {
           if (channel.type === 'email') {
-            await ctx.runAction(internal.email.sendEmail, { to: channel.target, subject, text });
+            const res = await ctx.runAction(internal.email.sendEmail, {
+              to: channel.target,
+              subject,
+              text,
+            });
+            ok = res.ok;
+            if (!ok) detail = res.skipped ? 'SMTP not configured' : (res.detail ?? 'send failed');
           } else {
             const req = channelRequest(channel, {
               title: subject,
@@ -243,25 +256,49 @@ export const evaluateMetricAlerts = internalAction({
             });
             if (req) {
               // safeFetch validates the target and every redirect hop (SSRF guard).
-              await safeFetch(req.url, {
+              const res = await safeFetch(req.url, {
                 method: 'POST',
                 headers: req.headers,
                 body: req.body,
                 signal: AbortSignal.timeout(8000),
               });
+              ok = res.ok;
+              if (!ok) detail = `non-2xx response (${res.status})`;
+            } else {
+              ok = true; // channel with no request builder (nothing to send) is not a failure
             }
           }
-        } catch {
-          // Best-effort delivery; do not block other channels/alerts.
+        } catch (err) {
+          detail = err instanceof Error ? err.message : String(err);
+        }
+        deliveredOk = deliveredOk || ok;
+        await ctx.runMutation(internal.notifications.record, {
+          organizationId: a.organizationId,
+          projectId: a.projectId,
+          source: 'metric_alert',
+          sourceId: a._id,
+          label: a.name,
+          channelType: channel.type,
+          target: channel.target,
+          ok,
+          detail,
+        });
+        if (!ok) {
+          console.error(
+            `metric-alert delivery failed: alert=${a._id} channel=${channel.type} detail=${detail ?? 'unknown'}`,
+          );
         }
       }
-      await ctx.runMutation(internal.metricAlerts.recordMetricFiring, {
-        alertId: a._id,
-        value,
-        firedAt: now,
-      });
-      fired += 1;
+      if (deliveredOk) {
+        await ctx.runMutation(internal.metricAlerts.recordMetricFiring, {
+          alertId: a._id,
+          value,
+          firedAt: now,
+        });
+        fired += 1;
+      }
     }
+    console.log(`evaluateMetricAlerts: evaluated ${alerts.length}, fired ${fired}`);
     return { fired };
   },
 });

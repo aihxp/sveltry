@@ -622,6 +622,9 @@ export default defineSchema({
     environment: v.string(),
     release: v.optional(v.string()),
     timestamp: v.number(),
+    // For uptime probes: the failure cause (timeout, blocked by the SSRF guard,
+    // connection refused, unexpected status), so an `error` is diagnosable.
+    detail: v.optional(v.string()),
   })
     .index('by_project_checkInId', ['projectId', 'checkInId'])
     .index('by_monitor', ['projectId', 'monitorSlug', 'timestamp']),
@@ -774,6 +777,26 @@ export default defineSchema({
     deliveredAt: v.number(),
   })
     .index('by_issue', ['issueId'])
+    .index('by_project', ['projectId']),
+
+  // Per-attempt delivery record for the non-issue notification paths (metric
+  // alerts, quota/usage alerts, tracker auto-create). The issue-alert path uses
+  // `alertDeliveries`, which is bound to issueId/ruleId; this is its generic
+  // sibling so cron-driven deliveries are no longer silently swallowed and an
+  // operator can see failures in the dashboard.
+  notificationDeliveries: defineTable({
+    organizationId: v.string(),
+    projectId: v.optional(v.id('projects')),
+    source: v.string(), // 'metric_alert' | 'usage_alert' | 'tracker'
+    sourceId: v.string(), // the alert/monitor document id, for correlation
+    label: v.string(), // human label (e.g. the alert name)
+    channelType: v.string(),
+    target: v.string(),
+    ok: v.boolean(),
+    detail: v.optional(v.string()),
+    deliveredAt: v.number(),
+  })
+    .index('by_org', ['organizationId'])
     .index('by_project', ['projectId']),
 
   // Outbound webhooks: a project endpoint that receives a signed JSON POST on issue

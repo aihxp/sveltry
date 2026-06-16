@@ -258,7 +258,12 @@ export const runTrackerCreate = internalAction({
         url: outcome.url,
       });
     } else {
-      // Release the claim so a corrected retry can run.
+      // Release the claim so a corrected retry can run. Log the failure: when
+      // this runs from the auto-create trigger the returned outcome is discarded,
+      // so without a log line an operator has no signal the ticket never created.
+      console.error(
+        `tracker create failed: issue=${issueId} provider=${data.config.type} detail=${outcome.detail ?? 'unknown'}`,
+      );
       await ctx.runMutation(internal.integrations.clearTrackerClaim, { issueId });
     }
     return outcome;
