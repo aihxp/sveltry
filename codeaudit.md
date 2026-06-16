@@ -75,7 +75,8 @@ Ordered union of Quick wins and Plan now (no Critical present, so all are High),
 
 Sorted by severity, then dimension. Each block is self-contained. Finding IDs are stable; security IDs are namespaced by sub-audit (`SEC-authz`/`SEC-inject`/`SEC-secrets`). The 8 High findings carry a `Verification` line recording the independent adversarial re-check.
 
-### [QUAL-001] Tenant-scoped table list is hand-maintained and duplicated across purge, restamp, and retention
+### [QUAL-001] ~~Tenant-scoped table list is hand-maintained and duplicated across purge, restamp, and retention~~ [RESOLVED - Slice 4]
+- Status: RESOLVED (Slice 4). Added `lib/tenantTables.ts` with a single `TENANT_SCOPED_TABLES` registry and a compile-time exhaustiveness check derived from the schema (verified it fails the build when a table is dropped). `webhooks`, `webhookDeliveries`, and `notificationDeliveries` are now purged (delete) and re-stamped (transfer), closing the orphaned-secret and cross-tenant-residue bugs. Retention now also prunes `transactions` and `sessions`; the blob-backed tables (replays/profiles/attachments) need a project+timestamp index + storage cleanup and are tracked for Slice 9.
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: Code Quality & Maintainability
 - Location: `apps/backend/convex/projectLifecycle.ts:64-321`, `apps/backend/convex/projectLifecycle.ts:339-440`, `apps/backend/convex/maintenance.ts:14-36`
 - Evidence: purgeProjectData (projectLifecycle.ts:64) issues ~29 near-identical purgeRows blocks, one per scoped table; restampProjectOrg (projectLifecycle.ts:339) defines a parallel array of 25 cursor-paginated drainer closures, each 8 lines differing only by table name and index name (verified: 25 `isDone: p.isDone, cursor: p.continueCursor` occurrences); sweepRetention (maintenance.ts:24-26) hard-codes a single table (`events`) and deletes nothing else. The three lists must stay in sync by hand. A comment at projectLifecycle.ts:350 even states the restamp order 'mirrors purgeProjectData', acknowledging the coupling.
@@ -593,7 +594,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 
 ## Remediation plan
 
-- **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), `QUAL-001`, `DOC-001`.
+- **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), ~~`QUAL-001`~~ (done, Slice 4), `DOC-001`.
 - **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), `ERR-002`, `TEST-001`.
 - **Verify first** (Suspected / assumption-dependent): `DEP-001` (confirm the transitive `cookie` version and advisory applicability with the ecosystem audit tool, and that a Kit patch bump clears it).
 - **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, ~~`OBS-003`~~ (done, Slice 3), ~~`OBS-004`~~ (done, Slice 3), `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)

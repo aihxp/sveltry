@@ -6,6 +6,18 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Project delete and transfer now cover every tenant-scoped table.** The delete purge and
+  transfer re-stamp were three independently hand-maintained table lists that had drifted:
+  `webhooks` and `webhookDeliveries` (and the new `notificationDeliveries`) were in neither, so
+  deleting a project orphaned those rows (including a plaintext webhook signing secret) and
+  transferring a project left them stamped with the source organization's id (a cross-tenant
+  isolation residue). All three are now purged and re-stamped, and a single
+  `TENANT_SCOPED_TABLES` registry with a compile-time exhaustiveness check against the schema
+  prevents the list from silently drifting again. The retention sweep now also prunes expired
+  `transactions` and `sessions`, not only `events`.
+
 ### Added
 
 - **Notification-delivery visibility.** Metric-alert and usage-alert deliveries are now recorded
