@@ -6,6 +6,18 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Sanitize a `?redirectTo=` value into a safe same-origin path, defeating
+ * open-redirect: only a path beginning with a single `/` is allowed. `//host`
+ * and `/\host` (which browsers treat as protocol-relative, off-origin) and any
+ * absolute URL fall back to the default.
+ */
+export function safeRedirectPath(raw: string | null | undefined, fallback = '/dashboard'): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\'))
+    return fallback;
+  return raw;
+}
+
 /** A human, relative timestamp like "3m ago" / "2d ago". */
 export function relativeTime(epochMs: number): string {
   const diff = Date.now() - epochMs;

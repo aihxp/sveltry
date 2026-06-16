@@ -6,6 +6,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- **Hardening pass.** Closed an open redirect: the post-login / post-signup `redirectTo` is now
+  restricted to same-origin paths. User-feedback and user-report free-text messages are now run
+  through the PII scrubber (cards / SSNs / bearer tokens) when a project enables scrubbing, instead
+  of bypassing it. Tightened the active-organization bootstrap so a stale pointer to a member-less
+  org resolves only for the user who created it.
+
 ### Added
 
 - **Automated test coverage for the backend, SDK, and dashboard build.** Stood up a `convex-test`
