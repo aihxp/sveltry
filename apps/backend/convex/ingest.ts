@@ -47,6 +47,16 @@ import { generateShortId } from './lib/slug';
 
 const decoder = new TextDecoder();
 
+/** Parse a JSON envelope item and append it, skipping (never failing the whole
+ * envelope on) an unparseable item. */
+function pushParsed<T>(into: T[], payload: Uint8Array): void {
+  try {
+    into.push(JSON.parse(decoder.decode(payload)) as T);
+  } catch {
+    // Skip an unparseable envelope item.
+  }
+}
+
 /**
  * The Sentry-compatible ingestion endpoint. Mounted in `http.ts` under the
  * `/api/` path prefix, it accepts both the modern `/api/<id>/envelope/` and the
@@ -170,72 +180,30 @@ export const ingest = httpAction(async (ctx, request) => {
       headerEventId = env.header.event_id;
       for (const item of env.items) {
         if (item.type === 'event') {
-          try {
-            events.push(JSON.parse(decoder.decode(item.payload)) as SentryEventPayload);
-          } catch {
-            // Skip an unparseable item; do not fail the whole envelope.
-          }
+          pushParsed<SentryEventPayload>(events, item.payload);
         } else if (item.type === 'transaction') {
-          try {
-            transactions.push(JSON.parse(decoder.decode(item.payload)) as SentryEventPayload);
-          } catch {
-            // Skip an unparseable transaction; do not fail the whole envelope.
-          }
+          pushParsed<SentryEventPayload>(transactions, item.payload);
         } else if (item.type === 'session') {
-          try {
-            sessions.push(JSON.parse(decoder.decode(item.payload)) as SentrySession);
-          } catch {
-            // Skip an unparseable session; do not fail the whole envelope.
-          }
+          pushParsed<SentrySession>(sessions, item.payload);
         } else if (item.type === 'sessions') {
-          try {
-            sessionAggregates.push(
-              JSON.parse(decoder.decode(item.payload)) as SentrySessionAggregates,
-            );
-          } catch {
-            // Skip an unparseable aggregate; do not fail the whole envelope.
-          }
+          pushParsed<SentrySessionAggregates>(sessionAggregates, item.payload);
         } else if (item.type === 'check_in') {
-          try {
-            checkIns.push(JSON.parse(decoder.decode(item.payload)) as SentryCheckIn);
-          } catch {
-            // Skip an unparseable check-in; do not fail the whole envelope.
-          }
+          pushParsed<SentryCheckIn>(checkIns, item.payload);
         } else if (item.type === 'replay_event') {
-          try {
-            replayEvents.push(JSON.parse(decoder.decode(item.payload)) as SentryReplayEvent);
-          } catch {
-            // Skip an unparseable replay event.
-          }
+          pushParsed<SentryReplayEvent>(replayEvents, item.payload);
         } else if (item.type === 'replay_recording') {
           // Binary rrweb stream; keep the raw bytes for storage.
           replayRecordings.push(item.payload);
         } else if (item.type === 'profile') {
-          try {
-            profiles.push(JSON.parse(decoder.decode(item.payload)) as SentryProfile);
-          } catch {
-            // Skip an unparseable profile.
-          }
+          pushParsed<SentryProfile>(profiles, item.payload);
         } else if (item.type === 'attachment') {
           attachmentItems.push(item); // binary; keep header (filename, type) + bytes
         } else if (item.type === 'user_report') {
-          try {
-            userReports.push(JSON.parse(decoder.decode(item.payload)) as SentryUserReport);
-          } catch {
-            // Skip an unparseable user report.
-          }
+          pushParsed<SentryUserReport>(userReports, item.payload);
         } else if (item.type === 'feedback') {
-          try {
-            feedbacks.push(JSON.parse(decoder.decode(item.payload)) as SentryEventPayload);
-          } catch {
-            // Skip an unparseable feedback event.
-          }
+          pushParsed<SentryEventPayload>(feedbacks, item.payload);
         } else if (item.type === 'client_report') {
-          try {
-            clientReports.push(JSON.parse(decoder.decode(item.payload)) as SentryClientReport);
-          } catch {
-            // Skip an unparseable client report.
-          }
+          pushParsed<SentryClientReport>(clientReports, item.payload);
         }
       }
     } catch (err) {

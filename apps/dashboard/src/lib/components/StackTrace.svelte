@@ -27,11 +27,11 @@
     repoRef = null,
   }: { payload: unknown; repoConfig?: RepoConfig | null; repoRef?: string | null } = $props();
 
-  function exceptionValues(p: any): ExceptionValue[] {
-    const ex = p?.exception;
+  function exceptionValues(p: unknown): ExceptionValue[] {
+    const ex = (p as { exception?: unknown } | null | undefined)?.exception;
     if (!ex) return [];
-    if (Array.isArray(ex)) return ex;
-    return ex.values ?? [];
+    if (Array.isArray(ex)) return ex as ExceptionValue[];
+    return (ex as { values?: ExceptionValue[] }).values ?? [];
   }
 
   const values = $derived(exceptionValues(payload));

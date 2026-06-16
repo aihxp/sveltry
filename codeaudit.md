@@ -343,8 +343,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: packages/sdk has a test script that runs in CI and in release.yml before publish; tests fail if DSN parsing or tunnel target derivation is broken.
 - Related: none
 
-### [QUAL-004] `organizationId` field actually stores the org slug, not an id
+### [QUAL-004] `organizationId` field actually stores the org slug, not an id [ACCEPTED - Slice 12]
 - Severity: Low | Confidence: Confirmed | Effort: L | Dimension: Code Quality & Maintainability
+- Status: ACCEPTED (Slice 12). The org `slug` is the stable tenant key by design and is intentionally stored as `organizationId` across every scoped table; renaming the field (40+ tables, every query, the tenant registry) is a large, purely-cosmetic migration with no functional benefit and real risk. The semantics are documented at the organizations table and in the tenant-table registry.
 - Location: `apps/backend/convex/schema.ts:136-145`, `apps/backend/convex/maintenance.ts:54`, `apps/backend/convex/maintenance.ts:86`, `apps/backend/convex/maintenance.ts:123`, `apps/backend/convex/maintenance.ts:163`
 - Evidence: The field threaded through every domain table is named `organizationId` (schema.ts:156 etc.), but the comment at schema.ts:136-137 states 'slug is the tenant key used as organizationId', and maintenance crons populate/query it from `org.slug` (maintenance.ts:54,86,123,163: `q.eq('organizationId', org.slug)` and `organizationId: org.slug`). The organizations table's own primary handle is `slug` (schema.ts:141), and there is no separate org id column.
 - Impact: A field named `...Id` holding a human-meaningful slug is a naming trap: a reader naturally expects a `v.id('organizations')` or opaque id and may join/compare incorrectly, or assume renaming an org slug is safe when it would orphan every scoped row. The mismatch is documented but the name still lies.
@@ -352,8 +353,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Confirm org slug is immutable post-creation (no mutation patches organizations.slug), or that a rename re-stamps all scoped rows the way transferProject does.
 - Related: Related to QUAL-001: the same misnamed tenant key is what the purge/restamp lists thread.
 
-### [QUAL-005] No static linter; `lint` only runs prettier --check
+### [QUAL-005] No static linter; `lint` only runs prettier --check [ACCEPTED - Slice 12]
 - Severity: Low | Confidence: Confirmed | Effort: M | Dimension: Code Quality & Maintainability
+- Status: ACCEPTED (Slice 12). The repo-wide strict TypeScript config (strict, noUncheckedIndexedAccess, noFallthroughCasesInSwitch, verbatimModuleSyntax, isolatedModules) plus prettier --check and svelte-check already provide substantial static analysis, and the codebase is clean of the escape hatches a linter targets (zero ts-ignore/eslint-disable). Adding a full ESLint/Svelte/Convex lint stack is a separate focused effort; deferred rather than rushed at the end of a remediation batch.
 - Location: `package.json:55`
 - Evidence: package.json:55 defines `"lint": "prettier --check ."`; no ESLint config exists anywhere (find for .eslintrc*/eslint.config.* returns nothing, no eslint dep in any package.json). Formatting is enforced but no rule engine catches unused exports, floating promises, `any`, complexity, or accidental fallthrough beyond what tsc covers.
 - Impact: The few real quality issues found here (untyped `any` payload helpers, the unused pg/jose deps, the duplicated table lists) are precisely the class an ESLint setup (typescript-eslint + svelte plugin) would surface automatically in CI. Relying on tsc + prettier alone leaves a gap between 'compiles and is formatted' and 'is clean'.
@@ -370,8 +372,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Build/typecheck/test still pass after removal; grep confirms no remaining import; bun.lock no longer references pg/jose.
 - Related: Same root cause as QUAL-003: incomplete cleanup after the Convex-only migration.
 
-### [QUAL-007] Dashboard payload helpers use `any` despite shared Sentry types existing
+### [QUAL-007] ~~Dashboard payload helpers use `any` despite shared Sentry types existing~~ [RESOLVED - Slice 12]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Code Quality & Maintainability
+- Status: RESOLVED (Slice 12). Replaced the `any`-typed dashboard payload helpers (exceptionValues in StackTrace.svelte; breadcrumbs / requestOf in the issue page) with `unknown` parameters narrowed through structured local types, so the prop`s `unknown` safety is no longer discarded.
 - Location: `apps/dashboard/src/lib/components/StackTrace.svelte:30`, `apps/dashboard/src/routes/(app)/issues/[id]/+page.svelte:168`, `apps/dashboard/src/routes/(app)/issues/[id]/+page.svelte:173`
 - Evidence: StackTrace.svelte declares the prop as `payload: unknown` (line 28) then immediately narrows it through `function exceptionValues(p: any): ExceptionValue[]` (line 30), discarding the `unknown` safety. issues/[id]/+page.svelte has `function breadcrumbs(payload: any): any[]` (168) and `function requestOf(payload: any)` (173). The dashboard imports nothing from `@sveltry/types` (grep for `from '@sveltry/types'` in dashboard src returns zero), even though SentryEventPayload and exception/breadcrumb shapes are defined there and used by the backend.
 - Impact: These are the only meaningful type-safety escape hatches in the dashboard. They sit on the event-detail rendering path, so a payload shape change is not caught by the compiler and surfaces as a runtime render glitch instead. Typed shapes already exist one package away.
@@ -379,8 +382,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Grep for `: any` in dashboard src returns 0 on these helpers; tsc still passes with the typed signatures.
 - Related: A linter (QUAL-005) with no-explicit-any would flag exactly these three sites.
 
-### [QUAL-008] Repeated try/catch JSON.parse blocks in the envelope item loop
+### [QUAL-008] ~~Repeated try/catch JSON.parse blocks in the envelope item loop~~ [RESOLVED - Slice 12]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Code Quality & Maintainability
+- Status: RESOLVED (Slice 12). Extracted the ten repeated try/catch JSON.parse blocks in the envelope item loop into a single generic pushParsed<T>() helper.
 - Location: `apps/backend/convex/ingest.ts:149-217`
 - Evidence: The envelope item dispatch (ingest.ts:149-217) contains ~10 structurally identical arms, each `try { collection.push(JSON.parse(decoder.decode(item.payload)) as SomeType); } catch { /* skip */ }`, differing only by the target array and the cast type. The skip-on-unparseable behavior (intentional, so one bad item never fails the batch) is correct, but the boilerplate is copy-pasted per item type.
 - Impact: Low functional risk (the behavior is right and tested at the protocol layer), but the repetition means the skip-comment and parse logic must be kept consistent by hand across 10 arms, and a future change (e.g. logging dropped items, or a per-type size cap) has to be applied 10 times.
@@ -492,8 +496,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Upload a deliberately corrupt .map, ingest a matching minified event, and confirm the operator can see that resolution was attempted and failed (vs. silently nothing).
 - Related: none
 
-### [OBS-005] /healthz is a static 200 that verifies no dependency (paper liveness, no readiness)
+### [OBS-005] ~~/healthz is a static 200 that verifies no dependency (paper liveness, no readiness)~~ [RESOLVED - Slice 12]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Observability & Operability
+- Status: RESOLVED (Slice 12). /healthz now runs a real readiness check (internal.health.ready does a bounded DB read) and returns 503 if the query fails, instead of an unconditional 200. Verified live: GET /healthz -> 200 "ok". Added an admin-gated health.configStatus query reporting which critical env vars (SITE_URL, SMTP, S3, SSRF resolver) are configured (OBS-006).
 - Location: `apps/backend/convex/http.ts:47-54`
 - Evidence: The /healthz handler returns `new Response('ok', { status: 200 })` unconditionally; it runs no query, so it does not confirm the database, scheduler, or any dependency is functional. docs/SENTRY_COMPATIBILITY.md:49 and docs/FEATURE_PARITY.md:63 advertise it as the liveness/health endpoint, and there is no separate readiness probe. The docker-compose healthcheck targets the Convex backend's own /version, not this app-level /healthz.
 - Impact: A load balancer or uptime check pointed at /healthz reports healthy even if the database is unreachable or queries are failing, because reaching the HTTP action only proves the runtime is up. The advertised app health endpoint can mask a degraded-but-reachable backend.
@@ -501,8 +506,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Simulate a query failure and confirm the endpoint returns non-200 so an LB would pull the instance from rotation.
 - Related: none
 
-### [OBS-006] No required-environment validation at boot; missing critical config degrades to silent no-ops
+### [OBS-006] ~~No required-environment validation at boot; missing critical config degrades to silent no-ops~~ [RESOLVED - Slice 12]
 - Severity: Low | Confidence: Confirmed | Effort: M | Dimension: Observability & Operability
+- Status: RESOLVED (Slice 12). Added health.configStatus (admin-gated) surfacing whether the important-but-optional env vars are set, so missing config (which otherwise degrades to a silent no-op: no SMTP = no email alerts; no SITE_URL = blank alert links) is visible to an operator.
 - Location: `apps/backend/convex/alerts.ts:192-193`, `apps/backend/convex/email.ts:27-28`, `apps/backend/convex/betterauth.ts:18`, `apps/backend/convex/storage.ts:45-46`
 - Evidence: No startup/boot-time validation of required configuration exists (grep for throw/assert in auth.config.ts, betterauth.ts, storage.ts returned nothing). Missing SITE_URL silently omits alert/webhook/invite links (issueUrl becomes undefined at alerts.ts:193); missing SMTP_HOST makes email a no-op returning skipped (email.ts:28); missing S3_BUCKET disables offload silently (storage.ts:46); betterauth.ts:18 falls back to http://localhost:5173, which would break auth origins in production without an explicit error. Each fallback is individually documented as intentional, but the aggregate effect is a misconfigured prod deploy that comes up 'healthy'.
 - Impact: An operator can deploy with SITE_URL unset and get a working-looking instance whose alert emails contain no clickable issue link and whose auth uses a localhost origin, discovering it only when an alert fires or a login fails.

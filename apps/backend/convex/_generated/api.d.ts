@@ -19,6 +19,7 @@ import type * as discover from "../discover.js";
 import type * as email from "../email.js";
 import type * as events from "../events.js";
 import type * as feedback from "../feedback.js";
+import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as ingest from "../ingest.js";
 import type * as integrations from "../integrations.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   email: typeof email;
   events: typeof events;
   feedback: typeof feedback;
+  health: typeof health;
   http: typeof http;
   ingest: typeof ingest;
   integrations: typeof integrations;
