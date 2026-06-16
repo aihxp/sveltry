@@ -10,6 +10,7 @@ import {
   frameRef,
   ingestError,
   matchSourcemap,
+  MAX_REQUEST_BODY_BYTES,
   parseDebugId,
   parseS3Env,
   parseSourceMappingURL,
@@ -58,7 +59,24 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
   const resolved = await ctx.runQuery(internal.projects.resolveIngestKey, { publicId, publicKey });
   if (!resolved) return ingestError(401, 'invalid dsn', ['unknown or revoked key'], cors);
 
+  const declaredLen = Number(request.headers.get('content-length') ?? '');
+  if (Number.isFinite(declaredLen) && declaredLen > MAX_REQUEST_BODY_BYTES) {
+    return ingestError(
+      413,
+      'payload too large',
+      [`body exceeds ${MAX_REQUEST_BODY_BYTES} bytes`],
+      cors,
+    );
+  }
   const buf = await request.arrayBuffer();
+  if (buf.byteLength > MAX_REQUEST_BODY_BYTES) {
+    return ingestError(
+      413,
+      'payload too large',
+      [`body exceeds ${MAX_REQUEST_BODY_BYTES} bytes`],
+      cors,
+    );
+  }
   const kind = name.endsWith('.map') ? ('sourcemap' as const) : ('minified' as const);
 
   // Extract the artifact's debug id (and, for minified files, its sourceMappingURL)
