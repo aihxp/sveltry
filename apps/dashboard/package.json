@@ -1,6 +1,6 @@
 {
   "name": "@sveltry/dashboard",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "type": "module",
   "description": "Sveltry's SvelteKit dashboard: live issue stream, triage, projects, and alerts.",
