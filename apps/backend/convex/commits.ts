@@ -1,5 +1,12 @@
 import { v } from 'convex/values';
-import { corsHeaders, extractAuth, frameRef, ingestError, suspectCommits } from '@sveltry/protocol';
+import {
+  corsHeaders,
+  extractAuth,
+  frameRef,
+  ingestError,
+  parseResolvedShortIds,
+  suspectCommits,
+} from '@sveltry/protocol';
 import type { SentryEventPayload, SentryException, SentryStackFrame } from '@sveltry/types';
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
@@ -126,6 +133,28 @@ export const recordCommits = internalMutation({
         ...c,
         createdAt: now,
       });
+    }
+
+    // Auto-resolve issues a commit message marks as fixed (e.g. "Fixes WEB-1A2B3C").
+    // Scoped to this project; resolve-in-this-release so a later regression reopens.
+    const refs = new Set<string>();
+    for (const c of commits) {
+      if (c.message) for (const sid of parseResolvedShortIds(c.message)) refs.add(sid);
+    }
+    for (const sid of refs) {
+      const issue = await ctx.db
+        .query('issues')
+        .withIndex('by_org_shortId', (q) =>
+          q.eq('organizationId', organizationId).eq('shortId', sid),
+        )
+        .first();
+      if (issue && issue.projectId === projectId && issue.status !== 'resolved') {
+        await ctx.db.patch(issue._id, {
+          status: 'resolved',
+          substatus: 'ongoing',
+          resolvedInRelease: release,
+        });
+      }
     }
   },
 });

@@ -86,10 +86,10 @@ Highest-value additions that build on the existing tables:
 
 Valuable, but a larger surface or a new subsystem:
 
-- **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links
-  already ship (a per-project repo config builds a link from each in-app frame to its file and line
-  on the provider's web UI, URL-only, no token). Still to come: suspect commits from SCM and
-  auto-resolve from commit messages (issues now carry a short id for commit messages to reference).
+- **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links and
+  auto-resolve from commit messages (a `Fixes WEB-1A2B3C` in an uploaded commit resolves the issue)
+  already ship. Still to come: fetching suspect commits directly from the SCM provider (today they
+  come from the uploaded `set-commits` data).
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
 - **Finer percentiles.** p99 ships on the performance views (the stats table and a
   p50 / p95 / p99 selector on the latency-over-time chart). Still to come: higher-resolution

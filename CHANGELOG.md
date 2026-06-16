@@ -6,6 +6,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Auto-resolve from commit messages.** When a release's commits are uploaded (`set-commits` /
+  `POST /releases/commits`), a commit message that marks an issue fixed (`Fix login (Fixes
+  WEB-1A2B3C)`; the `fix`/`close`/`resolve` verbs, with the displayed `<PROJECT>-<shortId>` form)
+  resolves that issue automatically, scoped to the commits' project. It is resolved "in this
+  release", so a later release that regresses reopens it. No external provider call is involved.
+
 ## [0.7.0] - 2026-06-15
 
 ### Added
