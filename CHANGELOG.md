@@ -6,6 +6,16 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- **Stored-XSS hardening for third-party URLs.** Commit URLs (from the `set-commits` API) and
+  issue-tracker URLs (from a Jira/Linear response) were stored and rendered into an anchor `href`
+  with only a `typeof`-string check, so a `javascript:`/`data:` URL would execute in the operator's
+  authenticated dashboard on click. They are now scheme-validated to `http(s)` before storage (a
+  shared `httpUrlOnly` helper), with a defense-in-depth `safeHref()` guard at the render sites. The
+  webhook create form now applies the same SSRF/scheme guard `safeFetch` uses at delivery, so an
+  obviously bad target (metadata/link-local) is rejected up front instead of only at dispatch.
+
 ## [0.9.3] - 2026-06-16
 
 ### Changed

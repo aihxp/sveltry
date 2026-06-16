@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import {
   corsHeaders,
   frameRef,
+  httpUrlOnly,
   ingestError,
   parseResolvedShortIds,
   suspectCommits,
@@ -73,7 +74,9 @@ export const uploadCommits = httpAction(async (ctx, request) => {
       message: typeof c.message === 'string' ? c.message.slice(0, 1000) : undefined,
       author: typeof c.author === 'string' ? c.author : undefined,
       authorEmail: typeof c.author_email === 'string' ? c.author_email : undefined,
-      url: typeof c.url === 'string' ? c.url : undefined,
+      // Scheme-validate: a commit URL is rendered into an anchor href in the
+      // dashboard, so a javascript:/data: URL would be stored XSS. Keep only http(s).
+      url: httpUrlOnly(c.url),
       timestamp: commitTimestamp(c, now),
       files: commitFiles(c),
     }));

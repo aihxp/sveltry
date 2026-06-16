@@ -31,3 +31,4 @@ export * from './scrub.js';
 export * from './sourcemap.js';
 export * from './ssrf.js';
 export * from './trackers.js';
+export * from './url.js';

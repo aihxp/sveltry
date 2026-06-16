@@ -10,7 +10,7 @@ import { internal } from './_generated/api';
 import { recordAudit } from './lib/audit';
 import { requireOrg, requireRole } from './lib/auth';
 import { generateToken } from './lib/slug';
-import { safeFetch } from './lib/net';
+import { assertSafeOutboundTarget, safeFetch } from './lib/net';
 import { webhookEventValidator } from './schema';
 
 // ---------------------------------------------------------------------------
@@ -88,15 +88,14 @@ export const createWebhook = mutation({
       throw new Error('Project not found');
     }
     const trimmed = url.trim();
-    // Fast feedback at create time; `safeFetch` is the real guard on every delivery.
-    let parsed: URL;
+    // Fast feedback at create time using the SAME guard `safeFetch` applies on
+    // every delivery (scheme + metadata/link-local denylist), so an obviously bad
+    // target is rejected up front rather than only failing silently at dispatch.
+    // RFC1918/loopback stay allowed on purpose (self-hosters point at internal relays).
     try {
-      parsed = new URL(trimmed);
+      assertSafeOutboundTarget(trimmed);
     } catch {
-      throw new Error('Invalid URL');
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('URL must be http or https');
+      throw new Error('URL must be http(s) and not a metadata/link-local address');
     }
     if (events.length === 0) throw new Error('Select at least one event');
 

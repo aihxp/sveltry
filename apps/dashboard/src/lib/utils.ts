@@ -18,6 +18,22 @@ export function safeRedirectPath(raw: string | null | undefined, fallback = '/da
   return raw;
 }
 
+/**
+ * Safe href for a possibly-untrusted URL (a commit / tracker / release URL that
+ * originates from an SDK or a third-party provider). Only `http:`/`https:` pass;
+ * anything else (notably `javascript:`/`data:`) collapses to `'#'`. Defense in
+ * depth: the backend already scheme-validates these before storing.
+ */
+export function safeHref(url: string | null | undefined): string {
+  if (typeof url !== 'string') return '#';
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? url : '#';
+  } catch {
+    return '#';
+  }
+}
+
 /** A human, relative timestamp like "3m ago" / "2d ago". */
 export function relativeTime(epochMs: number): string {
   const diff = Date.now() - epochMs;
