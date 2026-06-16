@@ -6,6 +6,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-15
+
 ### Added
 
 - **Issue short ids.** Every newly grouped issue gets a short, human-friendly id (displayed as
@@ -327,7 +329,8 @@ The first release: a complete, Sentry-wire-compatible error-tracking vertical sl
 - **Tooling**: Bun workspaces with a shared dependency catalog, CI (test/type-check/build/format),
   Changesets-based releases, and a publishable SDK package.
 
-[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/aihxp/sveltry/releases/tag/v0.7.0
 [0.6.0]: https://github.com/aihxp/sveltry/releases/tag/v0.6.0
 [0.5.0]: https://github.com/aihxp/sveltry/releases/tag/v0.5.0
 [0.4.0]: https://github.com/aihxp/sveltry/releases/tag/v0.4.0
