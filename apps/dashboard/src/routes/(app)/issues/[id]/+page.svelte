@@ -11,7 +11,7 @@
   import LevelBadge from '$lib/components/LevelBadge.svelte';
   import StackTrace from '$lib/components/StackTrace.svelte';
   import { Input } from '$lib/components/ui/input';
-  import { formatBytes, relativeTime } from '$lib/utils';
+  import { formatBytes, relativeTime, safeHref } from '$lib/utils';
   import CheckIcon from '@lucide/svelte/icons/check';
   import BellOffIcon from '@lucide/svelte/icons/bell-off';
   import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
@@ -272,7 +272,7 @@
         Linked in {i.trackerProvider}:
         {#if i.trackerUrl}
           <a
-            href={i.trackerUrl}
+            href={safeHref(i.trackerUrl)}
             target="_blank"
             rel="noreferrer"
             class="font-medium text-primary hover:underline"
@@ -322,7 +322,7 @@
                 <p class="mt-0.5 text-xs text-muted-foreground">
                   {#if c.url}
                     <a
-                      href={c.url}
+                      href={safeHref(c.url)}
                       target="_blank"
                       rel="noreferrer"
                       class="font-mono hover:underline">{c.shortId}</a

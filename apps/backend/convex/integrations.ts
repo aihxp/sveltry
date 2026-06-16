@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import {
+  httpUrlOnly,
   parseJiraResult,
   parseLinearResult,
   trackerRequest,
@@ -183,7 +184,9 @@ export const recordTrackerLink = internalMutation({
     await ctx.db.patch(issueId, {
       trackerProvider: provider,
       trackerKey: key,
-      trackerUrl: url,
+      // The tracker URL comes from the external provider's JSON and is rendered
+      // into an anchor href; keep only http(s) to prevent a javascript: scheme.
+      trackerUrl: httpUrlOnly(url),
     });
   },
 });
