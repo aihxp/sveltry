@@ -11,6 +11,12 @@ import { requireOrg } from './lib/auth';
 // ---------------------------------------------------------------------------
 
 const SCAN_CAP = 10_000;
+// The `users` aggregate is the only one that deep-reads the event payload (for the
+// user identity); every other aggregate groups on scalar columns. Scan a smaller
+// window for the payload-reading path so a count/avg over scalars is not throttled
+// down to match the cost of the one blob-reading aggregate. Accuracy degrades
+// gracefully under sampling (surfaced via the `sampled` flag).
+const SCAN_CAP_USERS = 5_000;
 const HOUR_MS = 3_600_000;
 
 // Allowlisted fields per dataset, so a query can only group/filter on real columns.
@@ -79,41 +85,46 @@ export const runDiscover = query({
         throw new Error('Project not found');
     }
 
+    // The errors `users` aggregate must read the event payload; cap it lower.
+    const cap = args.aggregate === 'users' ? SCAN_CAP_USERS : SCAN_CAP;
+
     // Gather the rows for the window (bounded).
     let rows: Row[] = [];
     if (args.dataset === 'transactions') {
+      // Scan the lean projection (no span payload): every transaction aggregate
+      // groups on scalar columns and reads only durationMs, all present in meta.
       rows = args.projectId
         ? await ctx.db
-            .query('transactions')
+            .query('transactionsMeta')
             .withIndex('by_project', (q) =>
               q.eq('projectId', args.projectId!).gte('timestamp', since),
             )
-            .take(SCAN_CAP)
+            .take(cap)
         : await ctx.db
-            .query('transactions')
+            .query('transactionsMeta')
             .withIndex('by_org', (q) =>
               q.eq('organizationId', activeOrganizationId).gte('timestamp', since),
             )
-            .take(SCAN_CAP);
+            .take(cap);
     } else if (args.projectId) {
       rows = await ctx.db
         .query('events')
         .withIndex('by_project', (q) => q.eq('projectId', args.projectId!).gte('timestamp', since))
-        .take(SCAN_CAP);
+        .take(cap);
     } else {
       // Org-wide scan over a single time-ordered index (events.by_org), so the
-      // SCAN_CAP window is the most-recent events org-wide rather than skewed
-      // toward earlier-iterated projects (and no per-project fan-out).
+      // cap window is the most-recent events org-wide rather than skewed toward
+      // earlier-iterated projects (and no per-project fan-out).
       rows = await ctx.db
         .query('events')
         .withIndex('by_org', (q) =>
           q.eq('organizationId', activeOrganizationId).gte('timestamp', since),
         )
-        .take(SCAN_CAP);
+        .take(cap);
     }
 
     const scanned = rows.length;
-    const sampled = scanned >= SCAN_CAP;
+    const sampled = scanned >= cap;
 
     // Apply filters and reduce to aggregation samples.
     const useUsers = args.aggregate === 'users';

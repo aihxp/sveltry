@@ -102,6 +102,14 @@ const PROJECT_PURGERS: Record<ProjectScopedTable, ProjectPurger> = {
         .withIndex('by_project', (q) => q.eq('projectId', pid))
         .take(BATCH),
     ),
+  transactionsMeta: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('transactionsMeta')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
   transactionRollups: async (ctx, pid) =>
     purgeRows(
       ctx,
@@ -396,6 +404,14 @@ const ORG_DRAINERS: Record<ProjectScopedTable, OrgDrainer> = {
   transactions: async (ctx, pid, to, c) => {
     const p = await ctx.db
       .query('transactions')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  transactionsMeta: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('transactionsMeta')
       .withIndex('by_project', (q) => q.eq('projectId', pid))
       .paginate({ numItems: BATCH, cursor: c });
     for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });

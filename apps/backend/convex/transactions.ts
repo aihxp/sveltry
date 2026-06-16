@@ -347,8 +347,9 @@ export const transactionStats = query({
   args: {},
   handler: async (ctx) => {
     const { activeOrganizationId } = await requireOrg(ctx);
+    // Scan the lean projection (scalar columns only, no span payload).
     const recent = await ctx.db
-      .query('transactions')
+      .query('transactionsMeta')
       .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
       .order('desc')
       .take(STATS_SAMPLE);
@@ -389,13 +390,15 @@ export const recentTransactions = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     const { activeOrganizationId } = await requireOrg(ctx);
+    // Scan the lean projection; `_id` must be the underlying transaction id so the
+    // live feed's `/performance/<id>` link resolves via `getTransaction`.
     const rows = await ctx.db
-      .query('transactions')
+      .query('transactionsMeta')
       .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
       .order('desc')
       .take(Math.min(limit ?? RECENT_LIMIT, 200));
     return rows.map((t) => ({
-      _id: t._id,
+      _id: t.transactionId,
       name: t.name,
       op: t.op,
       status: t.status,
@@ -476,18 +479,20 @@ export const webVitals = query({
   args: {},
   handler: async (ctx) => {
     const { activeOrganizationId } = await requireOrg(ctx);
+    // Scan the lean projection; web-vitals values were extracted into the
+    // `measurements` column at ingest, so this no longer materializes span blobs.
     const recent = await ctx.db
-      .query('transactions')
+      .query('transactionsMeta')
       .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
       .order('desc')
       .take(1000);
 
     const samples: Record<string, number[]> = {};
     for (const t of recent) {
-      const m = (t.payload as { measurements?: Record<string, { value?: number }> }).measurements;
+      const m = t.measurements;
       if (!m) continue;
       for (const vital of WEB_VITALS) {
-        const v = m[vital]?.value;
+        const v = m[vital];
         if (typeof v === 'number') (samples[vital] ??= []).push(v);
       }
     }

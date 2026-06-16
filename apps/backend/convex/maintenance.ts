@@ -125,8 +125,10 @@ export const rollupTransactions = internalMutation({
     let upserts = 0;
 
     for (const org of orgs) {
+      // Scan the lean projection: the rollup needs only projectId/name/timestamp/
+      // durationMs, so it must not pay for the span payload of 8000 fat rows/hour.
       const txns = await ctx.db
-        .query('transactions')
+        .query('transactionsMeta')
         .withIndex('by_org', (q) => q.eq('organizationId', org.slug).gte('timestamp', windowStart))
         .take(8000);
 

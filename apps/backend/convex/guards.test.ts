@@ -155,6 +155,57 @@ describe('session-aggregate idempotency (ERR-001)', () => {
   });
 });
 
+describe('transaction lean projection (PERF-001)', () => {
+  const txnArgs = (projectId: Id<'projects'>) => ({
+    projectId,
+    organizationId: 'org-a',
+    eventId: 'tx1',
+    traceId: 'tr',
+    spanId: 'sp',
+    name: 'GET /a',
+    op: 'http.server',
+    status: 'ok',
+    timestamp: 5,
+    endTimestamp: 6,
+    durationMs: 42,
+    platform: 'javascript',
+    environment: 'production',
+    tags: {},
+    spanCount: 3,
+    payload: { measurements: { lcp: { value: 1200 }, cls: { value: 0.1 } }, spans: [{}, {}, {}] },
+  });
+
+  test('recordTransaction writes a 1:1 lean meta row with web vitals extracted', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+
+    const res = await t.mutation(internal.ingest.recordTransaction, txnArgs(projectId));
+    expect(res.inserted).toBe(true);
+
+    const meta = await t.run((ctx) => ctx.db.query('transactionsMeta').collect());
+    expect(meta.length).toBe(1);
+    expect(meta[0]!.name).toBe('GET /a');
+    expect(meta[0]!.durationMs).toBe(42);
+    expect(meta[0]!.spanCount).toBe(3);
+    // The numeric web-vitals values are extracted from payload.measurements.
+    expect(meta[0]!.measurements).toEqual({ lcp: 1200, cls: 0.1 });
+    // The meta row points back at its transaction (1:1).
+    const txns = await t.run((ctx) => ctx.db.query('transactions').collect());
+    expect(txns.length).toBe(1);
+    expect(meta[0]!.transactionId).toBe(txns[0]!._id);
+  });
+
+  test('an SDK retry (same eventId) does not double-write the meta row', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+    await t.mutation(internal.ingest.recordTransaction, txnArgs(projectId));
+    const retry = await t.mutation(internal.ingest.recordTransaction, txnArgs(projectId));
+    expect(retry.inserted).toBe(false);
+    const meta = await t.run((ctx) => ctx.db.query('transactionsMeta').collect());
+    expect(meta.length).toBe(1);
+  });
+});
+
 describe('project lifecycle (registry-driven purge / restamp)', () => {
   // Seed one row in a representative spread of tenant tables: a hot table
   // (events), the historically-orphaned webhooks (with a secret), an issue plus
