@@ -4,7 +4,7 @@ All notable changes to Sveltry are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.4] - 2026-06-16
 
 ### Tested
 
@@ -18,6 +18,15 @@ All notable changes to Sveltry are documented here. The format is based on
   upstream origin over the attacker-supplied payload host. (The backend tests stay out of the deploy
   type-check because they use vitest's vite-only `import.meta.glob`; they are exercised at runtime in
   CI.)
+- **Backend authz / REST / outbound coverage.** The backend test suite previously covered only ingest;
+  the security-load-bearing surface beyond it was untested. Added three convex-test files: `safeFetch`
+  SSRF redirect re-validation (a 302 to a link-local host is rejected before the next hop, a non-GET
+  body is not replayed across a 301/302/303, a 307 follows to a re-validated host); the public REST
+  API v1 (missing/invalid bearer, per-org project scoping, cross-org issue read denied, the
+  `by_org_eventId` collision returning the caller's own event, read-vs-write token scope, dashboard-vs-API
+  issue-status parity, and the lifecycle webhook firing only on an actual status change); and the full
+  project-lifecycle path (seed all 32 tenant tables, then assert `purgeProjectData` empties them and
+  `restampProjectOrg` rewrites every org-bearing table while detaching saved views/widgets).
 
 ### Internal
 
@@ -134,19 +143,6 @@ All notable changes to Sveltry are documented here. The format is based on
   (schema -> registry -> drainers is enforced end to end). No behavior change; added backend tests
   asserting purge empties the tables (including webhooks + issue children) and transfer rewrites
   org-bearing rows while detaching saved views.
-
-### Tested
-
-- **Backend authz / REST / outbound coverage.** The backend test suite previously covered only ingest;
-  the security-load-bearing surface beyond it was untested. Added three convex-test files: `safeFetch`
-  SSRF redirect re-validation (a 302 to a link-local host is rejected before the next hop, a non-GET
-  body is not replayed across a 301/302/303, a 307 follows to a re-validated host); the public REST
-  API v1 (missing/invalid bearer, per-org project scoping, cross-org issue read denied, the
-  `by_org_eventId` collision returning the caller's own event, read-vs-write token scope, dashboard-vs-API
-  issue-status parity, and the lifecycle webhook firing only on an actual status change); and the full
-  project-lifecycle path (seed all 32 tenant tables, then assert `purgeProjectData` empties them and
-  `restampProjectOrg` rewrites every org-bearing table while detaching saved views/widgets). Backend
-  suite is now 22 tests across 4 files.
 
 ## [0.9.3] - 2026-06-16
 
