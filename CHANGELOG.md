@@ -6,6 +6,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-16
+
 ### Security
 
 - **Hardening pass.** Closed an open redirect: the post-login / post-signup `redirectTo` is now
@@ -460,7 +462,8 @@ The first release: a complete, Sentry-wire-compatible error-tracking vertical sl
 - **Tooling**: Bun workspaces with a shared dependency catalog, CI (test/type-check/build/format),
   Changesets-based releases, and a publishable SDK package.
 
-[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/aihxp/sveltry/releases/tag/v0.9.2
 [0.9.1]: https://github.com/aihxp/sveltry/releases/tag/v0.9.1
 [0.9.0]: https://github.com/aihxp/sveltry/releases/tag/v0.9.0
 [0.8.0]: https://github.com/aihxp/sveltry/releases/tag/v0.8.0

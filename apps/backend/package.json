@@ -1,6 +1,6 @@
 {
   "name": "@sveltry/backend",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "type": "module",
   "description": "Sveltry's Convex backend: Sentry-compatible ingestion, issue grouping, and reactive queries.",
