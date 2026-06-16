@@ -6,6 +6,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * DAY_MS;
 const HOUR_MS = 60 * 60 * 1000;
 
+// Per-tick scan cap for the org/project-iterating crons. Generous headroom for
+// the single-node, team-and-product scale Sveltry targets; if a deployment ever
+// exceeds it the helper logs, so the truncation is visible rather than silent
+// (full cursor pagination across ticks is the follow-up if that ever happens).
+const CRON_ENTITY_CAP = 2000;
+function warnIfCapped(count: number, cron: string, entity: string): void {
+  if (count >= CRON_ENTITY_CAP) {
+    console.warn(
+      `${cron}: hit the ${CRON_ENTITY_CAP}-${entity} scan cap this tick; some ${entity}s were not processed`,
+    );
+  }
+}
+
 /**
  * Prune telemetry past each project's retention window. Bounded per run so a
  * single cron tick never exceeds Convex transaction limits; the daily schedule
@@ -21,7 +34,8 @@ export const sweepRetention = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    const projects = await ctx.db.query('projects').take(500);
+    const projects = await ctx.db.query('projects').take(CRON_ENTITY_CAP);
+    warnIfCapped(projects.length, 'sweepRetention', 'project');
     let deleted = 0;
 
     for (const project of projects) {
@@ -71,7 +85,8 @@ export const sweepOngoing = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    const orgs = await ctx.db.query('organizations').take(500);
+    const orgs = await ctx.db.query('organizations').take(CRON_ENTITY_CAP);
+    warnIfCapped(orgs.length, 'sweepOngoing', 'org');
     let updated = 0;
 
     for (const org of orgs) {
@@ -105,7 +120,8 @@ export const rollupTransactions = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
     const windowStart = Math.floor(now / HOUR_MS) * HOUR_MS - 2 * HOUR_MS;
-    const orgs = await ctx.db.query('organizations').take(500);
+    const orgs = await ctx.db.query('organizations').take(CRON_ENTITY_CAP);
+    warnIfCapped(orgs.length, 'rollupTransactions', 'org');
     let upserts = 0;
 
     for (const org of orgs) {
@@ -183,7 +199,8 @@ export const detectMissedCheckIns = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    const orgs = await ctx.db.query('organizations').take(500);
+    const orgs = await ctx.db.query('organizations').take(CRON_ENTITY_CAP);
+    warnIfCapped(orgs.length, 'detectMissedCheckIns', 'org');
     let missed = 0;
     for (const org of orgs) {
       const monitors = await ctx.db

@@ -101,19 +101,15 @@ export const runDiscover = query({
         .withIndex('by_project', (q) => q.eq('projectId', args.projectId!).gte('timestamp', since))
         .take(SCAN_CAP);
     } else {
-      // Events have no org+timestamp index, so fan out over the org's projects.
-      const projects = await ctx.db
-        .query('projects')
-        .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
-        .collect();
-      for (const project of projects) {
-        if (rows.length >= SCAN_CAP) break;
-        const slice = await ctx.db
-          .query('events')
-          .withIndex('by_project', (q) => q.eq('projectId', project._id).gte('timestamp', since))
-          .take(SCAN_CAP - rows.length);
-        rows = rows.concat(slice);
-      }
+      // Org-wide scan over a single time-ordered index (events.by_org), so the
+      // SCAN_CAP window is the most-recent events org-wide rather than skewed
+      // toward earlier-iterated projects (and no per-project fan-out).
+      rows = await ctx.db
+        .query('events')
+        .withIndex('by_org', (q) =>
+          q.eq('organizationId', activeOrganizationId).gte('timestamp', since),
+        )
+        .take(SCAN_CAP);
     }
 
     const scanned = rows.length;

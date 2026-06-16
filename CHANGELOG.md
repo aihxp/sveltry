@@ -17,6 +17,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Changed
 
+- **Faster org-wide Discover and safer cron scans.** Added an `events` org+timestamp index so the
+  org-wide Discover / cross-project analytics path scans one time-ordered index instead of fanning
+  out per project (which also made the sampled window the most-recent events org-wide rather than
+  skewed toward earlier-iterated projects). The org/project-iterating crons now scan with generous
+  headroom and log when they hit the cap, so a large deployment's truncation is visible instead of
+  silent.
 - **Dependency cleanup.** Removed dead dependencies that nothing imported (`pg`, `jose` left over
   from the pre-Convex auth migration; `convex-helpers`; `@tanstack/table-core`; and the dashboard's
   `zod`), pinned `@types/bun` to a concrete version instead of `latest`, and forced the transitive
