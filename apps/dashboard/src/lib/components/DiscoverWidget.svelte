@@ -3,7 +3,6 @@
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
   import * as Card from '$lib/components/ui/card';
-  import { Button } from '$lib/components/ui/button';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { compactNumber, formatDuration } from '$lib/utils';
   import XIcon from '@lucide/svelte/icons/x';
