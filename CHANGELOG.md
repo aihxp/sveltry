@@ -84,6 +84,13 @@ All notable changes to Sveltry are documented here. The format is based on
   window than the scalar aggregates. Note: transactions ingested before the upgrade have no meta row,
   so the recent-window aggregates transiently exclude them until new ingest fills the window
   (transaction detail/trace/span views are unaffected).
+- **Uptime probes run with bounded concurrency.** The per-minute uptime cron probed each due monitor
+  strictly sequentially, so a handful of slow/timing-out endpoints could overrun the 1-minute
+  interval. It now probes in batches of up to 8 (`Promise.all` over slices), bounding total wall time
+  to `ceil(N / 8) x timeout`; the per-fetch SSRF guard is unaffected by the concurrency. The serial
+  per-item ingest writes and the decompressor's transient ~2x merge peak are documented as deliberate
+  trade-offs rather than changed (per-item idempotency and the simple bomb-guard path are worth more
+  than the micro-optimizations).
 
 ### Security
 

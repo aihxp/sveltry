@@ -74,6 +74,14 @@ function inflate(
     ]);
   }
   if (chunks.length === 1) return chunks[0]!;
+  // Merge into one contiguous buffer. The running-total guard above bounds `total`
+  // to `maxDecompressed`, but note this final merge transiently holds BOTH the
+  // accumulated `chunks[]` and the freshly-allocated `out` (each ~`total`), so the
+  // peak is ~2x the decompressed size for a multi-chunk body near the cap. So the
+  // 200 MiB cap means ~400 MiB transient peak when sizing the isolate. (Avoidable
+  // with a doubling growth buffer, but kept simple here: the downstream
+  // `parseEnvelope` materializes the full body anyway, and the chunks are freed as
+  // soon as this returns.)
   const out = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
