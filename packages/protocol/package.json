@@ -1,6 +1,6 @@
 {
   "name": "@sveltry/protocol",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Sentry-compatible wire protocol: DSN parsing, byte-accurate envelope parsing, auth extraction, event normalization, and issue fingerprinting.",
