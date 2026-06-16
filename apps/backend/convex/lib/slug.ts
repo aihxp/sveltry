@@ -11,25 +11,24 @@ export function slugify(input: string): string {
 }
 
 /** Generate a 32-char lowercase-hex DSN public key. */
-export function generatePublicKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '').slice(0, 32);
+/** Concatenated UUID hex from the CSPRNG. Throws if `crypto.randomUUID` is absent
+ * rather than falling back to a non-cryptographic source for a secret. */
+function cryptoHex(uuids: number): string {
+  if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
+    throw new Error('crypto.randomUUID is required to generate a secret');
   }
   let s = '';
-  for (let i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16);
-  return s;
+  for (let i = 0; i < uuids; i++) s += crypto.randomUUID();
+  return s.replace(/-/g, '');
+}
+
+export function generatePublicKey(): string {
+  return cryptoHex(2).slice(0, 32);
 }
 
 /** Generate a 64-char lowercase-hex secret (e.g. an invitation token). */
 export function generateToken(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return (crypto.randomUUID() + crypto.randomUUID() + crypto.randomUUID() + crypto.randomUUID())
-      .replace(/-/g, '')
-      .slice(0, 64);
-  }
-  let s = '';
-  for (let i = 0; i < 64; i++) s += Math.floor(Math.random() * 16).toString(16);
-  return s;
+  return cryptoHex(4).slice(0, 64);
 }
 
 /** Generate a numeric public id for a project (the `/api/<id>/` DSN segment). */

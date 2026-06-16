@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { assertSafeOutboundTarget, embeddedIpv4, isBlockedHost } from '../src/ssrf.js';
+import {
+  assertResolvedHostSafe,
+  assertSafeOutboundTarget,
+  embeddedIpv4,
+  isBlockedHost,
+  isIpLiteral,
+} from '../src/ssrf.js';
 
 describe('embeddedIpv4', () => {
   test('extracts IPv4 from dotted and IPv4-mapped IPv6 forms', () => {
@@ -44,5 +50,58 @@ describe('assertSafeOutboundTarget', () => {
     expect(() =>
       assertSafeOutboundTarget('https://acme.atlassian.net/rest/api/3/issue'),
     ).not.toThrow();
+  });
+});
+
+describe('isIpLiteral', () => {
+  test('detects IPv4 / IPv6 literals but not hostnames', () => {
+    expect(isIpLiteral('169.254.169.254')).toBe(true);
+    expect(isIpLiteral('::ffff:a9fe:a9fe')).toBe(true);
+    expect(isIpLiteral('2001:db8::1')).toBe(true);
+    expect(isIpLiteral('[fe80::1]')).toBe(true);
+    expect(isIpLiteral('example.com')).toBe(false);
+    expect(isIpLiteral('hooks.slack.com')).toBe(false);
+  });
+});
+
+describe('assertResolvedHostSafe (DNS-rebinding guard)', () => {
+  const resolveTo = (ips: string[]) => async (): Promise<string[]> => ips;
+
+  test('rejects a hostname whose record is a blocked IP', async () => {
+    await expect(
+      assertResolvedHostSafe('attacker.example', resolveTo(['169.254.169.254'])),
+    ).rejects.toThrow();
+  });
+
+  test('rejects when ANY resolved address is blocked (mixed A/AAAA)', async () => {
+    await expect(
+      assertResolvedHostSafe('mix.example', resolveTo(['93.184.216.34', 'fd00:ec2::254'])),
+    ).rejects.toThrow();
+  });
+
+  test('allows public and RFC1918 resolutions', async () => {
+    await expect(
+      assertResolvedHostSafe('ok.example', resolveTo(['93.184.216.34'])),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertResolvedHostSafe('internal.example', resolveTo(['10.0.0.5'])),
+    ).resolves.toBeUndefined();
+  });
+
+  test('fails OPEN on a resolver error (availability)', async () => {
+    const boom = async (): Promise<string[]> => {
+      throw new Error('resolver down');
+    };
+    await expect(assertResolvedHostSafe('flaky.example', boom)).resolves.toBeUndefined();
+  });
+
+  test('skips resolution for an IP literal (already covered by isBlockedHost)', async () => {
+    let called = false;
+    const spy = async (): Promise<string[]> => {
+      called = true;
+      return [];
+    };
+    await assertResolvedHostSafe('203.0.113.7', spy);
+    expect(called).toBe(false);
   });
 });

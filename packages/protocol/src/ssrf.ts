@@ -64,3 +64,39 @@ export function assertSafeOutboundTarget(target: string): void {
     throw new Error('target host is not allowed');
   }
 }
+
+/** Whether `host` is an IP-address literal (so it needs no DNS resolution: the
+ * literal {@link isBlockedHost} check already covers it). IPv6 literals contain a
+ * colon, which a DNS hostname never does. */
+export function isIpLiteral(host: string): boolean {
+  const h = unbracket(host);
+  return embeddedIpv4(h) !== null || h.includes(':');
+}
+
+/**
+ * Defense-in-depth against DNS rebinding: resolve `hostname` via the injected
+ * `resolve` (the runtime supplies a DNS-over-HTTPS resolver, since the default
+ * Convex runtime has no `node:dns`) and reject if ANY resolved address is blocked.
+ * This closes the "a public name whose A/AAAA record is a blocked IP" case (e.g.
+ * `attacker.example` -> 169.254.169.254). It is best-effort: without connection
+ * pinning (unavailable here) it cannot fully close *active* rebinding that flips
+ * the record between this check and the actual connect. It FAILS OPEN on a
+ * resolver error so a resolver outage never breaks legitimate (e.g. RFC1918 or
+ * internal-name) delivery; the always-on literal {@link assertSafeOutboundTarget}
+ * guard still applies regardless.
+ */
+export async function assertResolvedHostSafe(
+  hostname: string,
+  resolve: (name: string) => Promise<string[]>,
+): Promise<void> {
+  if (isIpLiteral(hostname)) return;
+  let ips: string[];
+  try {
+    ips = await resolve(hostname);
+  } catch {
+    return; // fail open: resolver outage must not break legitimate delivery
+  }
+  for (const ip of ips) {
+    if (isBlockedHost(ip)) throw new Error('target resolves to a blocked address');
+  }
+}
