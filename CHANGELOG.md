@@ -6,6 +6,21 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Performance
+
+- **Lean `transactionsMeta` projection for the transaction analytics.** Convex has no column
+  projection, so a `take(N)` over `transactions` materialized the full span `payload` of every row
+  even for a count/percentile that uses only scalar columns. The reactive performance page
+  (`transactionStats` + `recentTransactions` + `webVitals`) and the hourly rollup cron scanned
+  thousands of fat rows for a few numbers. A lean `transactionsMeta` table (scalar columns + the
+  extracted web-vitals `measurements`, no span blob) is now written 1:1 with each transaction at
+  ingest, and those four readers plus the transactions-dataset Discover scan it instead. The span
+  views (operations/search/performance-issues/detail/trace) still read the full table. Discover's
+  errors-dataset `users` aggregate (the only one that reads the event payload) now scans a smaller
+  window than the scalar aggregates. Note: transactions ingested before the upgrade have no meta row,
+  so the recent-window aggregates transiently exclude them until new ingest fills the window
+  (transaction detail/trace/span views are unaffected).
+
 ### Security
 
 - **Stored-XSS hardening for third-party URLs.** Commit URLs (from the `set-commits` API) and

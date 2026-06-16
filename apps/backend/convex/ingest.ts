@@ -542,10 +542,41 @@ export const recordTransaction = internalMutation({
       )
       .first();
     if (dup) return { inserted: false };
-    await ctx.db.insert('transactions', args);
+    const transactionId = await ctx.db.insert('transactions', args);
+    // Lean projection (no span payload) for the high-frequency scalar analytics.
+    // Written only here, on the same insert path, so it stays 1:1 with the row and
+    // an SDK retry (deduped above) never double-writes it.
+    await ctx.db.insert('transactionsMeta', {
+      organizationId: args.organizationId,
+      projectId: args.projectId,
+      transactionId,
+      name: args.name,
+      op: args.op,
+      status: args.status,
+      durationMs: args.durationMs,
+      timestamp: args.timestamp,
+      platform: args.platform,
+      environment: args.environment,
+      release: args.release,
+      spanCount: args.spanCount,
+      measurements: extractMeasurements(args.payload),
+    });
     return { inserted: true };
   },
 });
+
+/** Pull the numeric web-vitals values out of a transaction payload's `measurements`. */
+function extractMeasurements(payload: unknown): Record<string, number> | undefined {
+  const m = (payload as { measurements?: Record<string, { value?: unknown }> } | null)
+    ?.measurements;
+  if (!m || typeof m !== 'object') return undefined;
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(m)) {
+    const v = (val as { value?: unknown } | null)?.value;
+    if (typeof v === 'number') out[k] = v;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 /** Upsert an issue and persist an event. Schedules alert dispatch. */
 export const recordEvent = internalMutation({

@@ -107,7 +107,7 @@ async function seedEveryTenantTable(
       tags: {},
       payload: {},
     });
-    await ctx.db.insert('transactions', {
+    const transactionId = await ctx.db.insert('transactions', {
       organizationId: ORG,
       projectId,
       eventId: 't1',
@@ -124,6 +124,19 @@ async function seedEveryTenantTable(
       tags: {},
       spanCount: 1,
       payload: {},
+    });
+    await ctx.db.insert('transactionsMeta', {
+      organizationId: ORG,
+      projectId,
+      transactionId,
+      name: 'GET /',
+      op: 'http.server',
+      status: 'ok',
+      durationMs: 1,
+      timestamp: 0,
+      platform: 'node',
+      environment: 'production',
+      spanCount: 1,
     });
     await ctx.db.insert('transactionRollups', {
       organizationId: ORG,

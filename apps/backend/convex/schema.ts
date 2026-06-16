@@ -496,6 +496,35 @@ export default defineSchema({
     .index('by_project_eventId', ['projectId', 'eventId'])
     .index('by_trace', ['traceId']),
 
+  // A lean projection of `transactions`: just the scalar columns (no `payload`
+  // span blob) the high-frequency analytics need. Convex has no column
+  // projection, so a `take(N)` over `transactions.by_org` materializes the full
+  // span payload of every row even for a count/percentile that uses only scalars;
+  // the reactive performance page (transactionStats + recentTransactions +
+  // webVitals) and the hourly rollup cron all scanned thousands of fat rows for a
+  // few numbers. They now scan this table instead. Written 1:1 with `transactions`
+  // at ingest (one extra lean insert), keyed back by `transactionId`. `measurements`
+  // is the web-vitals map extracted from the payload so webVitals needs no blob.
+  transactionsMeta: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    transactionId: v.id('transactions'),
+    name: v.string(),
+    op: v.string(),
+    status: v.string(),
+    durationMs: v.number(),
+    timestamp: v.number(),
+    platform: v.string(),
+    environment: v.string(),
+    release: v.optional(v.string()),
+    spanCount: v.number(),
+    /** Web-vitals values (lcp/fcp/cls/...) extracted from the payload at ingest. */
+    measurements: v.optional(v.record(v.string(), v.number())),
+  })
+    .index('by_org', ['organizationId', 'timestamp'])
+    .index('by_project', ['projectId', 'timestamp'])
+    .index('by_project_name', ['projectId', 'name', 'timestamp']),
+
   // Hourly latency rollups: a fixed-bucket duration histogram per (project,
   // transaction, hour). Lets percentiles span arbitrary windows without scanning
   // raw transactions or needing a columnar store. Recomputed by an hourly cron.

@@ -1023,26 +1023,39 @@ export const debugDiscover = internalMutation({
       );
     };
     const mkTxn = async (name: string, durationMs: number) => {
-      txnIds.push(
-        await ctx.db.insert('transactions', {
-          organizationId,
-          projectId,
-          eventId: `disct-${now}-${txnIds.length}`,
-          traceId: 't',
-          spanId: 's',
-          name,
-          op: 'http.server',
-          status: 'ok',
-          timestamp: now,
-          endTimestamp: now + durationMs,
-          durationMs,
-          platform: 'javascript',
-          environment: 'production',
-          tags: {},
-          spanCount: 1,
-          payload: {},
-        }),
-      );
+      const transactionId = await ctx.db.insert('transactions', {
+        organizationId,
+        projectId,
+        eventId: `disct-${now}-${txnIds.length}`,
+        traceId: 't',
+        spanId: 's',
+        name,
+        op: 'http.server',
+        status: 'ok',
+        timestamp: now,
+        endTimestamp: now + durationMs,
+        durationMs,
+        platform: 'javascript',
+        environment: 'production',
+        tags: {},
+        spanCount: 1,
+        payload: {},
+      });
+      // Keep the lean projection in sync with the demo transactions.
+      await ctx.db.insert('transactionsMeta', {
+        organizationId,
+        projectId,
+        transactionId,
+        name,
+        op: 'http.server',
+        status: 'ok',
+        durationMs,
+        timestamp: now,
+        platform: 'javascript',
+        environment: 'production',
+        spanCount: 1,
+      });
+      txnIds.push(transactionId);
     };
 
     await mkEvent('error', 'u1');

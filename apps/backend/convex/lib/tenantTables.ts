@@ -28,6 +28,7 @@ export type ProjectScopedTable = {
 export const TENANT_SCOPED_TABLES = [
   'events',
   'transactions',
+  'transactionsMeta',
   'transactionRollups',
   'sessions',
   'sessionBuckets',
