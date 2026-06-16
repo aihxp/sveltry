@@ -4,6 +4,7 @@ import { internalMutation, mutation, type MutationCtx } from './_generated/serve
 import type { Id, TableNames } from './_generated/dataModel';
 import { recordAudit } from './lib/audit';
 import { ROLE_RANK, requireRole } from './lib/auth';
+import { TENANT_SCOPED_TABLES, type ProjectScopedTable } from './lib/tenantTables';
 
 // ---------------------------------------------------------------------------
 // Project deletion. `deleteProject` removes the project row immediately (so it
@@ -56,289 +57,300 @@ async function purgeIssueChildren(ctx: MutationCtx, issueId: Id<'issues'>): Prom
   return comments.length === CHILD_BATCH || users.length === CHILD_BATCH;
 }
 
+/** Delete one bounded batch of a project's rows from a tenant table; returns whether more remain. */
+type ProjectPurger = (ctx: MutationCtx, pid: Id<'projects'>) => Promise<boolean>;
+
 /**
- * Delete a project's data across all scoped tables, a batch at a time. Each table
- * is queried by a `projectId`-prefixed index; the helper returns whether a table
- * was full (more rows remain). When any table still has data, reschedule.
+ * One purge drainer per registered tenant table, keyed by `ProjectScopedTable`.
+ * Because the key type is the registry's element type, TypeScript fails the build
+ * if a table is added to `TENANT_SCOPED_TABLES` (and thus the schema) without a
+ * matching drainer here -- so purge coverage cannot silently fall behind the
+ * registry the way the old hand-maintained list could. Each closure is fully
+ * typed: the compiler verifies the index exists on the table and that `projectId`
+ * is its first field. `replaySegments` reuses `by_replay` (projectId-prefixed);
+ * the three storage-backed tables pass `{ storage: true }` so their blob is
+ * deleted with the row. `issues` drains each issue's comments + users first, only
+ * deleting the issue once its children are gone, so a high-cardinality issue never
+ * leaves orphaned child rows.
  */
-export const purgeProjectData = internalMutation({
-  args: { projectId: v.id('projects') },
-  handler: async (ctx, { projectId: pid }) => {
-    const db = ctx.db;
-    // Each call below is fully typed: the compiler verifies the index exists on
-    // the table and that `projectId` is its first field. `replaySegments` reuses
-    // `by_replay` (projectId-prefixed); tables that had no project index gained a
-    // `by_project` one in this change.
-    let more = false;
-    // Issues: drain each issue's comments + users in bounded batches, and only
-    // delete the issue once its children are gone, so a high-cardinality issue
-    // (many affected users) never leaves orphaned child rows. Issues whose
-    // children are not yet drained are kept and re-processed on the next pass.
-    const issues = await db
+const PROJECT_PURGERS: Record<ProjectScopedTable, ProjectPurger> = {
+  issues: async (ctx, pid) => {
+    const issues = await ctx.db
       .query('issues')
       .withIndex('by_project_lastSeen', (q) => q.eq('projectId', pid))
       .take(ISSUE_BATCH);
     let issuesIncomplete = false;
     for (const issue of issues) {
       if (await purgeIssueChildren(ctx, issue._id)) issuesIncomplete = true;
-      else await db.delete(issue._id);
+      else await ctx.db.delete(issue._id);
     }
-    if (issues.length === ISSUE_BATCH || issuesIncomplete) more = true;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('events')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('transactions')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('transactionRollups')
-          .withIndex('by_project_bucket', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('sessions')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('sessionBuckets')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('profiles')
-          .withIndex('by_project_profileId', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('replaySegments')
-          .withIndex('by_replay', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-        { storage: true },
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('replays')
-          .withIndex('by_project_replayId', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('attachments')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-        { storage: true },
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('feedback')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('monitors')
-          .withIndex('by_project_slug', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('checkIns')
-          .withIndex('by_project_checkInId', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('uptimeMonitors')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('releases')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('releaseArtifacts')
-          .withIndex('by_project_release', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-        { storage: true },
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('releaseCommits')
-          .withIndex('by_project_release', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('deploys')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('usageDaily')
-          .withIndex('by_project_day', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('alertRules')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('metricAlerts')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('usageAlerts')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('alertDeliveries')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('issueMerges')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('projectIntegrations')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('spikeWindows')
-          .withIndex('by_project_window', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('savedViews')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('dashboardWidgets')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('projectKeys')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    // Webhooks + their delivery log + cron notification deliveries. These were
-    // historically missing here, so deleting a project orphaned them (including
-    // a plaintext webhook secret). Registered in TENANT_SCOPED_TABLES.
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('webhooks')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('webhookDeliveries')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
-    more =
-      (await purgeRows(
-        ctx,
-        await db
-          .query('notificationDeliveries')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH),
-      )) || more;
+    return issues.length === ISSUE_BATCH || issuesIncomplete;
+  },
+  events: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('events')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  transactions: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('transactions')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  transactionRollups: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('transactionRollups')
+        .withIndex('by_project_bucket', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  sessions: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('sessions')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  sessionBuckets: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('sessionBuckets')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  profiles: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('profiles')
+        .withIndex('by_project_profileId', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  replaySegments: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('replaySegments')
+        .withIndex('by_replay', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+      { storage: true },
+    ),
+  replays: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('replays')
+        .withIndex('by_project_replayId', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  attachments: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('attachments')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+      { storage: true },
+    ),
+  feedback: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('feedback')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  monitors: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('monitors')
+        .withIndex('by_project_slug', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  checkIns: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('checkIns')
+        .withIndex('by_project_checkInId', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  uptimeMonitors: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('uptimeMonitors')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  releases: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('releases')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  releaseArtifacts: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('releaseArtifacts')
+        .withIndex('by_project_release', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+      { storage: true },
+    ),
+  releaseCommits: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('releaseCommits')
+        .withIndex('by_project_release', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  deploys: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('deploys')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  usageDaily: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('usageDaily')
+        .withIndex('by_project_day', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  alertRules: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('alertRules')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  metricAlerts: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('metricAlerts')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  usageAlerts: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('usageAlerts')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  alertDeliveries: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('alertDeliveries')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  notificationDeliveries: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('notificationDeliveries')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  webhooks: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('webhooks')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  webhookDeliveries: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('webhookDeliveries')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  issueMerges: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('issueMerges')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  projectIntegrations: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('projectIntegrations')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  spikeWindows: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('spikeWindows')
+        .withIndex('by_project_window', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  savedViews: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('savedViews')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  dashboardWidgets: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('dashboardWidgets')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+  projectKeys: async (ctx, pid) =>
+    purgeRows(
+      ctx,
+      await ctx.db
+        .query('projectKeys')
+        .withIndex('by_project', (q) => q.eq('projectId', pid))
+        .take(BATCH),
+    ),
+};
 
+/**
+ * Delete a project's data across all scoped tables, a batch at a time, by
+ * iterating the registry-keyed `PROJECT_PURGERS`. Each drainer returns whether
+ * its table still has rows; when any does, reschedule until everything is gone.
+ */
+export const purgeProjectData = internalMutation({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId: pid }) => {
+    let more = false;
+    for (const table of TENANT_SCOPED_TABLES) {
+      more = (await PROJECT_PURGERS[table](ctx, pid)) || more;
+    }
     if (more) {
       await ctx.scheduler.runAfter(0, internal.projectLifecycle.purgeProjectData, {
         projectId: pid,
@@ -347,21 +359,302 @@ export const purgeProjectData = internalMutation({
   },
 });
 
+type DrainResult = { count: number; isDone: boolean; cursor: string };
+
+/** Re-stamp / detach one page of a tenant table for a transferred project. */
+type OrgDrainer = (
+  ctx: MutationCtx,
+  pid: Id<'projects'>,
+  to: string,
+  cursor: string | null,
+) => Promise<DrainResult>;
+
+/** A no-op drainer for tables that are not re-stamped here (see notes per entry). */
+const noopDrain: OrgDrainer = async () => ({ count: 0, isDone: true, cursor: '' });
+
 /**
- * Re-stamp a transferred project's data onto its new organization. The
- * `transferProject` mutation flips the project row (and its DSN keys) atomically;
- * this background sweep walks every other scoped table and rewrites
- * `organizationId` to the target. It is a state machine over an ordered list of
- * per-table "drainers": each invocation runs exactly ONE step's one page, then
- * reschedules from where it left off (Convex allows only a single paginated query
- * per function call, so steps are not batched together).
- *
- * Unlike the delete purge, re-stamping does NOT remove a row from its
- * `by_project` index, so a `.take()`+reschedule loop would never terminate. The
- * org-rewrite steps therefore use cursor pagination (each row is visited exactly
- * once); the two detach steps clear an optional `projectId`, which DOES remove
- * the row from the index, so they use the simple `.take()` drain. Idempotent and
- * re-runnable: every step filters by `projectId` and writes a fixed value.
+ * One re-stamp drainer per registered tenant table, keyed by `ProjectScopedTable`
+ * exactly like `PROJECT_PURGERS`, so the compiler likewise fails the build if a
+ * registered table has no transfer step. Org-rewrite steps cursor-paginate and
+ * patch `organizationId` (re-stamping does NOT remove a row from `by_project`, so
+ * a `.take()`+reschedule loop would never terminate). The two detach steps clear
+ * the optional `projectId` (which DOES remove the row, so `.take()` drains them).
+ * `projectKeys` is re-stamped atomically inside `transferProject`, and
+ * `spikeWindows` carries no `organizationId` (a transient per-minute counter), so
+ * both are no-ops here. Idempotent and re-runnable: every step filters by
+ * `projectId` and writes a fixed value.
+ */
+const ORG_DRAINERS: Record<ProjectScopedTable, OrgDrainer> = {
+  events: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('events')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  transactions: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('transactions')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  transactionRollups: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('transactionRollups')
+      .withIndex('by_project_bucket', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  sessions: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('sessions')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  sessionBuckets: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('sessionBuckets')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  profiles: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('profiles')
+      .withIndex('by_project_profileId', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  replaySegments: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('replaySegments')
+      .withIndex('by_replay', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  replays: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('replays')
+      .withIndex('by_project_replayId', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  attachments: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('attachments')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  feedback: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('feedback')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  monitors: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('monitors')
+      .withIndex('by_project_slug', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  checkIns: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('checkIns')
+      .withIndex('by_project_checkInId', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  uptimeMonitors: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('uptimeMonitors')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  releases: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('releases')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  releaseArtifacts: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('releaseArtifacts')
+      .withIndex('by_project_release', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  releaseCommits: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('releaseCommits')
+      .withIndex('by_project_release', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  deploys: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('deploys')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  usageDaily: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('usageDaily')
+      .withIndex('by_project_day', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  alertRules: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('alertRules')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  metricAlerts: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('metricAlerts')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  usageAlerts: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('usageAlerts')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  alertDeliveries: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('alertDeliveries')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  notificationDeliveries: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('notificationDeliveries')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  // Webhooks + delivery log move with the project (they carry organizationId).
+  // Historically absent here, which left a transferred project's webhook rows
+  // stamped with the SOURCE org's id (a cross-tenant residue).
+  webhooks: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('webhooks')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  webhookDeliveries: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('webhookDeliveries')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  issueMerges: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('issueMerges')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  projectIntegrations: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('projectIntegrations')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: BATCH, cursor: c });
+    for (const r of p.page) await ctx.db.patch(r._id, { organizationId: to });
+    return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  // Issues: re-stamp the issue row and walk its comments (also org-bearing).
+  // `issueUsers` is intentionally skipped -- it has no organizationId.
+  issues: async (ctx, pid, to, c) => {
+    const p = await ctx.db
+      .query('issues')
+      .withIndex('by_project_lastSeen', (q) => q.eq('projectId', pid))
+      .paginate({ numItems: ISSUE_BATCH, cursor: c });
+    let count = p.page.length;
+    for (const issue of p.page) {
+      await ctx.db.patch(issue._id, { organizationId: to });
+      const comments = await ctx.db
+        .query('issueComments')
+        .withIndex('by_issue', (q) => q.eq('issueId', issue._id))
+        .collect();
+      for (const cm of comments) await ctx.db.patch(cm._id, { organizationId: to });
+      count += comments.length;
+    }
+    return { count, isDone: p.isDone, cursor: p.continueCursor };
+  },
+  // Detach steps: these rows belong to the SOURCE org (a user's saved view, a
+  // dashboard's widget) and must NOT move; only their optional project pointer is
+  // cleared. Clearing projectId removes the row from `by_project`, so `.take()`
+  // drains them (cursor pagination would never terminate over a fixed `by_project`).
+  savedViews: async (ctx, pid) => {
+    const rows = await ctx.db
+      .query('savedViews')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .take(BATCH);
+    for (const r of rows) await ctx.db.patch(r._id, { projectId: undefined });
+    return { count: rows.length, isDone: rows.length < BATCH, cursor: '' };
+  },
+  dashboardWidgets: async (ctx, pid) => {
+    const rows = await ctx.db
+      .query('dashboardWidgets')
+      .withIndex('by_project', (q) => q.eq('projectId', pid))
+      .take(BATCH);
+    for (const r of rows) await ctx.db.patch(r._id, { projectId: undefined });
+    return { count: rows.length, isDone: rows.length < BATCH, cursor: '' };
+  },
+  // `projectKeys` is re-stamped atomically inside `transferProject`; `spikeWindows`
+  // has no `organizationId`. Both are intentional no-ops, but they must appear so
+  // the registry stays the single, exhaustive source of truth.
+  projectKeys: noopDrain,
+  spikeWindows: noopDrain,
+};
+
+/**
+ * Re-stamp a transferred project's data onto its new organization by walking the
+ * registry-keyed `ORG_DRAINERS` as a state machine: each invocation runs exactly
+ * ONE step's one page (Convex allows a single paginated query per call), then
+ * reschedules from where it left off. `step` indexes `TENANT_SCOPED_TABLES`.
  */
 export const restampProjectOrg = internalMutation({
   args: {
@@ -371,281 +664,12 @@ export const restampProjectOrg = internalMutation({
     cursor: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, { projectId: pid, targetOrganizationId: to, step = 0, cursor = null }) => {
-    const db = ctx.db;
-    type DrainResult = { count: number; isDone: boolean; cursor: string };
-
-    // Org-rewrite drainers (cursor-paginated). Order mirrors `purgeProjectData`.
-    // Every table below carries `organizationId` (verified against the schema);
-    // `issueUsers` and `spikeWindows` are intentionally absent (no org field), and
-    // `savedViews` / `dashboardWidgets` are handled as detach steps, not here.
-    const drains: Array<(c: string | null) => Promise<DrainResult>> = [
-      async (c) => {
-        const p = await db
-          .query('events')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('transactions')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('transactionRollups')
-          .withIndex('by_project_bucket', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('sessions')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('sessionBuckets')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('profiles')
-          .withIndex('by_project_profileId', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('replaySegments')
-          .withIndex('by_replay', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('replays')
-          .withIndex('by_project_replayId', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('attachments')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('feedback')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('monitors')
-          .withIndex('by_project_slug', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('checkIns')
-          .withIndex('by_project_checkInId', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('uptimeMonitors')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('releases')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('releaseArtifacts')
-          .withIndex('by_project_release', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('releaseCommits')
-          .withIndex('by_project_release', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('deploys')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('usageDaily')
-          .withIndex('by_project_day', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('alertRules')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('metricAlerts')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('usageAlerts')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('alertDeliveries')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('issueMerges')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('projectIntegrations')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      // Issues: re-stamp the issue row and walk its comments (also org-bearing).
-      // `issueUsers` is intentionally skipped -- it has no organizationId.
-      async (c) => {
-        const p = await db
-          .query('issues')
-          .withIndex('by_project_lastSeen', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: ISSUE_BATCH, cursor: c });
-        let count = p.page.length;
-        for (const issue of p.page) {
-          await db.patch(issue._id, { organizationId: to });
-          const comments = await db
-            .query('issueComments')
-            .withIndex('by_issue', (q) => q.eq('issueId', issue._id))
-            .collect();
-          for (const cm of comments) await db.patch(cm._id, { organizationId: to });
-          count += comments.length;
-        }
-        return { count, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      // Webhooks + delivery logs + cron notification deliveries move with the
-      // project (they carry organizationId). Historically absent here, which left
-      // a transferred project's webhook rows stamped with the SOURCE org's id.
-      async (c) => {
-        const p = await db
-          .query('webhooks')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('webhookDeliveries')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      async (c) => {
-        const p = await db
-          .query('notificationDeliveries')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .paginate({ numItems: BATCH, cursor: c });
-        for (const r of p.page) await db.patch(r._id, { organizationId: to });
-        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
-      },
-      // Detach steps: these rows belong to the SOURCE org (a user's saved view, a
-      // dashboard's widget) and must NOT move; only their optional project pointer
-      // is cleared. Clearing projectId removes the row from `by_project`, so the
-      // simple `.take()` drain terminates.
-      async () => {
-        const rows = await db
-          .query('savedViews')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH);
-        for (const r of rows) await db.patch(r._id, { projectId: undefined });
-        return { count: rows.length, isDone: rows.length < BATCH, cursor: '' };
-      },
-      async () => {
-        const rows = await db
-          .query('dashboardWidgets')
-          .withIndex('by_project', (q) => q.eq('projectId', pid))
-          .take(BATCH);
-        for (const r of rows) await db.patch(r._id, { projectId: undefined });
-        return { count: rows.length, isDone: rows.length < BATCH, cursor: '' };
-      },
-    ];
-
-    // Run exactly one step's one page per invocation (single paginate per call).
-    if (step >= drains.length) return;
-    const res = await drains[step]!(cursor);
+    if (step >= TENANT_SCOPED_TABLES.length) return;
+    const res = await ORG_DRAINERS[TENANT_SCOPED_TABLES[step]!](ctx, pid, to, cursor);
     const nextStep = res.isDone ? step + 1 : step;
     const nextCursor = res.isDone ? null : res.cursor;
 
-    if (nextStep < drains.length) {
+    if (nextStep < TENANT_SCOPED_TABLES.length) {
       await ctx.scheduler.runAfter(0, internal.projectLifecycle.restampProjectOrg, {
         projectId: pid,
         targetOrganizationId: to,

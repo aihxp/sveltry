@@ -110,7 +110,11 @@ core to around 45 tables spanning issues/events, performance (transactions, roll
 (sessions, buckets), replays, profiles, cron + uptime monitors, alerting (rules, metric/usage alerts,
 delivery logs), webhooks, source-map artifacts, API tokens, teams, saved views, dashboards, and usage
 accounting. The project-scoped subset is enumerated and schema-checked in
-`apps/backend/convex/lib/tenantTables.ts`. The load-bearing core and its key indexes:
+`apps/backend/convex/lib/tenantTables.ts`, and the two whole-project lifecycle ops (delete
+`purgeProjectData`, transfer `restampProjectOrg`) are driven by `Record<ProjectScopedTable, ...>`
+drainer maps over that registry, so the build fails if a registered table has no purge / transfer
+step (schema -> registry -> drainers is compile-enforced end to end). The load-bearing core and its
+key indexes:
 
 - `issues.by_project_fingerprint` `[projectId, fingerprint]` - the upsert key on every ingest. This
   is the hottest lookup in the system, so it is the primary issue index.
