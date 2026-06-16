@@ -406,6 +406,9 @@ export default defineSchema({
   })
     .index('by_issue', ['issueId', 'timestamp'])
     .index('by_project', ['projectId', 'timestamp'])
+    // Org-wide time-ordered scan (Discover / cross-project analytics) without
+    // fanning out per project. Mirrors `transactions.by_org`.
+    .index('by_org', ['organizationId', 'timestamp'])
     .index('by_eventId', ['eventId'])
     // Selective lookup used to make ingestion idempotent per project: an SDK
     // retry resending the same `event_id` must not double-count.

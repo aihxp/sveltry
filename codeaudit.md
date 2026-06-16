@@ -269,8 +269,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Force a cron to throw in a test deployment and confirm the failure is detectable in-app (stale heartbeat / lastError set) rather than only in the external Convex console.
 - Related: Shares the missing-signal-layer root cause with OBS-002.
 
-### [PERF-001] Org-iterating crons bounded only by .take(500) orgs with a large per-org inner scan; silently skip orgs and rescan from scratch each tick
+### [PERF-001] ~~Org-iterating crons bounded only by .take(500) orgs with a large per-org inner scan; silently skip orgs and rescan from scratch each tick~~ [RESOLVED - Slice 9]
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Performance & Efficiency
+- Status: RESOLVED (Slice 9). The org/project-iterating crons now scan up to CRON_ENTITY_CAP (2000) and log a warning via warnIfCapped when the cap is hit, so truncation is visible instead of silent (full cursor pagination across ticks is the follow-up if a deployment ever exceeds that).
 - Location: `apps/backend/convex/maintenance.ts:46-66`, `apps/backend/convex/maintenance.ts:75-148`, `apps/backend/convex/maintenance.ts:154-175`
 - Evidence: sweepOngoing, rollupTransactions, and detectMissedCheckIns all do `await ctx.db.query('organizations').take(500)` then loop every org with a per-org scan. rollupTransactions reads up to 8000 raw transactions per org (`.take(8000)` via by_org, maintenance.ts:84-87) and builds an in-memory Map, recomputing the last 2 hours from raw every hour. sweepOngoing takes 500 unresolved issues per org; detectMissedCheckIns takes 500 monitors per org. The org list is hard-capped at 500 with no cursor, so org #501 is never swept, and each tick re-reads everything from the start (no progress cursor).
 - Impact: On a deployment with >500 orgs, orgs past the cap silently never age issues, never get latency rollups, and never get missed-check-in detection, a correctness-affecting performance cliff, not just slowness. Before that, rollupTransactions' hourly 8000-row-per-org raw scan grows with per-org transaction volume and runs entirely in one mutation; a few high-volume orgs can make the hourly tick heavy and risk Convex read/time limits.
@@ -278,8 +279,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Seed >500 orgs (or lower the cap in a test) and confirm every org's issues age, rollups populate, and missed check-ins fire across successive cron ticks; measure rollupTransactions read count per tick stays bounded as one org's transaction volume grows.
 - Related: none
 
-### [PERF-002] Analytics queries pull thousands of full event/transaction rows (including the large payload blob) into memory and aggregate in JS
+### [PERF-002] Analytics queries pull thousands of full event/transaction rows (including the large payload blob) into memory and aggregate in JS [ACCEPTED - Slice 9]
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Performance & Efficiency
+- Status: ACCEPTED (Slice 9). Suspected scaling concern, not a correctness bug: the analytics queries are bounded by explicit SAMPLE caps, and Convex returns whole documents (no field projection), so trimming the payload load would mean denormalizing aggregate fields into indexed columns - a larger change whose cost is not justified at the single-node, team-scale target the audit calibrates to. Revisit if a dedicated analytics tier is added.
 - Location: `apps/backend/convex/discover.ts:84-117`, `apps/backend/convex/transactions.ts:187-191`, `apps/backend/convex/transactions.ts:350-354`, `apps/backend/convex/sessions.ts:104-108`
 - Evidence: runDiscover reads up to SCAN_CAP=10000 rows (discover.ts:13) via by_project/by_org then filters and groups in JS; for the errors dataset every row carries the full normalized Sentry `payload` (schema.ts:399, `payload: v.any()`, the whole nodestore blob), and userOf() reads payload.user (discover.ts:44-49). transactions.performanceIssues reads SPAN_SAMPLE=1000 transactions and iterates `payload.spans` per row (transactions.ts:196). transactionStats reads STATS_SAMPLE=2000 and releaseHealth reads HEALTH_SAMPLE=5000 + BUCKET_SAMPLE=5000 full rows, all into one query's memory.
 - Impact: Each call materializes thousands of multi-KB documents (event/transaction payloads are large) into a single reactive query's memory and CPU, then does O(n) JS work. These are live convex-svelte queries, so they recompute on every relevant write, a Stats/Discover/Performance page open on a busy org repeatedly pulls and re-aggregates 1000-10000 fat rows. This drives query latency and Convex bandwidth/CPU disproportionately to the small result returned.
@@ -287,8 +289,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Compare query bytes-read/latency before and after for an org with thousands of events/transactions; confirm Discover/Stats/Performance pages return the same shape with a fraction of the bandwidth.
 - Related: none
 
-### [PERF-003] Org-wide Discover over the errors dataset fans out per project because events has no org+timestamp index
+### [PERF-003] ~~Org-wide Discover over the errors dataset fans out per project because events has no org+timestamp index~~ [RESOLVED - Slice 9]
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Performance & Efficiency
+- Status: RESOLVED (Slice 9). Added an events `by_org` [organizationId, timestamp] index (mirroring transactions) and rewrote the org-wide Discover branch to a single time-ordered scan, removing the per-project fan-out and the earlier-projects sampling skew.
 - Location: `apps/backend/convex/discover.ts:103-117`, `apps/backend/convex/schema.ts:404-413`
 - Evidence: For an org-wide errors query (no projectId), the code comments 'Events have no org+timestamp index, so fan out over the org's projects' and loops every project, issuing a separate `by_project` range scan per project until SCAN_CAP is reached (discover.ts:104-116). The events table indexes are by_issue, by_project, by_eventId, by_project_eventId, by_org_eventId, none is (organizationId, timestamp) (schema.ts:404-413). Transactions, by contrast, do have a by_org timestamp index (schema.ts:481) and take the single-scan path.
 - Impact: An org with many projects issues one indexed scan per project on every org-wide error Discover run, and the rows are gathered in project order (not time order), so the SCAN_CAP=10000 window is not the most-recent 10k events org-wide, it skews toward earlier-iterated projects, making the 'sampled' result both slower and less representative as project count grows.
@@ -296,8 +299,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: With an org of N projects, confirm org-wide error Discover issues a single index scan instead of N, and that the sampled window is the most-recent events across the org.
 - Related: none
 
-### [PERF-004] Metric-alert cron issues N sequential per-alert queries, each a .take(5000) raw scan, every 5 minutes
+### [PERF-004] Metric-alert cron issues N sequential per-alert queries, each a .take(5000) raw scan, every 5 minutes [ACCEPTED - Slice 9]
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Performance & Efficiency
+- Status: ACCEPTED (Slice 9). Suspected scaling concern: each metric-alert evaluation is bounded by a .take(5000) sample, run every 5 minutes; reducing the per-alert scans requires a pre-aggregated rollup tier (the same Later-horizon analytics tier as PERF-002). Not justified at the current scale/maturity; the eval is correct, just not pre-aggregated.
 - Location: `apps/backend/convex/metricAlerts.ts:207-221`, `apps/backend/convex/metricAlerts.ts:100-174`, `apps/backend/convex/crons.ts:34-38`
 - Evidence: evaluateMetricAlerts loads up to 500 enabled alerts (enabledMetricAlerts take(500), metricAlerts.ts:183) then loops them, awaiting one `metricValue` runQuery per alert serially (metricAlerts.ts:214-221). For error_count it scans up to 5000 events via by_project (line 113-117), for env-scoped p95 up to 5000 transactions (line 129-135), for crash_free up to 5000 sessions (line 166-169), and then filters by environment in JS, so the environment is not an index column. This runs every 5 minutes (crons.ts:35).
 - Impact: Each 5-minute tick can do up to 500 sequential round-trip queries, several of which each pull 5000 rows. The serial await chain plus large per-query scans makes the action's wall-clock and total read volume scale with (number of alerts) x (events/transactions/sessions per window). For error_count and crash_free the env filter is applied post-scan, so a low-volume target environment still pays the full 5000-row scan of all environments.
@@ -502,8 +506,9 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Deploy with SITE_URL unset and confirm the instance signals the misconfiguration (warning log or settings indicator) rather than silently producing link-less alerts and localhost auth origins.
 - Related: none
 
-### [PERF-005] Multi-event envelope ingests one event at a time via serial runMutation round-trips
+### [PERF-005] Multi-event envelope ingests one event at a time via serial runMutation round-trips [ACCEPTED - Slice 9]
 - Severity: Low | Confidence: Likely | Effort: M | Dimension: Performance & Efficiency
+- Status: ACCEPTED (Slice 9). Deliberate tradeoff: per-event runMutation calls keep each event isolated, so one bad/failing event never fails the rest of the batch (the property ERR-002 relies on), and Convex local round-trips are cheap. Batching would couple events for a marginal gain; not worth the isolation loss at this scale.
 - Location: `apps/backend/convex/ingest.ts:275-300`, `apps/backend/convex/ingest.ts:302-325`
 - Evidence: In the ingest httpAction, each error event and each transaction in the envelope is persisted with its own `await ctx.runMutation(internal.ingest.recordEvent, ...)` inside a serial for-loop (ingest.ts:281 and 306). An envelope carrying K events triggers K sequential action->mutation round trips on the synchronous request path; only the alert/symbolication fan-out is deferred, the persistence itself blocks the 200 response.
 - Impact: For SDKs that batch multiple events per envelope, ingest latency scales linearly with events-per-envelope because the round trips are serial, not batched or parallelized. Most Sentry SDK envelopes carry a single error event so the common case is fine; the cost shows up for multi-item envelopes (and large transaction batches).
