@@ -11,10 +11,19 @@
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
   import CopyButton from '$lib/components/CopyButton.svelte';
-  import { buildDsn, formatBytes, relativeTime } from '$lib/utils';
-  import TrashIcon from '@lucide/svelte/icons/trash-2';
-  import FileCode2Icon from '@lucide/svelte/icons/file-code-2';
+  import { buildDsn } from '$lib/utils';
   import GitBranchIcon from '@lucide/svelte/icons/git-branch';
+  // Each feature section is its own focused component; this page composes them
+  // and owns only the cohesive project-configuration + danger-zone sections.
+  import IntegrationCard from '$lib/components/project/IntegrationCard.svelte';
+  import UsageCard from '$lib/components/project/UsageCard.svelte';
+  import DeploysCard from '$lib/components/project/DeploysCard.svelte';
+  import AlertRulesCard from '$lib/components/project/AlertRulesCard.svelte';
+  import WebhooksCard from '$lib/components/project/WebhooksCard.svelte';
+  import MetricAlertsCard from '$lib/components/project/MetricAlertsCard.svelte';
+  import UsageAlertsCard from '$lib/components/project/UsageAlertsCard.svelte';
+  import NotificationDeliveriesCard from '$lib/components/project/NotificationDeliveriesCard.svelte';
+  import SourceMapsCard from '$lib/components/project/SourceMapsCard.svelte';
 
   const auth = useAuth();
   const client = useConvexClient();
@@ -25,106 +34,16 @@
     auth.isAuthenticated && slug ? { slug } : ('skip' as const),
   );
   const projectId = $derived(proj.data?.project?._id as Id<'projects'> | undefined);
-  const rules = useQuery(api.alerts.listAlertRules, () =>
-    projectId ? { projectId } : ('skip' as const),
-  );
 
-  // Outbound webhooks: signed POSTs on issue-lifecycle events.
-  const webhooks = useQuery(api.webhooks.listWebhooks, () =>
-    projectId ? { projectId } : ('skip' as const),
-  );
-  const webhookDeliveries = useQuery(api.webhooks.recentDeliveries, () =>
-    projectId ? { projectId, limit: 10 } : ('skip' as const),
-  );
-  const WEBHOOK_EVENTS = [
-    { value: 'issue.resolved', label: 'Issue resolved' },
-    { value: 'issue.unresolved', label: 'Issue unresolved' },
-    { value: 'issue.ignored', label: 'Issue ignored' },
-    { value: 'issue.assigned', label: 'Issue assigned' },
-    { value: 'issue.unassigned', label: 'Issue unassigned' },
-  ] as const;
-  type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]['value'];
-  let webhookUrl = $state('');
-  let webhookEvents = $state<WebhookEvent[]>(['issue.resolved']);
-  let creatingWebhook = $state(false);
-  let webhookError = $state('');
-  let newWebhookSecret = $state('');
-  function toggleWebhookEvent(value: WebhookEvent, checked: boolean) {
-    webhookEvents = checked ? [...webhookEvents, value] : webhookEvents.filter((e) => e !== value);
-  }
-  async function addWebhook(e: SubmitEvent) {
-    e.preventDefault();
-    if (!projectId) return;
-    creatingWebhook = true;
-    webhookError = '';
-    newWebhookSecret = '';
-    try {
-      const res = await client.mutation(api.webhooks.createWebhook, {
-        projectId,
-        url: webhookUrl.trim(),
-        events: webhookEvents,
-      });
-      newWebhookSecret = res.secret;
-      webhookUrl = '';
-      webhookEvents = ['issue.resolved'];
-    } catch (err) {
-      webhookError = err instanceof Error ? err.message : 'Could not create webhook';
-    } finally {
-      creatingWebhook = false;
-    }
-  }
-  async function removeWebhook(id: Id<'webhooks'>) {
-    await client.mutation(api.webhooks.deleteWebhook, { webhookId: id });
-  }
-  async function toggleWebhookEnabled(id: Id<'webhooks'>, enabled: boolean) {
-    await client.mutation(api.webhooks.setWebhookEnabled, { webhookId: id, enabled });
-  }
-  const artifacts = useQuery(api.sourcemaps.listProjectArtifacts, () =>
-    projectId ? { projectId } : ('skip' as const),
-  );
-  const metricAlerts = useQuery(api.metricAlerts.listMetricAlerts, () =>
-    projectId ? { projectId } : ('skip' as const),
-  );
-  let usageWindow = $state(30);
-  const usage = useQuery(api.usage.projectUsage, () =>
-    projectId ? { projectId, windowDays: usageWindow } : ('skip' as const),
-  );
-  // Gap-fill the sparse daily series into a continuous bar series across the window.
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const usageSeries = $derived.by(() => {
-    const data = usage.data;
-    if (!data) return [];
-    const byDay = new Map(data.days.map((d) => [d.day, d]));
-    const today = Math.floor(Date.now() / DAY_MS) * DAY_MS;
-    const out: {
-      day: number;
-      events: number;
-      transactions: number;
-      dropped: number;
-      filtered: number;
-    }[] = [];
-    for (let i = data.windowDays - 1; i >= 0; i--) {
-      const day = today - i * DAY_MS;
-      const row = byDay.get(day);
-      out.push({
-        day,
-        events: row?.events ?? 0,
-        transactions: row?.transactions ?? 0,
-        dropped: row?.dropped ?? 0,
-        filtered: row?.filtered ?? 0,
-      });
-    }
-    return out;
-  });
-  const usageMax = $derived(Math.max(1, ...usageSeries.map((d) => d.events)));
-  const dayLabel = (ms: number) =>
-    new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const deploys = useQuery(api.usage.listDeploys, () =>
-    projectId ? { projectId } : ('skip' as const),
-  );
   const teams = useQuery(api.teams.listTeams, () =>
     auth.isAuthenticated ? {} : ('skip' as const),
   );
+
+  const lines = (s: string): string[] =>
+    s
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
 
   // Per-key allowed domains (one pattern per line). Seeded once per key from the
   // loaded keys; saving an empty list clears the restriction.
@@ -140,10 +59,7 @@
   async function saveOrigins(keyId: Id<'projectKeys'>) {
     savingOrigins = keyId;
     try {
-      const allowedOrigins = (originDrafts[keyId] ?? '')
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const allowedOrigins = lines(originDrafts[keyId] ?? '');
       await client.mutation(api.projects.setKeyAllowedOrigins, { keyId, allowedOrigins });
     } finally {
       savingOrigins = null;
@@ -163,73 +79,6 @@
     } finally {
       assigningTeam = false;
     }
-  }
-
-  // Issue-tracker integration (Jira / Linear).
-  const integration = useQuery(api.integrations.getProjectIntegration, () =>
-    projectId ? { projectId } : ('skip' as const),
-  );
-  let provider = $state<'' | 'jira' | 'linear'>('');
-  let jiraSite = $state('');
-  let jiraProjectKey = $state('');
-  let jiraEmail = $state('');
-  let jiraType = $state('Task');
-  let linearTeam = $state('');
-  let secret = $state('');
-  let intEnabled = $state(true);
-  let intAuto = $state(false);
-  let intSeeded = false;
-  let savingInt = $state(false);
-  $effect(() => {
-    const d = integration.data;
-    if (d && !intSeeded) {
-      intSeeded = true;
-      intEnabled = d.isEnabled;
-      intAuto = d.autoCreate;
-      provider = d.display.type;
-      if (d.display.type === 'jira') {
-        jiraSite = d.display.siteUrl;
-        jiraProjectKey = d.display.projectKey;
-        jiraEmail = d.display.email;
-        jiraType = d.display.issueTypeName;
-      } else {
-        linearTeam = d.display.teamId;
-      }
-    }
-  });
-  async function saveIntegration() {
-    if (!projectId || !provider || savingInt) return;
-    savingInt = true;
-    try {
-      const config =
-        provider === 'jira'
-          ? {
-              type: 'jira' as const,
-              siteUrl: jiraSite.trim(),
-              projectKey: jiraProjectKey.trim(),
-              email: jiraEmail.trim(),
-              apiToken: secret,
-              issueTypeName: jiraType.trim() || 'Task',
-            }
-          : { type: 'linear' as const, apiKey: secret, teamId: linearTeam.trim() };
-      await client.mutation(api.integrations.upsertIntegration, {
-        projectId,
-        config,
-        isEnabled: intEnabled,
-        autoCreate: intAuto,
-      });
-      secret = '';
-    } finally {
-      savingInt = false;
-    }
-  }
-  async function removeIntegration() {
-    if (!integration.data) return;
-    await client.mutation(api.integrations.deleteIntegration, {
-      integrationId: integration.data.id,
-    });
-    intSeeded = false;
-    provider = '';
   }
 
   // Project limits/settings (seeded once from the loaded project)
@@ -282,66 +131,6 @@
     }
   }
 
-  // Delete project (danger zone): requires typing the exact project name.
-  let deleteConfirm = $state('');
-  let deleting = $state(false);
-  let deleteError = $state('');
-  const deleteArmed = $derived(
-    !!proj.data?.project && deleteConfirm.trim() === proj.data.project.name,
-  );
-  async function deleteProject() {
-    if (!projectId || !deleteArmed) return;
-    deleting = true;
-    deleteError = '';
-    try {
-      await client.mutation(api.projectLifecycle.deleteProject, {
-        projectId,
-        confirmName: deleteConfirm.trim(),
-      });
-      await goto('/projects');
-    } catch (err) {
-      deleting = false;
-      deleteError = err instanceof Error ? err.message : 'Could not delete the project';
-    }
-  }
-
-  // Transfer project (danger zone): move it (and all its data) to another org the
-  // caller administers. The picker lists the caller's admin/owner orgs except the
-  // current (active) one.
-  const myOrgs = useQuery(api.organizations.listMyOrganizations, () =>
-    auth.isAuthenticated ? {} : ('skip' as const),
-  );
-  const transferOrgs = $derived(
-    (myOrgs.data ?? []).filter((o) => !o.isActive && (o.role === 'admin' || o.role === 'owner')),
-  );
-  let transferTarget = $state('');
-  let transferConfirm = $state('');
-  let transferring = $state(false);
-  let transferError = $state('');
-  const transferArmed = $derived(
-    !!proj.data?.project && !!transferTarget && transferConfirm.trim() === proj.data.project.name,
-  );
-  async function transferProject() {
-    if (!projectId || !transferArmed) return;
-    transferring = true;
-    transferError = '';
-    try {
-      await client.mutation(api.projectLifecycle.transferProject, {
-        projectId,
-        targetOrganizationId: transferTarget,
-        confirmName: transferConfirm.trim(),
-      });
-    } catch (err) {
-      transferring = false;
-      transferError = err instanceof Error ? err.message : 'Could not transfer the project';
-      return;
-    }
-    // The transfer committed; the project has left this org (and its slug may have
-    // changed in the target), so leave the now-stale project view. Navigation runs
-    // outside the try so a navigation hiccup never reads as a transfer failure.
-    await goto('/projects');
-  }
-
   // Inbound data filters (one glob pattern per line). Seeded once from the project.
   let filterErrors = $state('');
   let filterReleases = $state('');
@@ -361,11 +150,6 @@
       filterBots = f?.filterBots ?? false;
     }
   });
-  const lines = (s: string): string[] =>
-    s
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
   async function saveFilters(e: SubmitEvent) {
     e.preventDefault();
     if (!projectId) return;
@@ -463,123 +247,64 @@
     }
   }
 
-  // New metric alert form
-  let maMetric = $state<'p95_latency' | 'error_count' | 'crash_free_rate'>('p95_latency');
-  let maThreshold = $state(1000);
-  let maTransaction = $state('');
-  let maEnvironment = $state('');
-  let maWindow = $state(60);
-  let maChannelType = $state<
-    'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
-  >('webhook');
-  let maTarget = $state('');
-  let savingMetric = $state(false);
-  const metricLabel = {
-    p95_latency: 'p95 latency (ms)',
-    error_count: 'errors',
-    crash_free_rate: 'crash-free %',
-  };
-
-  async function addMetricAlert(e: SubmitEvent) {
-    e.preventDefault();
-    if (!projectId) return;
-    savingMetric = true;
-    try {
-      await client.mutation(api.metricAlerts.createMetricAlert, {
-        projectId,
-        name: `${metricLabel[maMetric]} alert`,
-        metric: maMetric,
-        transactionName: maMetric === 'p95_latency' && maTransaction ? maTransaction : undefined,
-        environment: maEnvironment.trim() || undefined,
-        windowMinutes: maWindow,
-        threshold: maThreshold,
-        channels: [{ type: maChannelType, target: maTarget }],
-      });
-      maTarget = '';
-      maEnvironment = '';
-    } finally {
-      savingMetric = false;
-    }
-  }
-  async function deleteMetricAlert(id: Id<'metricAlerts'>) {
-    await client.mutation(api.metricAlerts.deleteMetricAlert, { alertId: id });
-  }
-
-  // Quota-usage alerts
-  const usageAlerts = useQuery(api.usageAlerts.listUsageAlerts, () =>
-    projectId ? { projectId } : ('skip' as const),
+  // Delete project (danger zone): requires typing the exact project name.
+  let deleteConfirm = $state('');
+  let deleting = $state(false);
+  let deleteError = $state('');
+  const deleteArmed = $derived(
+    !!proj.data?.project && deleteConfirm.trim() === proj.data.project.name,
   );
-  // Recent cron-driven notification deliveries (metric/usage alerts), org-wide,
-  // so a failing channel is visible instead of silently swallowed.
-  const notificationDeliveries = useQuery(api.notifications.listRecent, () => ({ limit: 20 }));
-  let uaThreshold = $state(80);
-  let uaChannelType = $state<
-    'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
-  >('webhook');
-  let uaTarget = $state('');
-  let savingUsageAlert = $state(false);
-  async function addUsageAlert(e: SubmitEvent) {
-    e.preventDefault();
-    if (!projectId) return;
-    savingUsageAlert = true;
+  async function deleteProject() {
+    if (!projectId || !deleteArmed) return;
+    deleting = true;
+    deleteError = '';
     try {
-      await client.mutation(api.usageAlerts.createUsageAlert, {
+      await client.mutation(api.projectLifecycle.deleteProject, {
         projectId,
-        thresholdPercent: Number(uaThreshold),
-        channels: [{ type: uaChannelType, target: uaTarget }],
+        confirmName: deleteConfirm.trim(),
       });
-      uaTarget = '';
-    } finally {
-      savingUsageAlert = false;
-    }
-  }
-  async function deleteUsageAlert(id: Id<'usageAlerts'>) {
-    await client.mutation(api.usageAlerts.deleteUsageAlert, { alertId: id });
-  }
-
-  // New alert rule form
-  let ruleName = $state('');
-  let trigger = $state<'new_issue' | 'regression' | 'event_frequency'>('new_issue');
-  let threshold = $state(10);
-  let ruleEnvironment = $state('');
-  let channelType = $state<
-    'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
-  >('webhook');
-  const CHANNEL_OPTIONS = [
-    { value: 'webhook', label: 'Webhook' },
-    { value: 'slack', label: 'Slack' },
-    { value: 'discord', label: 'Discord' },
-    { value: 'email', label: 'Email' },
-    { value: 'msteams', label: 'MS Teams' },
-    { value: 'pagerduty', label: 'PagerDuty (routing key)' },
-    { value: 'opsgenie', label: 'Opsgenie (API key)' },
-  ];
-  let channelTarget = $state('');
-  let savingRule = $state(false);
-
-  async function addRule(e: SubmitEvent) {
-    e.preventDefault();
-    if (!projectId) return;
-    savingRule = true;
-    try {
-      await client.mutation(api.alerts.createAlertRule, {
-        projectId,
-        name: ruleName || `${trigger} alert`,
-        trigger,
-        threshold: trigger === 'event_frequency' ? threshold : undefined,
-        environment: ruleEnvironment.trim() || undefined,
-        channels: [{ type: channelType, target: channelTarget }],
-      });
-      ruleName = '';
-      channelTarget = '';
-      ruleEnvironment = '';
-    } finally {
-      savingRule = false;
+      await goto('/projects');
+    } catch (err) {
+      deleting = false;
+      deleteError = err instanceof Error ? err.message : 'Could not delete the project';
     }
   }
 
-  async function deleteRule(ruleId: Id<'alertRules'>) {
-    await client.mutation(api.alerts.deleteAlertRule, { ruleId });
+  // Transfer project (danger zone): move it (and all its data) to another org the
+  // caller administers. The picker lists the caller's admin/owner orgs except the
+  // current (active) one.
+  const myOrgs = useQuery(api.organizations.listMyOrganizations, () =>
+    auth.isAuthenticated ? {} : ('skip' as const),
+  );
+  const transferOrgs = $derived(
+    (myOrgs.data ?? []).filter((o) => !o.isActive && (o.role === 'admin' || o.role === 'owner')),
+  );
+  let transferTarget = $state('');
+  let transferConfirm = $state('');
+  let transferring = $state(false);
+  let transferError = $state('');
+  const transferArmed = $derived(
+    !!proj.data?.project && !!transferTarget && transferConfirm.trim() === proj.data.project.name,
+  );
+  async function transferProject() {
+    if (!projectId || !transferArmed) return;
+    transferring = true;
+    transferError = '';
+    try {
+      await client.mutation(api.projectLifecycle.transferProject, {
+        projectId,
+        targetOrganizationId: transferTarget,
+        confirmName: transferConfirm.trim(),
+      });
+    } catch (err) {
+      transferring = false;
+      transferError = err instanceof Error ? err.message : 'Could not transfer the project';
+      return;
+    }
+    // The transfer committed; the project has left this org (and its slug may have
+    // changed in the target), so leave the now-stale project view. Navigation runs
+    // outside the try so a navigation hiccup never reads as a transfer failure.
+    await goto('/projects');
   }
 </script>
 
@@ -659,7 +384,7 @@
       <Card.Content>
         {#if teams.data && teams.data.length > 0}
           <select
-            value={proj.data?.project?.teamId ?? ''}
+            value={project.teamId ?? ''}
             disabled={assigningTeam}
             onchange={(e) => assignTeam(e.currentTarget.value)}
             class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-72"
@@ -679,86 +404,7 @@
       </Card.Content>
     </Card.Root>
 
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Issue tracker</Card.Title>
-        <Card.Description>
-          Create Jira or Linear tickets from issues. Credentials are stored on your instance and
-          never shown again.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content class="space-y-3">
-        <select
-          bind:value={provider}
-          class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-72"
-        >
-          <option value="">No integration</option>
-          <option value="jira">Jira</option>
-          <option value="linear">Linear</option>
-        </select>
-
-        {#if provider === 'jira'}
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label>Site URL</Label>
-              <Input bind:value={jiraSite} placeholder="https://you.atlassian.net" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>Project key</Label>
-              <Input bind:value={jiraProjectKey} placeholder="OPS" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>Account email</Label>
-              <Input bind:value={jiraEmail} placeholder="you@company.com" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>Issue type</Label>
-              <Input bind:value={jiraType} placeholder="Task" />
-            </div>
-            <div class="space-y-1.5 sm:col-span-2">
-              <Label>API token</Label>
-              <Input
-                bind:value={secret}
-                type="password"
-                placeholder={integration.data ? 'Re-enter to save changes' : 'Atlassian API token'}
-              />
-            </div>
-          </div>
-        {:else if provider === 'linear'}
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label>Team ID (UUID)</Label>
-              <Input bind:value={linearTeam} placeholder="9cfb482a-81e3-..." />
-            </div>
-            <div class="space-y-1.5">
-              <Label>API key</Label>
-              <Input
-                bind:value={secret}
-                type="password"
-                placeholder={integration.data ? 'Re-enter to save changes' : 'Linear API key'}
-              />
-            </div>
-          </div>
-        {/if}
-
-        {#if provider}
-          <div class="flex flex-wrap items-center gap-4">
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" bind:checked={intEnabled} class="size-4" /> Enabled
-            </label>
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" bind:checked={intAuto} class="size-4" /> Auto-create on new issue
-            </label>
-          </div>
-          <div class="flex gap-2">
-            <Button onclick={saveIntegration} disabled={savingInt || !secret}>Save</Button>
-            {#if integration.data}
-              <Button variant="outline" onclick={removeIntegration}>Remove</Button>
-            {/if}
-          </div>
-        {/if}
-      </Card.Content>
-    </Card.Root>
+    <IntegrationCard projectId={project._id} />
 
     <Card.Root>
       <Card.Header>
@@ -892,559 +538,14 @@
       </Card.Content>
     </Card.Root>
 
-    {#if usage.data}
-      <Card.Root>
-        <Card.Header class="flex-row items-center justify-between space-y-0">
-          <Card.Title>Usage (last {usage.data.windowDays} days)</Card.Title>
-          <div class="flex gap-1">
-            {#each [7, 30, 90] as w (w)}
-              <Button
-                variant={usageWindow === w ? 'default' : 'outline'}
-                size="sm"
-                onclick={() => (usageWindow = w)}>{w}d</Button
-              >
-            {/each}
-          </div>
-        </Card.Header>
-        <Card.Content>
-          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <div class="text-xs uppercase tracking-wide text-muted-foreground">Events</div>
-              <div class="text-2xl font-bold tabular-nums">
-                {usage.data.totals.events.toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs uppercase tracking-wide text-muted-foreground">Transactions</div>
-              <div class="text-2xl font-bold tabular-nums">
-                {usage.data.totals.transactions.toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs uppercase tracking-wide text-muted-foreground">Dropped</div>
-              <div class="text-2xl font-bold tabular-nums text-muted-foreground">
-                {usage.data.totals.dropped.toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs uppercase tracking-wide text-muted-foreground">Filtered</div>
-              <div class="text-2xl font-bold tabular-nums text-muted-foreground">
-                {usage.data.totals.filtered.toLocaleString()}
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-6">
-            <div class="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
-              Events per day
-            </div>
-            {#if usageSeries.every((d) => d.events === 0)}
-              <p class="py-4 text-sm text-muted-foreground">No events in this window yet.</p>
-            {:else}
-              <div class="flex h-32 items-end gap-px">
-                {#each usageSeries as d (d.day)}
-                  <div
-                    class="flex-1"
-                    title={`${dayLabel(d.day)} · ${d.events.toLocaleString()} events · ${d.transactions.toLocaleString()} txns · ${d.dropped.toLocaleString()} dropped · ${d.filtered.toLocaleString()} filtered`}
-                  >
-                    <div
-                      class="rounded-t bg-primary/70 transition-colors hover:bg-primary"
-                      style={`height:${d.events ? Math.max(2, (d.events / usageMax) * 100) : 0}%`}
-                    ></div>
-                  </div>
-                {/each}
-              </div>
-              <div class="mt-1 flex justify-between text-xs text-muted-foreground">
-                <span>{dayLabel(usageSeries[0].day)}</span>
-                <span>up to {usageMax.toLocaleString()} / day</span>
-                <span>{dayLabel(usageSeries[usageSeries.length - 1].day)}</span>
-              </div>
-            {/if}
-          </div>
-        </Card.Content>
-      </Card.Root>
-    {/if}
-
-    {#if deploys.data && deploys.data.length > 0}
-      <Card.Root>
-        <Card.Header><Card.Title>Deploys</Card.Title></Card.Header>
-        <Card.Content class="px-0">
-          <div class="divide-y border-t">
-            {#each deploys.data as d (d._id)}
-              <div class="flex items-center gap-3 px-6 py-2.5 text-sm">
-                <Badge variant="muted" class="shrink-0">{d.environment}</Badge>
-                <span class="min-w-0 flex-1 truncate font-mono text-xs">{d.release}</span>
-                <span class="shrink-0 text-xs text-muted-foreground"
-                  >{relativeTime(d.deployedAt)}</span
-                >
-              </div>
-            {/each}
-          </div>
-        </Card.Content>
-      </Card.Root>
-    {/if}
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Alert rules</Card.Title>
-        <Card.Description>Get notified when issues appear or spike.</Card.Description>
-      </Card.Header>
-      <Card.Content class="space-y-4">
-        {#if rules.isLoading}
-          <p class="text-sm text-muted-foreground">Loading alert rules…</p>
-        {:else if rules.error}
-          <p class="text-sm text-destructive">Failed to load alert rules.</p>
-        {:else if rules.data && rules.data.length > 0}
-          <div class="space-y-2">
-            {#each rules.data as rule (rule._id)}
-              <div class="flex items-center justify-between rounded-lg border p-3">
-                <div class="min-w-0">
-                  <div class="text-sm font-medium">{rule.name}</div>
-                  <div class="truncate text-xs text-muted-foreground">
-                    {rule.trigger}{rule.threshold ? ` ≥ ${rule.threshold}` : ''}{rule.environment
-                      ? ` · env: ${rule.environment}`
-                      : ''} ·
-                    {rule.channels.map((c) => c.type).join(', ')}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onclick={() => deleteRule(rule._id)}
-                  aria-label="Delete rule"
-                >
-                  <TrashIcon class="size-4 text-destructive" />
-                </Button>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="text-sm text-muted-foreground">No alert rules yet.</p>
-        {/if}
-
-        <form class="space-y-3 rounded-lg border border-dashed p-4" onsubmit={addRule}>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label for="ruleName">Name</Label>
-              <Input id="ruleName" bind:value={ruleName} placeholder="Notify on new errors" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="trigger">Trigger</Label>
-              <select
-                id="trigger"
-                bind:value={trigger}
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="new_issue">New issue</option>
-                <option value="regression">Regression</option>
-                <option value="event_frequency">Event frequency</option>
-              </select>
-            </div>
-            {#if trigger === 'event_frequency'}
-              <div class="space-y-1.5 sm:col-span-2">
-                <Label for="threshold">Threshold (events)</Label>
-                <Input id="threshold" type="number" min="1" bind:value={threshold} />
-              </div>
-            {/if}
-            <div class="space-y-1.5">
-              <Label for="ruleEnvironment">Environment (blank = all)</Label>
-              <Input id="ruleEnvironment" bind:value={ruleEnvironment} placeholder="production" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="channelType">Channel</Label>
-              <select
-                id="channelType"
-                bind:value={channelType}
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {#each CHANNEL_OPTIONS as o (o.value)}
-                  <option value={o.value}>{o.label}</option>
-                {/each}
-              </select>
-            </div>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="target">Channel URL</Label>
-            <Input
-              id="target"
-              bind:value={channelTarget}
-              required
-              placeholder="https://hooks.slack.com/…"
-            />
-          </div>
-          <Button type="submit" size="sm" disabled={savingRule}>
-            {savingRule ? 'Adding…' : 'Add alert rule'}
-          </Button>
-        </form>
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Webhooks</Card.Title>
-        <Card.Description>
-          POST a signed JSON payload to your endpoint on issue lifecycle events. Each request is
-          signed with the webhook's secret (HMAC-SHA256) in the
-          <code class="font-mono">X-Sveltry-Signature</code> header.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content class="space-y-4">
-        {#if webhooks.isLoading}
-          <p class="text-sm text-muted-foreground">Loading webhooks…</p>
-        {:else if webhooks.error}
-          <p class="text-sm text-destructive">Failed to load webhooks.</p>
-        {:else if webhooks.data && webhooks.data.length > 0}
-          <div class="space-y-2">
-            {#each webhooks.data as wh (wh._id)}
-              <div class="flex items-center justify-between gap-3 rounded-lg border p-3">
-                <div class="min-w-0">
-                  <div class="truncate text-sm font-medium">{wh.url}</div>
-                  <div class="truncate text-xs text-muted-foreground">
-                    {wh.events.join(', ')} ·
-                    <code class="font-mono">{wh.secretPrefix}…</code>
-                  </div>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <Badge variant={wh.enabled ? 'success' : 'muted'}>
-                    {wh.enabled ? 'enabled' : 'disabled'}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onclick={() => toggleWebhookEnabled(wh._id, !wh.enabled)}
-                  >
-                    {wh.enabled ? 'Disable' : 'Enable'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onclick={() => removeWebhook(wh._id)}
-                    aria-label="Delete webhook"
-                  >
-                    <TrashIcon class="size-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="text-sm text-muted-foreground">No webhooks yet.</p>
-        {/if}
-
-        {#if webhookDeliveries.data && webhookDeliveries.data.length > 0}
-          <div class="mt-3 space-y-1">
-            <p class="text-xs font-medium text-muted-foreground">Recent deliveries</p>
-            {#each webhookDeliveries.data as d (d._id)}
-              <div class="flex items-center justify-between gap-2 text-xs">
-                <span class="min-w-0 truncate">
-                  {d.event}{#if d.detail && !d.ok}<span class="text-muted-foreground">
-                      · {d.detail}</span
-                    >{/if}
-                </span>
-                <span class="flex shrink-0 items-center gap-2">
-                  <Badge variant={d.ok ? 'success' : 'destructive'}
-                    >{d.ok ? (d.statusCode ?? 'ok') : (d.statusCode ?? 'failed')}</Badge
-                  >
-                  <span class="text-muted-foreground">{relativeTime(d.deliveredAt)}</span>
-                </span>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-        {#if newWebhookSecret}
-          <div class="space-y-1.5 rounded-lg border border-dashed p-3">
-            <p class="text-xs text-muted-foreground">
-              Copy this signing secret now. You will not be able to see it again.
-            </p>
-            <div class="flex items-center gap-2">
-              <code
-                class="min-w-0 flex-1 truncate rounded bg-muted/40 px-2 py-1.5 font-mono text-xs"
-                >{newWebhookSecret}</code
-              >
-              <CopyButton text={newWebhookSecret} />
-            </div>
-          </div>
-        {/if}
-
-        <form class="space-y-3 rounded-lg border border-dashed p-4" onsubmit={addWebhook}>
-          <div class="space-y-1.5">
-            <Label for="webhookUrl">Endpoint URL</Label>
-            <Input
-              id="webhookUrl"
-              type="url"
-              bind:value={webhookUrl}
-              required
-              placeholder="https://example.com/hooks/sveltry"
-            />
-          </div>
-          <div class="space-y-1.5">
-            <Label>Events</Label>
-            <div class="flex flex-wrap gap-x-4 gap-y-2">
-              {#each WEBHOOK_EVENTS as ev (ev.value)}
-                <label class="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    class="size-4"
-                    checked={webhookEvents.includes(ev.value)}
-                    onchange={(e) => toggleWebhookEvent(ev.value, e.currentTarget.checked)}
-                  />
-                  {ev.label}
-                </label>
-              {/each}
-            </div>
-          </div>
-          {#if webhookError}<p class="text-sm text-destructive">{webhookError}</p>{/if}
-          <Button type="submit" size="sm" disabled={creatingWebhook || webhookEvents.length === 0}>
-            {creatingWebhook ? 'Adding…' : 'Add webhook'}
-          </Button>
-        </form>
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Metric alerts</Card.Title>
-        <Card.Description
-          >Alert when latency, error count, or crash-free rate crosses a threshold.</Card.Description
-        >
-      </Card.Header>
-      <Card.Content class="space-y-4">
-        {#if metricAlerts.data && metricAlerts.data.length > 0}
-          <div class="space-y-2">
-            {#each metricAlerts.data as a (a._id)}
-              <div class="flex items-center justify-between rounded-lg border p-3">
-                <div class="min-w-0">
-                  <div class="text-sm font-medium">{a.name}</div>
-                  <div class="truncate text-xs text-muted-foreground">
-                    {metricLabel[a.metric]}
-                    {a.metric === 'crash_free_rate' ? '<' : '>'}
-                    {a.threshold} over {a.windowMinutes}m{a.environment
-                      ? ` · env: ${a.environment}`
-                      : ''}
-                    {#if a.lastValue != null}· last {Math.round(a.lastValue)}{/if}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onclick={() => deleteMetricAlert(a._id)}
-                  aria-label="Delete metric alert"
-                >
-                  <TrashIcon class="size-4 text-destructive" />
-                </Button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-        <form class="space-y-3 rounded-lg border border-dashed p-4" onsubmit={addMetricAlert}>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label for="maMetric">Metric</Label>
-              <select
-                id="maMetric"
-                bind:value={maMetric}
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="p95_latency">p95 latency (ms)</option>
-                <option value="error_count">Error count</option>
-                <option value="crash_free_rate">Crash-free rate (%)</option>
-              </select>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="maThreshold">
-                Threshold {maMetric === 'crash_free_rate' ? '(alert below)' : '(alert above)'}
-              </Label>
-              <Input id="maThreshold" type="number" bind:value={maThreshold} />
-            </div>
-            {#if maMetric === 'p95_latency'}
-              <div class="space-y-1.5 sm:col-span-2">
-                <Label for="maTransaction">Transaction (blank = all)</Label>
-                <Input id="maTransaction" bind:value={maTransaction} placeholder="GET /api/users" />
-              </div>
-            {/if}
-            <div class="space-y-1.5">
-              <Label for="maWindow">Window (minutes)</Label>
-              <Input id="maWindow" type="number" min="5" bind:value={maWindow} />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="maEnvironment">Environment (blank = all)</Label>
-              <Input id="maEnvironment" bind:value={maEnvironment} placeholder="production" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="maChannel">Channel</Label>
-              <select
-                id="maChannel"
-                bind:value={maChannelType}
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {#each CHANNEL_OPTIONS as o (o.value)}
-                  <option value={o.value}>{o.label}</option>
-                {/each}
-              </select>
-            </div>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="maTarget"
-              >{maChannelType === 'email' ? 'Email address' : 'Channel URL'}</Label
-            >
-            <Input id="maTarget" bind:value={maTarget} required />
-          </div>
-          <Button type="submit" size="sm" disabled={savingMetric}>Add metric alert</Button>
-        </form>
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Usage alerts</Card.Title>
-        <Card.Description>
-          Get notified when this month's events reach a percentage of the monthly quota.{!project.monthlyEventQuota
-            ? ' Set a monthly event quota above first.'
-            : ''}
-        </Card.Description>
-      </Card.Header>
-      <Card.Content class="space-y-4">
-        {#if usageAlerts.data && usageAlerts.data.length > 0}
-          <div class="space-y-2">
-            {#each usageAlerts.data as a (a._id)}
-              <div class="flex items-center justify-between rounded-lg border p-3">
-                <div class="min-w-0">
-                  <div class="text-sm font-medium">At {a.thresholdPercent}% of quota</div>
-                  <div class="truncate text-xs text-muted-foreground">
-                    {a.channels.map((c) => c.type).join(', ')}
-                    {#if a.lastFiredAt}· fired {relativeTime(a.lastFiredAt)}{/if}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onclick={() => deleteUsageAlert(a._id)}
-                  aria-label="Delete usage alert"
-                >
-                  <TrashIcon class="size-4 text-destructive" />
-                </Button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-        <form class="space-y-3 rounded-lg border border-dashed p-4" onsubmit={addUsageAlert}>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label for="uaThreshold">Threshold (% of quota)</Label>
-              <Input id="uaThreshold" type="number" min="1" max="100" bind:value={uaThreshold} />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="uaChannel">Channel</Label>
-              <select
-                id="uaChannel"
-                bind:value={uaChannelType}
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {#each CHANNEL_OPTIONS as o (o.value)}
-                  <option value={o.value}>{o.label}</option>
-                {/each}
-              </select>
-            </div>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="uaTarget"
-              >{uaChannelType === 'email' ? 'Email address' : 'Channel URL'}</Label
-            >
-            <Input id="uaTarget" bind:value={uaTarget} required />
-          </div>
-          <Button type="submit" size="sm" disabled={savingUsageAlert}>Add usage alert</Button>
-        </form>
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Notification deliveries</Card.Title>
-        <Card.Description>
-          Recent metric and usage alert deliveries across this organization. A failed delivery no
-          longer silently suppresses the alert.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content>
-        {#if !notificationDeliveries.data}
-          <p class="text-sm text-muted-foreground">Loading…</p>
-        {:else if notificationDeliveries.data.length === 0}
-          <p class="text-sm text-muted-foreground">No notification deliveries yet.</p>
-        {:else}
-          <ul class="divide-y">
-            {#each notificationDeliveries.data as d (d._id)}
-              <li class="flex items-center justify-between gap-2 py-2 text-sm">
-                <div class="min-w-0">
-                  <span class="font-medium">{d.label}</span>
-                  <span class="text-muted-foreground">
-                    · {d.source.replace('_', ' ')} · {d.channelType}</span
-                  >
-                  {#if d.detail && !d.ok}
-                    <p class="truncate text-xs text-muted-foreground">{d.detail}</p>
-                  {/if}
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <Badge variant={d.ok ? 'success' : 'destructive'}>{d.ok ? 'ok' : 'failed'}</Badge>
-                  <span class="text-xs text-muted-foreground">{relativeTime(d.deliveredAt)}</span>
-                </div>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Source maps</Card.Title>
-        <Card.Description>
-          Upload your release's <code class="font-mono">.map</code> files so minified production stack
-          traces resolve to original source.
-        </Card.Description>
-      </Card.Header>
-      <Card.Content class="space-y-4">
-        {#if artifacts.isLoading}
-          <p class="text-sm text-muted-foreground">Loading artifacts…</p>
-        {:else if artifacts.error}
-          <p class="text-sm text-destructive">Failed to load artifacts.</p>
-        {:else if artifacts.data && artifacts.data.length > 0}
-          <div class="divide-y rounded-lg border">
-            {#each artifacts.data as artifact (artifact.id)}
-              <div class="flex items-center gap-3 px-3 py-2 text-sm">
-                <FileCode2Icon class="size-4 shrink-0 text-muted-foreground" />
-                <span class="min-w-0 flex-1 truncate font-mono text-xs">{artifact.name}</span>
-                <Badge variant={artifact.kind === 'sourcemap' ? 'success' : 'muted'}
-                  >{artifact.kind}</Badge
-                >
-                {#if artifact.debugId}
-                  <Badge
-                    variant="outline"
-                    class="shrink-0 font-mono"
-                    title={`debug id ${artifact.debugId}`}>{artifact.debugId.slice(0, 8)}</Badge
-                  >
-                {/if}
-                {#if artifact.storage === 's3'}
-                  <Badge variant="outline" class="shrink-0" title="Offloaded to S3/R2">S3</Badge>
-                {/if}
-                <span class="shrink-0 font-mono text-xs text-muted-foreground"
-                  >{artifact.release || 'no release'}</span
-                >
-                <span class="hidden shrink-0 text-xs text-muted-foreground sm:inline"
-                  >{formatBytes(artifact.size)} · {relativeTime(artifact.createdAt)}</span
-                >
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="text-sm text-muted-foreground">
-            No source maps uploaded yet. Upload them from CI with the
-            <code class="font-mono">@aihxp/sveltry-sdk</code> uploader or a direct POST to
-            <code class="font-mono">/artifacts/upload</code>.
-          </p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
+    <UsageCard projectId={project._id} />
+    <DeploysCard projectId={project._id} />
+    <AlertRulesCard projectId={project._id} />
+    <WebhooksCard projectId={project._id} />
+    <MetricAlertsCard projectId={project._id} />
+    <UsageAlertsCard projectId={project._id} hasQuota={!!project.monthlyEventQuota} />
+    <NotificationDeliveriesCard />
+    <SourceMapsCard projectId={project._id} />
 
     <Card.Root>
       <Card.Header>
@@ -1496,7 +597,7 @@
             <Button type="submit" size="sm" disabled={savingRepo}>
               {savingRepo ? 'Saving…' : 'Save repository'}
             </Button>
-            {#if proj.data?.project?.repoConfig}
+            {#if project.repoConfig}
               <Button
                 type="button"
                 size="sm"
