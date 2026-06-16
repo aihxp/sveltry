@@ -25,6 +25,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Changed
 
+- **Real readiness probe + config visibility.** `/healthz` now performs a bounded database read and
+  returns `503` if the backend cannot serve queries, instead of an unconditional `200`. Added an
+  admin-only config-status view showing which important-but-optional environment variables
+  (`SITE_URL`, SMTP, S3 offload, the SSRF resolver) are configured, so missing config that otherwise
+  degrades to a silent no-op is visible.
 - **Faster org-wide Discover and safer cron scans.** Added an `events` org+timestamp index so the
   org-wide Discover / cross-project analytics path scans one time-ordered index instead of fanning
   out per project (which also made the sampled window the most-recent events org-wide rather than

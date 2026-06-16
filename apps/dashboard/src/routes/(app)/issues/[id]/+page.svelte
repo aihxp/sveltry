@@ -165,13 +165,24 @@
     await client.mutation(api.issues.deleteComment, { commentId });
   }
 
-  function breadcrumbs(payload: any): any[] {
-    const b = payload?.breadcrumbs;
-    if (!b) return [];
-    return Array.isArray(b) ? b : (b.values ?? []);
+  interface Breadcrumb {
+    type?: string;
+    category?: string;
+    message?: string;
+    level?: string;
+    data?: unknown;
   }
-  function requestOf(payload: any) {
-    return payload?.request ?? null;
+  interface RequestInfo {
+    method?: string;
+    url?: string;
+  }
+  function breadcrumbs(payload: unknown): Breadcrumb[] {
+    const b = (payload as { breadcrumbs?: unknown } | null | undefined)?.breadcrumbs;
+    if (!b) return [];
+    return (Array.isArray(b) ? b : ((b as { values?: Breadcrumb[] }).values ?? [])) as Breadcrumb[];
+  }
+  function requestOf(payload: unknown): RequestInfo | null {
+    return (payload as { request?: RequestInfo } | null | undefined)?.request ?? null;
   }
   const tagEntries = $derived(Object.entries(event.data?.tags ?? {}));
   const metaCards = $derived(

@@ -1,5 +1,6 @@
 import { httpRouter } from 'convex/server';
 import { corsPreflight } from '@sveltry/protocol';
+import { internal } from './_generated/api';
 import { httpAction } from './_generated/server';
 import { authComponent, createAuth } from './betterauth';
 import { uploadCommits } from './commits';
@@ -44,13 +45,22 @@ const preflight = httpAction(async (_ctx, request) =>
 http.route({ pathPrefix: '/api/', method: 'OPTIONS', handler: preflight });
 http.route({ path: '/artifacts/upload', method: 'OPTIONS', handler: preflight });
 
-// Liveness probe for load balancers / uptime checks.
+// Readiness probe for load balancers / uptime checks. Actually touches the
+// database so a degraded backend reports 503 instead of a paper 200.
 http.route({
   path: '/healthz',
   method: 'GET',
-  handler: httpAction(
-    async () => new Response('ok', { status: 200, headers: { 'content-type': 'text/plain' } }),
-  ),
+  handler: httpAction(async (ctx) => {
+    try {
+      await ctx.runQuery(internal.health.ready, {});
+      return new Response('ok', { status: 200, headers: { 'content-type': 'text/plain' } });
+    } catch {
+      return new Response('not ready', {
+        status: 503,
+        headers: { 'content-type': 'text/plain' },
+      });
+    }
+  }),
 });
 
 export default http;
