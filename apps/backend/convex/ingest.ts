@@ -293,13 +293,19 @@ export const ingest = httpAction(async (ctx, request) => {
     }
   }
 
+  // Count rows that were actually inserted (not deduped by an SDK retry), so
+  // usage accounting reflects stored data and a full-batch retry does not
+  // double-count toward the monthly quota.
+  let newEvents = 0;
+  let newTransactions = 0;
+
   for (const payload of events) {
     const normalized = normalizeEvent(payload, { receivedAt });
     const grouping = computeGrouping(payload, normalized);
     const storedPayload = resolved.scrubPii ? scrubPayload(payload, resolved.scrubConfig) : payload;
     if (!firstId) firstId = normalized.eventId;
 
-    await ctx.runMutation(internal.ingest.recordEvent, {
+    const res = await ctx.runMutation(internal.ingest.recordEvent, {
       projectId: resolved.projectId,
       organizationId: resolved.organizationId,
       eventId: normalized.eventId,
@@ -318,13 +324,14 @@ export const ingest = httpAction(async (ctx, request) => {
       groupingConfig: grouping.groupingConfig,
       payload: storedPayload,
     });
+    if (!res.duplicate) newEvents += 1;
   }
 
   for (const payload of transactions) {
     const t = normalizeTransaction(payload, { receivedAt });
     const storedPayload = resolved.scrubPii ? scrubPayload(payload, resolved.scrubConfig) : payload;
     if (!firstId) firstId = t.eventId;
-    await ctx.runMutation(internal.ingest.recordTransaction, {
+    const res = await ctx.runMutation(internal.ingest.recordTransaction, {
       projectId: resolved.projectId,
       organizationId: resolved.organizationId,
       eventId: t.eventId,
@@ -343,6 +350,7 @@ export const ingest = httpAction(async (ctx, request) => {
       spanCount: t.spanCount,
       payload: storedPayload,
     });
+    if (res.inserted) newTransactions += 1;
   }
 
   for (const payload of sessions) {
@@ -406,18 +414,26 @@ export const ingest = httpAction(async (ctx, request) => {
       new Blob([body.slice() as BlobPart], { type: 'application/octet-stream' }),
     );
     const segmentId = (header.segment_id as number) ?? meta.segment_id ?? i;
-    await ctx.runMutation(internal.replays.recordReplaySegment, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      replayId: meta.replay_id,
-      segmentId,
-      storageId,
-      timestamp: receivedAt,
-      url: meta.urls?.[0],
-      errorCount: meta.error_ids?.length ?? 0,
-      platform: meta.platform,
-      environment: meta.environment,
-    });
+    // Drop the just-stored blob if the row was deduped (retry) or the insert
+    // threw, so a failed/duplicate write never leaks an orphaned storage object.
+    let kept = false;
+    try {
+      const res = await ctx.runMutation(internal.replays.recordReplaySegment, {
+        projectId: resolved.projectId,
+        organizationId: resolved.organizationId,
+        replayId: meta.replay_id,
+        segmentId,
+        storageId,
+        timestamp: receivedAt,
+        url: meta.urls?.[0],
+        errorCount: meta.error_ids?.length ?? 0,
+        platform: meta.platform,
+        environment: meta.environment,
+      });
+      kept = res.inserted;
+    } finally {
+      if (!kept) await ctx.storage.delete(storageId).catch(() => {});
+    }
   }
 
   for (const payload of profiles) {
@@ -446,16 +462,22 @@ export const ingest = httpAction(async (ctx, request) => {
         type: item.header.content_type ?? 'application/octet-stream',
       }),
     );
-    await ctx.runMutation(internal.feedback.recordAttachment, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      eventId: attachEventId,
-      filename: item.header.filename ?? 'attachment',
-      contentType: item.header.content_type,
-      attachmentType: item.header.attachment_type,
-      size: item.payload.byteLength,
-      storageId,
-    });
+    let kept = false;
+    try {
+      const res = await ctx.runMutation(internal.feedback.recordAttachment, {
+        projectId: resolved.projectId,
+        organizationId: resolved.organizationId,
+        eventId: attachEventId,
+        filename: item.header.filename ?? 'attachment',
+        contentType: item.header.content_type,
+        attachmentType: item.header.attachment_type,
+        size: item.payload.byteLength,
+        storageId,
+      });
+      kept = res.inserted;
+    } finally {
+      if (!kept) await ctx.storage.delete(storageId).catch(() => {});
+    }
   }
 
   // User feedback: legacy `user_report` and the newer `feedback` event shape.
@@ -494,12 +516,12 @@ export const ingest = httpAction(async (ctx, request) => {
   for (const r of clientReports) {
     for (const d of r.discarded_events ?? []) dropped += d.quantity ?? 0;
   }
-  if (events.length || transactions.length || dropped || eventsFiltered) {
+  if (newEvents || newTransactions || dropped || eventsFiltered) {
     await ctx.runMutation(internal.usage.recordUsage, {
       projectId: resolved.projectId,
       organizationId: resolved.organizationId,
-      events: events.length,
-      transactions: transactions.length,
+      events: newEvents,
+      transactions: newTransactions,
       dropped,
       filtered: eventsFiltered,
     });
@@ -529,7 +551,7 @@ export const recordTransaction = internalMutation({
     spanCount: v.number(),
     payload: v.any(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ inserted: boolean }> => {
     // Idempotency: an SDK retry resending the same transaction event_id is a no-op.
     const dup = await ctx.db
       .query('transactions')
@@ -537,8 +559,9 @@ export const recordTransaction = internalMutation({
         q.eq('projectId', args.projectId).eq('eventId', args.eventId),
       )
       .first();
-    if (dup) return;
+    if (dup) return { inserted: false };
     await ctx.db.insert('transactions', args);
+    return { inserted: true };
   },
 });
 
@@ -687,7 +710,7 @@ export const recordEvent = internalMutation({
       environment: args.environment,
     });
 
-    return { eventId: args.eventId };
+    return { eventId: args.eventId, duplicate: false };
   },
 });
 

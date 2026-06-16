@@ -29,8 +29,15 @@ export const recordCheckIn = internalMutation({
     timestamp: v.number(),
     expectedIntervalSeconds: v.optional(v.number()),
     detail: v.optional(v.string()),
+    // For uptime probes: mark this monitor checked in the SAME transaction as the
+    // check-in, so a failure between the two writes cannot leave the monitor
+    // un-marked (and re-probed every tick).
+    markUptimeMonitorId: v.optional(v.id('uptimeMonitors')),
   },
   handler: async (ctx, args) => {
+    if (args.markUptimeMonitorId) {
+      await ctx.db.patch(args.markUptimeMonitorId, { lastCheckedAt: args.timestamp });
+    }
     // Upsert the individual check-in by check_in_id.
     if (args.checkInId) {
       const existing = await ctx.db
@@ -257,14 +264,6 @@ export const dueUptimeMonitors = internalQuery({
   },
 });
 
-/** Record that an uptime monitor was just probed. */
-export const markUptimeChecked = internalMutation({
-  args: { monitorId: v.id('uptimeMonitors'), checkedAt: v.number() },
-  handler: async (ctx, { monitorId, checkedAt }) => {
-    await ctx.db.patch(monitorId, { lastCheckedAt: checkedAt });
-  },
-});
-
 /**
  * Probe due uptime monitors and record each result as a check-in (so uptime
  * history shows up alongside cron check-ins on the Monitors page).
@@ -310,10 +309,8 @@ export const runUptimeChecks = internalAction({
         environment: 'uptime',
         timestamp: Date.now(),
         detail,
-      });
-      await ctx.runMutation(internal.monitors.markUptimeChecked, {
-        monitorId: m._id,
-        checkedAt: Date.now(),
+        // Record the check-in and mark the monitor checked atomically.
+        markUptimeMonitorId: m._id,
       });
     }
     if (due.length > 0) console.log(`runUptimeChecks: probed ${due.length}, ${failed} failed`);

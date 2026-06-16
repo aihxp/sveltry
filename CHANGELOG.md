@@ -6,6 +6,18 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Ingest is now idempotent on an SDK retry.** Usage accounting counted every event
+  and transaction in the request, including those a retry re-sent (which dedupe on
+  `event_id`), so a retried batch double-counted toward the monthly quota and could
+  trip quota throttling on data that was never actually re-stored. Usage now counts
+  only rows that were actually inserted. Replay-segment, attachment, and feedback
+  writes also dedupe on a stable id, and a deduped or failed write now drops the
+  blob it had already stored in file storage instead of orphaning it. Uptime probes
+  record the check-in and mark the monitor checked in a single transaction, and a
+  source map that fails to load or parse is now logged instead of silently no-opping.
+
 ## [0.9.1] - 2026-06-16
 
 ### Fixed

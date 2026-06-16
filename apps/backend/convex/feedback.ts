@@ -14,8 +14,18 @@ export const recordAttachment = internalMutation({
     size: v.number(),
     storageId: v.id('_storage'),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ inserted: boolean }> => {
+    // Idempotency: an SDK retry resending the same (eventId, filename) attachment
+    // must not duplicate the row (or orphan the freshly stored blob). The caller
+    // drops the blob when inserted=false.
+    const dup = await ctx.db
+      .query('attachments')
+      .withIndex('by_event', (q) => q.eq('eventId', args.eventId))
+      .filter((q) => q.eq(q.field('filename'), args.filename))
+      .first();
+    if (dup) return { inserted: false };
     await ctx.db.insert('attachments', { ...args, createdAt: Date.now() });
+    return { inserted: true };
   },
 });
 
@@ -30,6 +40,16 @@ export const recordFeedback = internalMutation({
     message: v.string(),
   },
   handler: async (ctx, args) => {
+    // Idempotency: dedupe a resent feedback by its event id (when present), so an
+    // SDK retry does not store the same feedback twice.
+    if (args.eventId) {
+      const eventId = args.eventId;
+      const dup = await ctx.db
+        .query('feedback')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .first();
+      if (dup) return;
+    }
     await ctx.db.insert('feedback', {
       ...args,
       message: args.message.slice(0, 10_000),

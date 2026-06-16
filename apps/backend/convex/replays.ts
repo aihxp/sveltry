@@ -16,7 +16,21 @@ export const recordReplaySegment = internalMutation({
     platform: v.optional(v.string()),
     environment: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ inserted: boolean }> => {
+    // Idempotency: an SDK retry resending the same (replayId, segmentId) must not
+    // duplicate the segment row or double-increment the replay's segmentCount.
+    // Returning inserted=false lets the caller drop the just-stored blob.
+    const dup = await ctx.db
+      .query('replaySegments')
+      .withIndex('by_replay', (q) =>
+        q
+          .eq('projectId', args.projectId)
+          .eq('replayId', args.replayId)
+          .eq('segmentId', args.segmentId),
+      )
+      .first();
+    if (dup) return { inserted: false };
+
     await ctx.db.insert('replaySegments', {
       organizationId: args.organizationId,
       projectId: args.projectId,
@@ -54,6 +68,7 @@ export const recordReplaySegment = internalMutation({
         environment: args.environment,
       });
     }
+    return { inserted: true };
   },
 });
 

@@ -107,7 +107,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verification: Adversarially verified; holds at High/Confirmed. metricAlerts.ts:258 and usageAlerts.ts:166 mark the alert fired unconditionally after a bare-catch channel loop, and safeFetch returns 4xx/5xx as a resolved Response the cron never inspects. The ingest-path alerts.ts already records per-attempt ok/detail into alertDeliveries and only dedupes on ok; mirror that pattern.
 - Related: Contrast with alerts.ts:243-273 recordDelivery, which does this correctly.
 
-### [ERR-002] Ingest batch persistence is non-atomic with no batch-level idempotency, so a mid-batch failure or HTTP-action retry leaves partial/duplicated state
+### [ERR-002] ~~Ingest batch persistence is non-atomic with no batch-level idempotency, so a mid-batch failure or HTTP-action retry leaves partial/duplicated state~~ [RESOLVED - Slice 5]
+- Status: RESOLVED (Slice 5). `recordEvent`/`recordTransaction` return whether they inserted, and usage now counts only actually-inserted rows, so a full-batch retry no longer double-counts toward the quota (live-verified: a resent event/transaction reports duplicate/`inserted:false`). Replay/attachment/feedback writes dedupe on a stable id; a deduped or failed write drops the already-stored blob (also closes ERR-004). Mid-batch failures no longer over-count usage because the count derives from inserts, not payload length.
 - Severity: High | Confidence: Confirmed | Effort: L | Dimension: Error Handling & Resilience
 - Location: `apps/backend/convex/ingest.ts:275-485`, `apps/backend/convex/ingest.ts:476-485`
 - Evidence: The ingest httpAction persists each envelope item as a SEPARATE ctx.runMutation transaction in sequence: events (281), transactions (306), sessions (330), checkins (359), replays (388, after ctx.storage.store at 384), profiles (405), attachments (428, after store at 423), feedback (443/459), and finally recordUsage (477) ONCE at the end. None of this is wrapped in error handling. If any mutation throws partway through (e.g. a transient Convex write conflict on the issues upsert at recordEvent, or a storage.store failure), the action returns 5xx with earlier items already committed and later items (including the single recordUsage write that backs quota/spike accounting) never run. Sentry SDKs retry on 5xx, and the HTTP action has no batch-level dedupe key, so the retry re-runs the whole batch. Per-event recordEvent/recordTransaction are individually idempotent on (projectId,eventId) (549-555, 513-519), but sessions (recordSession), checkins, replays (storage blob + recordReplaySegment), attachments (a fresh storage blob + recordAttachment each time), feedback, and crucially recordUsage are NOT eventId-idempotent, so a retry double-counts usage and creates duplicate attachment/replay blobs and feedback rows.
@@ -224,7 +225,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Craft a small gzip payload that decompresses to >200 MiB, POST it to ingest, and confirm the request is rejected without the process allocating the full expanded buffer (observe memory, or that streaming aborts early).
 - Related: none
 
-### [ERR-004] Store-then-insert ordering leaks orphaned storage blobs when the row insert fails
+### [ERR-004] ~~Store-then-insert ordering leaks orphaned storage blobs when the row insert fails~~ [RESOLVED - Slice 5]
+- Status: RESOLVED (Slice 5). The replay and attachment loops wrap the recorder mutation in try/finally and delete the stored blob whenever the row was not kept (deduped or the insert threw).
 - Severity: Medium | Confidence: Likely | Effort: M | Dimension: Error Handling & Resilience
 - Location: `apps/backend/convex/ingest.ts:383-399`, `apps/backend/convex/ingest.ts:422-438`, `apps/backend/convex/sourcemaps.ts:96-114`
 - Evidence: For replays (ingest.ts:384 ctx.storage.store then 388 recordReplaySegment), attachments (423 store then 428 recordAttachment), and artifact upload (sourcemaps.ts:97 store then 102 recordArtifact), the blob is written to Convex/S3 storage FIRST and the referencing DB row is inserted in a SEPARATE subsequent mutation/action. If the row insert throws (or the action is interrupted between the two), the blob remains in storage with nothing pointing at it. The purge/restamp sweeps and recordArtifact replacement only ever delete blobs reached THROUGH a row (projectLifecycle.ts:29-37 reads row.storageId), so an orphaned blob is unreachable and never garbage-collected. There is no reconciliation/GC pass for storage objects without a row.
@@ -453,7 +455,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: grep -niE 'migrat|schema' scripts/setup.sh stays empty; README comment no longer mentions migrate.
 - Related: none
 
-### [ERR-006] Uptime probe records the check-in and marks-checked as two unguarded sequential mutations
+### [ERR-006] ~~Uptime probe records the check-in and marks-checked as two unguarded sequential mutations~~ [RESOLVED - Slice 5]
+- Status: RESOLVED (Slice 5). `recordCheckIn` takes an optional `markUptimeMonitorId` and patches `lastCheckedAt` in the same transaction as the check-in; the separate `markUptimeChecked` mutation was removed.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Error Handling & Resilience
 - Location: `apps/backend/convex/monitors.ts:290-304`
 - Evidence: Per due monitor, runUptimeChecks calls recordCheckIn (290) then, in a separate mutation, markUptimeChecked (300). Neither call is wrapped; the loop has no try/catch. If recordCheckIn succeeds but markUptimeChecked throws (or the action is interrupted between them), lastCheckedAt is not advanced, so dueUptimeMonitors (245-256) returns the monitor again on the next tick and it is re-probed and a duplicate check-in recorded. Conversely an uncaught throw inside the loop body abandons all remaining due monitors for that tick (they are retried next minute, so impact is bounded).
@@ -462,7 +465,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Inject a throw in markUptimeChecked and confirm the monitor is not re-probed indefinitely and other due monitors in the same tick still run.
 - Related: none
 
-### [ERR-007] Source-map resolution swallows all parse/load errors per map with no diagnostic, so symbolication silently no-ops
+### [ERR-007] ~~Source-map resolution swallows all parse/load errors per map with no diagnostic, so symbolication silently no-ops~~ [RESOLVED - Slice 5]
+- Status: RESOLVED (Slice 5). The map load/parse catch now `console.warn`s the failing key and cause, so an operator can see why a frame did not resolve.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Error Handling & Resilience
 - Location: `apps/backend/convex/sourcemaps.ts:301-318`
 - Evidence: tracerFor wraps blob load + JSON.parse + new TraceMap in `try { ... } catch { tracer = null; }` (301-315) and caches null. A corrupt/truncated source map, an S3 fetch failure, or a TraceMap parse error all collapse to the same silent null; resolveEvent then just `continue`s (339) and, if nothing resolves, returns with no record (352). The whole resolveEvent action is fire-and-forget (scheduled at ingest.ts:633) and its result is never inspected. There is no surfaced signal distinguishing 'no map uploaded' from 'map present but failed to parse' from 'S3 unreachable'.
@@ -595,7 +599,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 ## Remediation plan
 
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), ~~`QUAL-001`~~ (done, Slice 4), `DOC-001`.
-- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), `ERR-002`, `TEST-001`.
+- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), ~~`ERR-002`~~ (done, Slice 5), `TEST-001`.
 - **Verify first** (Suspected / assumption-dependent): `DEP-001` (confirm the transitive `cookie` version and advisory applicability with the ecosystem audit tool, and that a Kit patch bump clears it).
 - **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, ~~`OBS-003`~~ (done, Slice 3), ~~`OBS-004`~~ (done, Slice 3), `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)
 

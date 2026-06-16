@@ -328,7 +328,12 @@ export const resolveEvent = internalAction({
           text = blob ? await blob.text() : null;
         }
         if (text) tracer = new TraceMap(JSON.parse(text));
-      } catch {
+      } catch (err) {
+        // A corrupt/unparseable map silently no-ops symbolication; log it so an
+        // operator can tell why a frame did not resolve, instead of guessing.
+        console.warn(
+          `sourcemap load/parse failed for ${key}: ${err instanceof Error ? err.message : String(err)}`,
+        );
         tracer = null;
       }
       tracers.set(key, tracer);
