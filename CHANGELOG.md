@@ -6,6 +6,15 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Dependencies
+
+- **Dependency hygiene.** Pruned the orphaned `@types/pg` left in the install store after the
+  Postgres removal (a clean reinstall; `bun install --frozen-lockfile` is unchanged), and dropped the
+  now-stale `pg` / `@types/pg` patterns from the dependabot `auth` group. `pg` itself stays only as an
+  inert optional peer of better-auth (no source imports it; Sveltry uses the Convex adapter).
+  Tightened the `nodemailer` pin (the outbound SMTP client) from `^8.0.11` to `~8.0.11` so a
+  lockfile-less build cannot pull an unvetted `8.x` minor on the email path.
+
 ### Observability
 
 - **Closed the observability gaps.** Tracker auto-create (Jira/Linear) now records each attempt to
