@@ -6,6 +6,18 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+
+- **Uptime monitor probes now go through the shared SSRF guard.** The per-minute
+  uptime-check cron previously called `fetch()` directly on the monitor's URL,
+  bypassing `safeFetch` (the only outbound path that did), so an admin-created
+  monitor pointed at a DNS name resolving to `169.254.169.254`, the rest of the
+  `169.254.0.0/16` link-local range, or an IPv6 link-local address turned the
+  up/down result into an SSRF oracle over internal and cloud-metadata services.
+  Probes now use `safeFetch` (literal denylist + DoH-resolved-IP rebinding check,
+  re-validated on every redirect hop), and the create-time check reuses the shared
+  `isBlockedHost` denylist instead of a 3-host literal set.
+
 ## [0.9.0] - 2026-06-16
 
 ### Added
