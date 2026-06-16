@@ -6,6 +6,19 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Tested
+
+- **Dashboard + SDK test coverage; all workspaces run in CI.** The `(app)` layout's auth-gate redirect
+  decision is extracted into a pure `authRedirect()` helper with a vitest suite covering every branch
+  (unauthenticated → /login with return path, authenticated-without-org → /onboarding, loading states
+  stay put), and the dashboard workspace now has vitest + a `test` script so `bun run --filter '*'
+  --if-present test` executes it instead of silently skipping it. The SDK's `createTunnelHandler` (the
+  ad-blocker tunnel proxy) is covered: it forwards only to allow-listed DSN hosts, rejects an
+  off-allow-list host (403) or a missing DSN (400) without forwarding, and honors a configured
+  upstream origin over the attacker-supplied payload host. (The backend tests stay out of the deploy
+  type-check because they use vitest's vite-only `import.meta.glob`; they are exercised at runtime in
+  CI.)
+
 ### Internal
 
 - **Architecture + quality nits.** The notification-channel set now has a single shared source
