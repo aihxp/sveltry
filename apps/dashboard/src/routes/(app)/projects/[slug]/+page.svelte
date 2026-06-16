@@ -33,6 +33,9 @@
   const webhooks = useQuery(api.webhooks.listWebhooks, () =>
     projectId ? { projectId } : ('skip' as const),
   );
+  const webhookDeliveries = useQuery(api.webhooks.recentDeliveries, () =>
+    projectId ? { projectId, limit: 10 } : ('skip' as const),
+  );
   const WEBHOOK_EVENTS = [
     { value: 'issue.resolved', label: 'Issue resolved' },
     { value: 'issue.unresolved', label: 'Issue unresolved' },
@@ -506,6 +509,9 @@
   const usageAlerts = useQuery(api.usageAlerts.listUsageAlerts, () =>
     projectId ? { projectId } : ('skip' as const),
   );
+  // Recent cron-driven notification deliveries (metric/usage alerts), org-wide,
+  // so a failing channel is visible instead of silently swallowed.
+  const notificationDeliveries = useQuery(api.notifications.listRecent, () => ({ limit: 20 }));
   let uaThreshold = $state(80);
   let uaChannelType = $state<
     'webhook' | 'discord' | 'slack' | 'email' | 'msteams' | 'pagerduty' | 'opsgenie'
@@ -1125,6 +1131,27 @@
           <p class="text-sm text-muted-foreground">No webhooks yet.</p>
         {/if}
 
+        {#if webhookDeliveries.data && webhookDeliveries.data.length > 0}
+          <div class="mt-3 space-y-1">
+            <p class="text-xs font-medium text-muted-foreground">Recent deliveries</p>
+            {#each webhookDeliveries.data as d (d._id)}
+              <div class="flex items-center justify-between gap-2 text-xs">
+                <span class="min-w-0 truncate">
+                  {d.event}{#if d.detail && !d.ok}<span class="text-muted-foreground">
+                      · {d.detail}</span
+                    >{/if}
+                </span>
+                <span class="flex shrink-0 items-center gap-2">
+                  <Badge variant={d.ok ? 'success' : 'destructive'}
+                    >{d.ok ? (d.statusCode ?? 'ok') : (d.statusCode ?? 'failed')}</Badge
+                  >
+                  <span class="text-muted-foreground">{relativeTime(d.deliveredAt)}</span>
+                </span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
         {#if newWebhookSecret}
           <div class="space-y-1.5 rounded-lg border border-dashed p-3">
             <p class="text-xs text-muted-foreground">
@@ -1328,6 +1355,43 @@
           </div>
           <Button type="submit" size="sm" disabled={savingUsageAlert}>Add usage alert</Button>
         </form>
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Notification deliveries</Card.Title>
+        <Card.Description>
+          Recent metric and usage alert deliveries across this organization. A failed delivery no
+          longer silently suppresses the alert.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content>
+        {#if !notificationDeliveries.data}
+          <p class="text-sm text-muted-foreground">Loading…</p>
+        {:else if notificationDeliveries.data.length === 0}
+          <p class="text-sm text-muted-foreground">No notification deliveries yet.</p>
+        {:else}
+          <ul class="divide-y">
+            {#each notificationDeliveries.data as d (d._id)}
+              <li class="flex items-center justify-between gap-2 py-2 text-sm">
+                <div class="min-w-0">
+                  <span class="font-medium">{d.label}</span>
+                  <span class="text-muted-foreground">
+                    · {d.source.replace('_', ' ')} · {d.channelType}</span
+                  >
+                  {#if d.detail && !d.ok}
+                    <p class="truncate text-xs text-muted-foreground">{d.detail}</p>
+                  {/if}
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <Badge variant={d.ok ? 'success' : 'destructive'}>{d.ok ? 'ok' : 'failed'}</Badge>
+                  <span class="text-xs text-muted-foreground">{relativeTime(d.deliveredAt)}</span>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </Card.Content>
     </Card.Root>
 

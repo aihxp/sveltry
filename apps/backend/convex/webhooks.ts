@@ -49,6 +49,30 @@ export const listWebhooks = query({
   },
 });
 
+/** Recent webhook delivery attempts for a project (most recent first), so an
+ * operator can see ok/status/detail in the UI rather than only a bare timestamp. */
+export const recentDeliveries = query({
+  args: { projectId: v.id('projects'), limit: v.optional(v.number()) },
+  handler: async (ctx, { projectId, limit }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const project = await ctx.db.get(projectId);
+    if (!project || project.organizationId !== activeOrganizationId) return [];
+    const rows = await ctx.db
+      .query('webhookDeliveries')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .order('desc')
+      .take(Math.min(limit ?? 20, 100));
+    return rows.map((d) => ({
+      _id: d._id,
+      event: d.event,
+      ok: d.ok,
+      statusCode: d.statusCode ?? null,
+      detail: d.detail ?? null,
+      deliveredAt: d.deliveredAt,
+    }));
+  },
+});
+
 /** Create a webhook. Admin+ only. Returns the signing secret once (never again). */
 export const createWebhook = mutation({
   args: {

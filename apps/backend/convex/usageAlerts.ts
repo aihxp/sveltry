@@ -104,6 +104,8 @@ export const enabledUsageAlerts = internalQuery({
         const used = rows.reduce((s, r) => s + r.eventCount, 0);
         return {
           _id: a._id,
+          organizationId: a.organizationId,
+          projectId: a.projectId,
           projectName: project?.name ?? 'project',
           quota,
           used,
@@ -143,33 +145,69 @@ export const evaluateUsageAlerts = internalAction({
         `${a.used.toLocaleString()} of ${a.quota.toLocaleString()} events used this month ` +
         `(${Math.round(pct)}%, alert threshold ${a.thresholdPercent}%).`;
 
+      // Record every delivery attempt; only mark the alert fired for the month
+      // when at least one channel delivered, so a broken endpoint cannot silence
+      // the once-per-month quota warning until the channel is fixed.
+      let deliveredOk = a.channels.length === 0;
       for (const channel of a.channels) {
+        let ok = false;
+        let detail: string | undefined;
         try {
           if (channel.type === 'email') {
-            await ctx.runAction(internal.email.sendEmail, { to: channel.target, subject, text });
+            const res = await ctx.runAction(internal.email.sendEmail, {
+              to: channel.target,
+              subject,
+              text,
+            });
+            ok = res.ok;
+            if (!ok) detail = res.skipped ? 'SMTP not configured' : (res.detail ?? 'send failed');
           } else {
             const req = channelRequest(channel, { title: subject, text, severity: 'warning' });
             if (req) {
               // safeFetch validates the target and every redirect hop (SSRF guard).
-              await safeFetch(req.url, {
+              const res = await safeFetch(req.url, {
                 method: 'POST',
                 headers: req.headers,
                 body: req.body,
                 signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
               });
+              ok = res.ok;
+              if (!ok) detail = `non-2xx response (${res.status})`;
+            } else {
+              ok = true;
             }
           }
-        } catch {
-          // Best-effort delivery; do not block other channels/alerts.
+        } catch (err) {
+          detail = err instanceof Error ? err.message : String(err);
+        }
+        deliveredOk = deliveredOk || ok;
+        await ctx.runMutation(internal.notifications.record, {
+          organizationId: a.organizationId,
+          projectId: a.projectId,
+          source: 'usage_alert',
+          sourceId: a._id,
+          label: `${a.projectName} quota`,
+          channelType: channel.type,
+          target: channel.target,
+          ok,
+          detail,
+        });
+        if (!ok) {
+          console.error(
+            `usage-alert delivery failed: alert=${a._id} channel=${channel.type} detail=${detail ?? 'unknown'}`,
+          );
         }
       }
-      await ctx.runMutation(internal.usageAlerts.recordUsageAlertFiring, {
-        alertId: a._id,
-        month: a.monthStart,
-        firedAt: now,
-      });
-      fired += 1;
+      if (deliveredOk) {
+        await ctx.runMutation(internal.usageAlerts.recordUsageAlertFiring, {
+          alertId: a._id,
+          month: a.monthStart,
+          firedAt: now,
+        });
+        fired += 1;
+      }
     }
+    console.log(`evaluateUsageAlerts: evaluated ${alerts.length}, fired ${fired}`);
     return { fired };
   },
 });

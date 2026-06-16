@@ -31,6 +31,7 @@ import type * as lib_slug from "../lib/slug.js";
 import type * as maintenance from "../maintenance.js";
 import type * as metricAlerts from "../metricAlerts.js";
 import type * as monitors from "../monitors.js";
+import type * as notifications from "../notifications.js";
 import type * as organizations from "../organizations.js";
 import type * as profiles from "../profiles.js";
 import type * as projectLifecycle from "../projectLifecycle.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   maintenance: typeof maintenance;
   metricAlerts: typeof metricAlerts;
   monitors: typeof monitors;
+  notifications: typeof notifications;
   organizations: typeof organizations;
   profiles: typeof profiles;
   projectLifecycle: typeof projectLifecycle;

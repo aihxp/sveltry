@@ -6,6 +6,17 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Notification-delivery visibility.** Metric-alert and usage-alert deliveries are now recorded
+  per attempt (a new `notificationDeliveries` table) and surfaced in a "Notification deliveries"
+  panel under Project Settings, so a failing Slack/webhook/SMTP endpoint is visible instead of
+  silently swallowed. A cron alert now advances its "fired" marker only when a channel actually
+  delivered, so a broken endpoint no longer suppresses a real regression for the whole window or
+  month. Uptime probes record the failure cause on the check-in, and the metric/usage/uptime crons
+  (plus tracker auto-create, retention, and missed-check-in detection) now log their outcomes so a
+  self-hosted operator can tell when the monitoring product itself is failing.
+
 ### Security
 
 - **Uptime monitor probes now go through the shared SSRF guard.** The per-minute

@@ -28,6 +28,7 @@ export const recordCheckIn = internalMutation({
     release: v.optional(v.string()),
     timestamp: v.number(),
     expectedIntervalSeconds: v.optional(v.number()),
+    detail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Upsert the individual check-in by check_in_id.
@@ -68,6 +69,7 @@ export const recordCheckIn = internalMutation({
         environment: args.environment,
         release: args.release,
         timestamp: args.timestamp,
+        detail: args.detail,
       });
     }
 
@@ -273,9 +275,11 @@ export const runUptimeChecks = internalAction({
   handler: async (ctx): Promise<{ checked: number }> => {
     const now = Date.now();
     const due = await ctx.runQuery(internal.monitors.dueUptimeMonitors, { now });
+    let failed = 0;
     for (const m of due) {
       const start = Date.now();
       let ok = false;
+      let detail: string | undefined;
       try {
         // safeFetch enforces the SSRF guard (literal denylist + DoH-resolved-IP
         // rebinding check) on every redirect hop. A blocked target throws and
@@ -285,10 +289,17 @@ export const runUptimeChecks = internalAction({
           signal: AbortSignal.timeout(UPTIME_TIMEOUT_MS),
         });
         ok = res.status === m.expectedStatus;
-      } catch {
-        ok = false;
+        if (!ok) detail = `unexpected status ${res.status} (expected ${m.expectedStatus})`;
+      } catch (err) {
+        detail = err instanceof Error ? err.message : String(err);
       }
       const latency = Date.now() - start;
+      if (!ok) {
+        failed += 1;
+        console.warn(
+          `uptime probe failed: monitor=${m.slug} url=${m.url} detail=${detail ?? 'unknown'}`,
+        );
+      }
       await ctx.runMutation(internal.monitors.recordCheckIn, {
         projectId: m.projectId,
         organizationId: m.organizationId,
@@ -298,12 +309,14 @@ export const runUptimeChecks = internalAction({
         durationMs: latency,
         environment: 'uptime',
         timestamp: Date.now(),
+        detail,
       });
       await ctx.runMutation(internal.monitors.markUptimeChecked, {
         monitorId: m._id,
         checkedAt: Date.now(),
       });
     }
+    if (due.length > 0) console.log(`runUptimeChecks: probed ${due.length}, ${failed} failed`);
     return { checked: due.length };
   },
 });
