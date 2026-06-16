@@ -36,6 +36,19 @@ All notable changes to Sveltry are documented here. The format is based on
   (it shed load toward protection and never affects billing), and the id-less check-in duplicate as
   an accepted edge (no stable retry key exists). Added a backend test for the session-aggregate case.
 
+### Changed
+
+- **Project lifecycle is now compile-enforced complete against the tenant-table registry.** Project
+  deletion (`purgeProjectData`) and transfer (`restampProjectOrg`) used to hand-enumerate ~32
+  near-identical per-table blocks; the registry only guaranteed it matched the schema, not that
+  delete/transfer covered every registered table, so a future table could silently leak rows on
+  delete (a plaintext webhook secret, the historic bug) or stay stamped with the source org on
+  transfer. Both ops are now driven by `Record<ProjectScopedTable, ...>` drainer maps that iterate
+  the registry, so TypeScript fails the build if a registered table has no purge / transfer step
+  (schema -> registry -> drainers is enforced end to end). No behavior change; added backend tests
+  asserting purge empties the tables (including webhooks + issue children) and transfer rewrites
+  org-bearing rows while detaching saved views.
+
 ## [0.9.3] - 2026-06-16
 
 ### Changed

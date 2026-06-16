@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import schema from './schema';
 import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
+import { TENANT_SCOPED_TABLES } from './lib/tenantTables';
 
 // convex-test loads every Convex module in-process. The glob excludes test files.
 // `import.meta.glob` is a Vite/vitest API (typed via the vite/client reference
@@ -151,6 +152,147 @@ describe('session-aggregate idempotency (ERR-001)', () => {
     expect(res.status).toBe(200);
     buckets = await t.run((ctx) => ctx.db.query('sessionBuckets').collect());
     expect(buckets.length).toBe(2);
+  });
+});
+
+describe('project lifecycle (registry-driven purge / restamp)', () => {
+  // Seed one row in a representative spread of tenant tables: a hot table
+  // (events), the historically-orphaned webhooks (with a secret), an issue plus
+  // its non-registry children (comments + users), a savedView (detached on
+  // transfer, deleted on purge), and a sessionBucket. Returns the issue id.
+  async function seedLifecycleRows(
+    t: ReturnType<typeof convexTest>,
+    projectId: Id<'projects'>,
+  ): Promise<Id<'issues'>> {
+    return await t.run(async (ctx) => {
+      const issueId = await ctx.db.insert('issues', {
+        organizationId: 'org-a',
+        projectId,
+        fingerprint: 'f',
+        groupingConfig: 'g',
+        title: 'T',
+        culprit: 'c',
+        level: 'error',
+        platform: 'node',
+        status: 'unresolved',
+        substatus: 'new',
+        count: 1,
+        userCount: 1,
+        firstSeen: 0,
+        lastSeen: 0,
+      });
+      await ctx.db.insert('events', {
+        organizationId: 'org-a',
+        projectId,
+        issueId,
+        eventId: 'e1',
+        timestamp: 0,
+        receivedAt: 0,
+        level: 'error',
+        platform: 'node',
+        environment: 'production',
+        message: 'm',
+        culprit: 'c',
+        tags: {},
+        payload: {},
+      });
+      await ctx.db.insert('issueComments', {
+        organizationId: 'org-a',
+        issueId,
+        authorId: 'u',
+        body: 'b',
+        createdAt: 0,
+      });
+      await ctx.db.insert('issueUsers', { issueId, userId: 'u', firstSeen: 0 });
+      await ctx.db.insert('webhooks', {
+        organizationId: 'org-a',
+        projectId,
+        url: 'https://hook.example/x',
+        secret: 's3cr3t',
+        events: ['issue.resolved'],
+        enabled: true,
+        createdBy: 'u',
+        createdAt: 0,
+      });
+      await ctx.db.insert('savedViews', {
+        organizationId: 'org-a',
+        userId: 'u',
+        name: 'v',
+        projectId,
+        createdAt: 0,
+      });
+      await ctx.db.insert('sessionBuckets', {
+        organizationId: 'org-a',
+        projectId,
+        release: '1.0.0',
+        environment: 'production',
+        bucketStart: 0,
+        exited: 1,
+        errored: 0,
+        crashed: 0,
+        abnormal: 0,
+        receivedAt: 0,
+      });
+      return issueId;
+    });
+  }
+
+  test('purgeProjectData empties tenant tables, incl. webhooks and issue children', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+    await seedLifecycleRows(t, projectId);
+
+    await t.mutation(internal.projectLifecycle.purgeProjectData, { projectId });
+
+    await t.run(async (ctx) => {
+      for (const table of [
+        'events',
+        'webhooks',
+        'issues',
+        'issueComments',
+        'issueUsers',
+        'savedViews',
+        'sessionBuckets',
+        'projectKeys',
+      ] as const) {
+        const rows = await ctx.db.query(table).collect();
+        expect(rows.length, `${table} should be empty after purge`).toBe(0);
+      }
+    });
+  });
+
+  test('restampProjectOrg rewrites org-bearing rows and detaches savedViews', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+    const issueId = await seedLifecycleRows(t, projectId);
+
+    // Drive the step machine one step per table (each seeded table holds <= 1 row,
+    // so every step completes in a single page).
+    for (let step = 0; step < TENANT_SCOPED_TABLES.length; step++) {
+      await t.mutation(internal.projectLifecycle.restampProjectOrg, {
+        projectId,
+        targetOrganizationId: 'org-b',
+        step,
+        cursor: null,
+      });
+    }
+
+    await t.run(async (ctx) => {
+      const ev = await ctx.db.query('events').collect();
+      expect(ev[0]!.organizationId).toBe('org-b');
+      const wh = await ctx.db.query('webhooks').collect();
+      expect(wh[0]!.organizationId).toBe('org-b');
+      const issue = await ctx.db.get(issueId);
+      expect(issue!.organizationId).toBe('org-b');
+      const comments = await ctx.db.query('issueComments').collect();
+      expect(comments[0]!.organizationId).toBe('org-b');
+      const sb = await ctx.db.query('sessionBuckets').collect();
+      expect(sb[0]!.organizationId).toBe('org-b');
+      // savedViews belong to the SOURCE org: detached from the project, not moved.
+      const sv = await ctx.db.query('savedViews').collect();
+      expect(sv[0]!.projectId).toBeUndefined();
+      expect(sv[0]!.organizationId).toBe('org-a');
+    });
   });
 });
 
