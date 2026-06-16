@@ -152,7 +152,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verification: Adversarially verified against fflate 0.8.3; holds at High/Confirmed. The deflate/zlib path grows an unbounded buffer (noBuf) and the gzip path pre-allocates from the attacker-controlled 32-bit ISIZE (up to ~4 GiB), both BEFORE the post-hoc 200 MiB check; no compressed-body cap on ingest or artifact upload. The unused fflate `out` buffer is the fix lever.
 - Related: Same missing-input-cap theme applies to artifact upload (sourcemaps.ts:61) which also reads an unbounded arrayBuffer before offload decisions.
 
-### [TEST-001] Entire Convex backend (auth, tenant isolation, ingest orchestration, irreversible ops) has zero automated tests
+### [TEST-001] ~~Entire Convex backend (auth, tenant isolation, ingest orchestration, irreversible ops) has zero automated tests~~ [RESOLVED - Slice 8]
+- Status: RESOLVED (Slice 8). Stood up a `convex-test` + vitest (edge-runtime) harness at `apps/backend/convex/guards.test.ts` (7 tests) asserting the load-bearing guards: DSN ingest auth (401 on unknown/inactive key, publicId-must-match cross-project rejection, 200 + org-tagged on valid key), multi-tenant isolation (a cross-org `listIssues` returns nothing; the owning org sees its data; unauthenticated is rejected), ingest idempotency (resent envelope = one event, usage counted once), and per-key rate limiting. Wired into CI.
 - Severity: High | Confidence: Confirmed | Effort: L | Dimension: Testing & Verification
 - Location: `apps/backend/convex/ingest.ts:60`, `apps/backend/convex/ingest.ts:525`, `apps/backend/convex/ingest.ts:708`, `apps/backend/convex/lib/auth.ts:84`, `apps/backend/convex/lib/auth.ts:137`, `apps/backend/convex/publicApi.ts:578`, `apps/backend/convex/projectLifecycle.ts:610`, `apps/backend/convex/projectLifecycle.ts:638`, `apps/backend/convex/issues.ts:278`
 - Evidence: find over apps/backend for *.test.ts/*.spec.ts (excluding _generated) returns 0 files; apps/backend/package.json has no 'test' script. The 10,937 LOC backend holds every integration-level security property: the ingest auth flow (ingest.ts:60), the multi-tenant org re-check that is the stated isolation invariant, the requireOrg/requireRole guards (lib/auth.ts:84,137), public-API write-scope enforcement (publicApi.ts:578,605), the stateful rate-limit window counter (checkRateLimit, ingest.ts:708), idempotent dedupe (recordEvent, ingest.ts:525), and irreversible mutations deleteProject/transferProject/mergeIssues. None of these is exercised by a test. The protocol tests cover the pure helpers these handlers call, but not the orchestration, the auth decisions, the fail-open quota/spike drops, the org tagging, or the upsert/reopen logic.
@@ -314,7 +315,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Send a ~1 MB gzip body that decompresses to >1 GB and confirm a 400/413 is returned without the full buffer being allocated; send a multi-GB uncompressed POST and confirm early rejection; upload a large artifact with no S3 configured and confirm it is rejected rather than stored. Add a protocol unit test asserting the incremental decompression guard aborts past the cap.
 - Related: Same root cause (no request-body-size guard before buffering) spans ingest.ts and sourcemaps.ts.
 
-### [TEST-002] Dashboard (65 files, ~7,000 LOC) has zero tests; org-scoping is asserted server-side but never verified end-to-end
+### [TEST-002] Dashboard (65 files, ~7,000 LOC) has zero tests; org-scoping is asserted server-side but never verified end-to-end [PARTIALLY ADDRESSED - Slice 8]
+- Status: PARTIALLY ADDRESSED (Slice 8). The security-relevant half is closed: org-scoping is enforced server-side (the dashboard only calls those Convex queries), and the backend harness now verifies cross-org isolation (see TEST-001). A dedicated dashboard component/E2E test harness (Svelte 5 runes component testing) is deferred as a separate effort: the friction of wiring `bun:test` types through `svelte-check` was not worth it for what would mostly be UI-rendering tests, given the enforcement is already tested at the boundary.
 - Severity: Medium | Confidence: Confirmed | Effort: L | Dimension: Testing & Verification
 - Location: `apps/dashboard/src`, `apps/dashboard/package.json`, `apps/dashboard/src/routes/api/auth/[...all]/+server.ts`, `apps/dashboard/src/hooks.server.ts`
 - Evidence: find over apps/dashboard for *.test.* (excluding .svelte-kit/node_modules) returns 0; apps/dashboard/package.json has only check/build scripts, no test runner. The orientation notes route gating is client-side and hooks.server.ts only formats errors. No component, route-guard, store, or query-scoping test exists. The only verification the dashboard gets is svelte-check (type-only) and a build.
@@ -323,7 +325,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: A dashboard test script exists and runs in CI; at least the auth/route-gating and a triage action have behavioral tests that fail if the guard is removed.
 - Related: none
 
-### [TEST-003] Published SDK (@aihxp/sveltry-sdk) ships to a registry with zero behavioral tests
+### [TEST-003] ~~Published SDK (@aihxp/sveltry-sdk) ships to a registry with zero behavioral tests~~ [RESOLVED - Slice 8]
+- Status: RESOLVED (Slice 8). Added `packages/sdk/test/dsn.test.ts` (8 tests) covering `buildSveltryDsn`, `parseDsn` (round-trip + rejection), `ingestUrlFromDsn`, and `dsnFromEnvelopeHeader`, with a `test` script wired into CI.
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Testing & Verification
 - Location: `packages/sdk/src/dsn.ts:52`, `packages/sdk/src/dsn.ts:68`, `packages/sdk/src/tunnel.ts:29`, `packages/sdk/src/upload.ts:46`, `packages/sdk/package.json`
 - Evidence: packages/sdk has no test files and no test script; it is the only package that is actually published (publishConfig + release.yml changesets publish). It contains its own independent DSN parser (parseDsn, ingestUrlFromDsn), a tunnel request handler (createTunnelHandler) that proxies arbitrary client payloads to the ingest endpoint, and a sourcemap uploader (uploadSourceMaps). These are user-facing and security-adjacent (the tunnel forwards untrusted request bodies) yet only type-checked, never behaviorally tested.
@@ -572,7 +575,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Visit /login?redirectTo=//evil.example and /login?redirectTo=https://evil.example, sign in, and confirm navigation lands on /dashboard (or a sanitized path), not the external host. Add a unit/e2e assertion on the sanitizer.
 - Related: Apply the same path-only guard anywhere a query param feeds navigation or location.* assignment.
 
-### [TEST-004] CI test step is hardwired to only the protocol package, so future package tests will not run unless CI is also edited
+### [TEST-004] ~~CI test step is hardwired to only the protocol package, so future package tests will not run unless CI is also edited~~ [RESOLVED - Slice 8]
+- Status: RESOLVED (Slice 8). The CI test step now runs `bun run --filter '*' --if-present test`, so every package with a `test` script (protocol, backend, sdk) is gated automatically.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Testing & Verification
 - Location: `.github/workflows/ci.yml:30`, `apps/backend/package.json`, `apps/dashboard/package.json`, `packages/sdk/package.json`
 - Evidence: ci.yml:31 runs `bun run --filter '@sveltry/protocol' test` (a package-pinned filter), not the root `bun run test` which is `bun run --filter '*' --if-present test`. Today both are equivalent because only protocol has a test script, but the pinned filter means that if a contributor adds a test script to backend/dashboard/sdk, CI will silently ignore it until someone also edits the workflow.
@@ -581,7 +585,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Adding a trivial failing test script to a non-protocol package causes CI to fail; removing it restores green.
 - Related: none
 
-### [TEST-005] Dead test tooling: vitest is declared in the root catalog but never wired into any package
+### [TEST-005] ~~Dead test tooling: vitest is declared in the root catalog but never wired into any package~~ [RESOLVED - Slice 8]
+- Status: RESOLVED (Slice 8). vitest is now the backend test runner (`apps/backend` `test` = `vitest run`, with `convex-test` + `@edge-runtime/vm`), so the catalog entry is live.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Testing & Verification
 - Location: `package.json:43`
 - Evidence: package.json:43 declares a 'testing' catalog with vitest ^3.0.0, but grep finds no vitest.config.* anywhere, no `from 'vitest'` import in any source/test file, and no package.json devDependency referencing `catalog:testing` for vitest (only @sentry/sveltekit consumes the testing catalog, in packages/sdk). The protocol suite uses bun:test, not vitest.
@@ -606,7 +611,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 ## Remediation plan
 
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), ~~`QUAL-001`~~ (done, Slice 4), ~~`DOC-001`~~ (done, Slice 6).
-- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), ~~`ERR-002`~~ (done, Slice 5), `TEST-001`.
+- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), ~~`ERR-002`~~ (done, Slice 5), ~~`TEST-001`~~ (done, Slice 8). **All High findings resolved.**
 - **Verify first** (Suspected / assumption-dependent): ~~`DEP-001`~~ (done, Slice 7 - verified the latest Kit still pins `cookie@0.6.0`, so a `cookie@^0.7.2` override was used instead and the dashboard build was re-verified).
 - **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, ~~`OBS-003`~~ (done, Slice 3), ~~`OBS-004`~~ (done, Slice 3), `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)
 

@@ -6,6 +6,15 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Automated test coverage for the backend, SDK, and dashboard build.** Stood up a `convex-test`
+  (vitest, edge-runtime) harness for the Convex backend that asserts the load-bearing guards: DSN
+  ingest authentication, multi-tenant isolation (a cross-org query returns nothing), ingest
+  idempotency, and per-key rate limiting. Added behavioral tests for the published SDK's DSN
+  helpers. CI now runs every workspace's test suite (`--filter '*' --if-present test`) instead of
+  only the protocol package, so new package tests gate merges automatically.
+
 ### Changed
 
 - **Dependency cleanup.** Removed dead dependencies that nothing imported (`pg`, `jose` left over
