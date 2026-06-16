@@ -38,3 +38,21 @@ export function generatePublicId(): string {
   const n = Math.floor(100000000 + Math.random() * 899999999);
   return String(n);
 }
+
+// Crockford base32 (no I, L, O, U) for unambiguous, readable short ids.
+const SHORTID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/**
+ * A short, human-friendly issue id (7 Crockford-base32 chars, a ~34-billion
+ * space). Random and unchecked, so no counter or extra read is needed on the
+ * ingest hot path. A collision is rare and low-impact at the team-and-product
+ * scale Sveltry targets: the short-id search returns the first match, but both
+ * issues stay reachable by title search and direct link.
+ */
+export function generateShortId(length = 7): string {
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += SHORTID_ALPHABET[Math.floor(Math.random() * SHORTID_ALPHABET.length)];
+  }
+  return out;
+}

@@ -6,6 +6,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Issue short ids.** Every newly grouped issue gets a short, human-friendly id (displayed as
+  `<PROJECT_SLUG>-<id>`, e.g. `WEB-1A2B3C`) shown on the issue list and detail page, returned in the
+  public API (`shortId`), and resolvable from the issue search box (paste `WEB-1A2B3C` or the bare
+  `1A2B3C` to jump straight to it). The id is a random Crockford-base32 string, so it needs no
+  counter on the ingest path. Issues created before this release have none.
+
 ## [0.6.0] - 2026-06-15
 
 ### Added
