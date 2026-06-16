@@ -179,6 +179,11 @@ export const monitorCheckIns = query({
 // ---------------------------------------------------------------------------
 
 const UPTIME_TIMEOUT_MS = 10_000;
+// Probe this many due monitors at once, so one slow/timing-out endpoint does not
+// stall the rest within a single 1-minute cron tick (sequential probing of N slow
+// monitors could overrun the interval). Bounded to avoid a thundering herd of
+// outbound requests; the per-fetch SSRF guard is unaffected by concurrency.
+const UPTIME_CONCURRENCY = 8;
 
 /** Create an HTTP uptime monitor for the caller's organization. */
 export const createUptimeMonitor = mutation({
@@ -283,7 +288,8 @@ export const runUptimeChecks = internalAction({
     const now = Date.now();
     const due = await ctx.runQuery(internal.monitors.dueUptimeMonitors, { now });
     let failed = 0;
-    for (const m of due) {
+
+    const probe = async (m: (typeof due)[number]): Promise<void> => {
       const start = Date.now();
       let ok = false;
       let detail: string | undefined;
@@ -320,6 +326,13 @@ export const runUptimeChecks = internalAction({
         // Record the check-in and mark the monitor checked atomically.
         markUptimeMonitorId: m._id,
       });
+    };
+
+    // Probe in bounded-concurrency batches: total wall time is now
+    // ceil(N / UPTIME_CONCURRENCY) x timeout instead of N x timeout, so a few slow
+    // endpoints cannot make the tick overrun the 1-minute interval.
+    for (let i = 0; i < due.length; i += UPTIME_CONCURRENCY) {
+      await Promise.all(due.slice(i, i + UPTIME_CONCURRENCY).map(probe));
     }
     if (due.length > 0) console.log(`runUptimeChecks: probed ${due.length}, ${failed} failed`);
     return { checked: due.length };

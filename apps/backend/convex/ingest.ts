@@ -564,6 +564,14 @@ export const ingest = httpAction(async (ctx, request) => {
   // Persist the remaining item types. These do not touch the per-batch usage
   // counters (only events/transactions above do), so each is a self-contained
   // named step over its already-parsed items.
+  //
+  // Each item is recorded via its own runMutation (a separate transaction
+  // boundary). That is deliberate, not an oversight (PERF-003): the common Sentry
+  // envelope carries a single event or transaction, the per-item dedup keys make
+  // each write independently idempotent under a retry, and the storage-backed
+  // items (replays/attachments) must interleave blob writes. A batched
+  // array-insert mutation would only help the rare many-items-per-envelope case
+  // at the cost of that per-item idempotency, so it is intentionally not done.
   await persistSessions(ctx, resolved, sessions, receivedAt);
   await persistSessionAggregates(ctx, resolved, sessionAggregates, receivedAt);
   await persistCheckIns(ctx, resolved, checkIns, receivedAt);
