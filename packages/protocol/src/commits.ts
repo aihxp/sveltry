@@ -71,3 +71,32 @@ export function suspectCommits(
   }
   return out;
 }
+
+/** Crockford base32 short id (matches the backend's `generateShortId`; no I/L/O/U). */
+const SHORTID_RE = /^[0-9A-HJKMNP-TV-Z]{6,9}$/;
+
+/**
+ * Keywords (case-insensitive) by which a commit message marks an issue resolved,
+ * followed by the issue reference token. Mirrors the verbs Sentry/GitHub accept.
+ */
+const RESOLVE_REF_RE = /\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)[\s:]+([A-Za-z0-9][\w-]*)/gi;
+
+/**
+ * Extract the issue short ids a commit message marks as resolved, e.g.
+ * `Fix login (Fixes WEB-1A2B3C)` -> `['1A2B3C']`. Only the displayed, project-
+ * prefixed form (`WEB-1A2B3C`, `demo-7305-1A2B3C`) is accepted: the short id is
+ * the trailing `-`-delimited token, uppercased and validated as Crockford base32.
+ * Requiring the prefix means a bare word after a verb (`fix navbar`, `fixed
+ * header`) is never mistaken for an issue reference. Returns a de-duplicated list.
+ */
+export function parseResolvedShortIds(message: string): string[] {
+  const out = new Set<string>();
+  for (const m of message.matchAll(RESOLVE_REF_RE)) {
+    const ref = m[1] ?? '';
+    // Require the `<PROJECT>-<shortId>` form; a bare trailing word is not a ref.
+    if (!ref.includes('-')) continue;
+    const tok = ref.slice(ref.lastIndexOf('-') + 1).toUpperCase();
+    if (SHORTID_RE.test(tok)) out.add(tok);
+  }
+  return [...out];
+}

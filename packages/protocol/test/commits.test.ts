@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { commitTouchesFrame, normalizePath, suspectCommits } from '../src/commits.js';
+import {
+  commitTouchesFrame,
+  normalizePath,
+  parseResolvedShortIds,
+  suspectCommits,
+} from '../src/commits.js';
 
 describe('path matching', () => {
   test('normalizePath unifies separators and strips a leading ./', () => {
@@ -48,5 +53,37 @@ describe('suspectCommits', () => {
   test('returns nothing when there are no frame files or commits', () => {
     expect(suspectCommits([], commits)).toEqual([]);
     expect(suspectCommits(['src/app.ts'], [])).toEqual([]);
+  });
+});
+
+describe('parseResolvedShortIds', () => {
+  test('extracts a prefixed short id after a fixes keyword', () => {
+    expect(parseResolvedShortIds('Fix login crash (Fixes WEB-1A2B3C)')).toEqual(['1A2B3C']);
+  });
+
+  test('accepts close/resolve verbs and a lowercase prefix, case-insensitively', () => {
+    expect(parseResolvedShortIds('closes WEB-9X8Y7Z')).toEqual(['9X8Y7Z']);
+    expect(parseResolvedShortIds('Resolved: web-1a2b3c')).toEqual(['1A2B3C']);
+  });
+
+  test('takes the trailing token when the slug itself contains dashes', () => {
+    expect(parseResolvedShortIds('Fixed DEMO-7305-ABCDEF')).toEqual(['ABCDEF']);
+  });
+
+  test('collects multiple, de-duplicated references', () => {
+    expect(parseResolvedShortIds('fix WEB-1A2B3C and closes WEB-2C3D4E, fixes WEB-1A2B3C')).toEqual(
+      ['1A2B3C', '2C3D4E'],
+    );
+  });
+
+  test('requires the project-prefixed form; bare words are never a reference', () => {
+    // "NAVBAR" is itself a valid 6-char Crockford token, but without a `<PROJECT>-`
+    // prefix it is just an ordinary word, so "fix navbar" must resolve nothing.
+    expect(parseResolvedShortIds('fix navbar; fixed header; resolve 1A2B3C')).toEqual([]);
+    expect(parseResolvedShortIds('a commit with no references at all')).toEqual([]);
+  });
+
+  test('does not match keyword substrings (prefix/fixture)', () => {
+    expect(parseResolvedShortIds('prefix WEB-1A2B3C; fixture WEB-2C3D4E')).toEqual([]);
   });
 });
