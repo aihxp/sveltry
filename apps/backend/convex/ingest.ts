@@ -230,6 +230,16 @@ export const ingest = httpAction(async (ctx, request) => {
       if (used >= resolved.monthlyEventQuota) accept = false;
     }
     if (accept && resolved.spikeThresholdPerMinute) {
+      // The spike counter is incremented BEFORE events are stored, by design: the
+      // whole point is to shed load before doing the per-item write work. That
+      // makes it intentionally non-idempotent under a full-batch retry: a batch
+      // that increments the counter and then 500s on a later item will, on the
+      // SDK's retry within the same minute window, increment the same window
+      // again. This over-counts the live minute window (self-correcting once it
+      // rolls), which fails safe TOWARD spike protection rather than toward
+      // unbounded ingest, and never affects billing (recordUsage counts only
+      // inserted rows). Accepted over a post-store reconcile, which would defeat
+      // the load-shed purpose. See codeaudit ERR-003.
       const exceeded = await ctx.runMutation(internal.usage.checkSpike, {
         projectId: resolved.projectId,
         increment: events.length,

@@ -112,19 +112,36 @@ export const uploadArtifact = httpAction(async (ctx, request) => {
     );
   }
 
-  await ctx.runMutation(internal.sourcemaps.recordArtifact, {
-    projectId: resolved.projectId,
-    organizationId: resolved.organizationId,
-    release,
-    name,
-    kind,
-    storageId,
-    s3Bucket,
-    s3Key,
-    size: buf.byteLength,
-    sourceMappingURL,
-    debugId,
-  });
+  // Mirror the ingest hot path's orphan-blob guard: the bytes are already in
+  // Convex storage / S3, so if recordArtifact throws (transient mutation failure
+  // / OCC conflict) the just-stored object would be unreferenced forever (there
+  // is no orphan-blob GC). Delete the freshly-stored blob on failure.
+  let kept = false;
+  try {
+    await ctx.runMutation(internal.sourcemaps.recordArtifact, {
+      projectId: resolved.projectId,
+      organizationId: resolved.organizationId,
+      release,
+      name,
+      kind,
+      storageId,
+      s3Bucket,
+      s3Key,
+      size: buf.byteLength,
+      sourceMappingURL,
+      debugId,
+    });
+    kept = true;
+  } finally {
+    if (!kept) {
+      if (storageId) await ctx.storage.delete(storageId).catch(() => {});
+      if (s3Bucket && s3Key) {
+        await ctx.scheduler
+          .runAfter(0, internal.storage.deleteObject, { bucket: s3Bucket, key: s3Key })
+          .catch(() => {});
+      }
+    }
+  }
 
   return new Response(JSON.stringify({ ok: true, name, kind, release }), {
     status: 201,

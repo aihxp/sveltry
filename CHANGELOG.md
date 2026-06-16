@@ -23,6 +23,19 @@ All notable changes to Sveltry are documented here. The format is based on
   returning 413 before any parse and 400 on malformed JSON. Authenticated-caller hardening, closing
   the body-cap inconsistency.
 
+### Fixed
+
+- **Ingest idempotency propagated to the session-aggregate and artifact paths.** When a multi-item
+  envelope failed mid-batch, the SDK retried the whole envelope. Session-aggregate (`sessions`)
+  buckets were blindly re-inserted, inflating release-health session/crash counts. They are now
+  deduplicated on a content key (release + environment + every bucket value), so a retry is a no-op
+  while genuinely distinct flushes still aggregate additively. The CI artifact upload stored the
+  blob and then wrote the row with no cleanup, so a failed row write orphaned a Convex/S3 object
+  forever; it now deletes the freshly-stored blob on failure, mirroring the ingest hot path. The
+  pre-gate spike counter's same-minute retry over-count is documented as a deliberate fail-safe
+  (it shed load toward protection and never affects billing), and the id-less check-in duplicate as
+  an accepted edge (no stable retry key exists). Added a backend test for the session-aggregate case.
+
 ## [0.9.3] - 2026-06-16
 
 ### Changed

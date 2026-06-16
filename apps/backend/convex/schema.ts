@@ -458,9 +458,15 @@ export default defineSchema({
     crashed: v.number(),
     abnormal: v.number(),
     receivedAt: v.number(),
+    // Content key over a whole `sessions` aggregate delivery (release +
+    // environment + every bucket value), so a full-batch SDK retry that
+    // re-delivers identical buckets is a no-op instead of double-counting.
+    // Optional for back-compat with rows written before this field existed.
+    ingestKey: v.optional(v.string()),
   })
     .index('by_org', ['organizationId', 'bucketStart'])
-    .index('by_project', ['projectId']),
+    .index('by_project', ['projectId'])
+    .index('by_project_ingestKey', ['projectId', 'ingestKey']),
 
   // Performance transactions (envelope items with `type: "transaction"`). The
   // full payload (including spans) is kept in `payload`; the columns are the
