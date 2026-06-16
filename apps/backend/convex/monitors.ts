@@ -8,6 +8,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrg, requireRole } from './lib/auth';
+import { assertSafeOutboundTarget, safeFetch } from './lib/net';
 import { slugify } from './lib/slug';
 
 /**
@@ -161,11 +162,6 @@ export const monitorCheckIns = query({
 // ---------------------------------------------------------------------------
 
 const UPTIME_TIMEOUT_MS = 10_000;
-const BLOCKED_UPTIME_HOSTS = new Set([
-  '169.254.169.254',
-  'metadata.google.internal',
-  '[fd00:ec2::254]',
-]);
 
 /** Create an HTTP uptime monitor for the caller's organization. */
 export const createUptimeMonitor = mutation({
@@ -182,17 +178,21 @@ export const createUptimeMonitor = mutation({
     if (!project || project.organizationId !== activeOrganizationId)
       throw new Error('Project not found');
 
+    // Reuse the shared SSRF host guard (scheme + full blocked-host denylist:
+    // the whole 169.254.0.0/16 link-local range, IPv6 link-local, and the
+    // cloud-metadata names, in every encoding) instead of a 3-host literal set.
+    // The resolve-time (DNS rebinding) half runs in runUptimeChecks via
+    // safeFetch, since a Convex mutation cannot do network I/O.
     let url: URL;
     try {
       url = new URL(args.url);
     } catch {
       throw new Error('Invalid URL');
     }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      throw new Error('URL must be http or https');
-    }
-    if (BLOCKED_UPTIME_HOSTS.has(url.hostname.toLowerCase())) {
-      throw new Error('That host is not allowed');
+    try {
+      assertSafeOutboundTarget(args.url);
+    } catch {
+      throw new Error('That URL is not allowed (must be http(s) and not a private/metadata host)');
     }
 
     return ctx.db.insert('uptimeMonitors', {
@@ -277,10 +277,12 @@ export const runUptimeChecks = internalAction({
       const start = Date.now();
       let ok = false;
       try {
-        const res = await fetch(m.url, {
+        // safeFetch enforces the SSRF guard (literal denylist + DoH-resolved-IP
+        // rebinding check) on every redirect hop. A blocked target throws and
+        // is recorded as a failed probe, never reaching the address.
+        const res = await safeFetch(m.url, {
           method: m.method,
           signal: AbortSignal.timeout(UPTIME_TIMEOUT_MS),
-          redirect: 'manual',
         });
         ok = res.status === m.expectedStatus;
       } catch {
