@@ -96,6 +96,13 @@ export const resolveApiToken = internalQuery({
     // The stored value is a digest of a 256-bit random secret: security here comes
     // from the token's entropy and the digest's preimage resistance (not collision
     // resistance), so sha1Hex of the full token is sufficient for lookup.
+    //
+    // The B-tree index lookup below is intentionally NOT a constant-time compare.
+    // That is safe here because the compared value is the SHA-1 *digest* of a
+    // 256-bit secret, not the secret itself: any timing the index leaks is about
+    // how far a candidate digest matches stored digests, and recovering a digest
+    // that way does not recover the 256-bit preimage needed to authenticate. A
+    // constant-time compare would add nothing against this threat model.
     const row = await ctx.db
       .query('apiTokens')
       .withIndex('by_hash', (q) => q.eq('tokenHash', sha1Hex(rawToken)))

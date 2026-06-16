@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { selectClass } from '$lib/components/ui/control-classes';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { buildDsn } from '$lib/utils';
 
@@ -57,11 +58,7 @@
           </div>
           <div class="space-y-1.5">
             <Label for="platform">Platform</Label>
-            <select
-              id="platform"
-              bind:value={platform}
-              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
+            <select id="platform" bind:value={platform} class={selectClass}>
               {#each platforms as p (p)}<option value={p}>{p}</option>{/each}
             </select>
           </div>

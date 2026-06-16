@@ -1,3 +1,4 @@
+import type { UserIdentity } from 'convex/server';
 import type { QueryCtx } from '../_generated/server';
 
 /**
@@ -21,6 +22,16 @@ interface Claims {
   org?: string | null;
 }
 
+/**
+ * Narrow a Convex `UserIdentity` to the claim subset Sveltry reads. The Better
+ * Auth JWT carries `subject`/`email` plus the optional legacy org claims; the
+ * unavoidable cast lives here, in one audited place, instead of being copied at
+ * every auth-boundary call site.
+ */
+function claimsOf(identity: UserIdentity): Claims {
+  return identity as unknown as Claims;
+}
+
 export interface SveltryUser {
   subject: string;
   email?: string;
@@ -30,7 +41,7 @@ export interface SveltryUser {
 export async function requireUser(ctx: QueryCtx): Promise<SveltryUser> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error('Unauthenticated');
-  const claims = identity as unknown as Claims;
+  const claims = claimsOf(identity);
   return { subject: claims.subject, email: claims.email };
 }
 
@@ -96,7 +107,7 @@ export async function requireOrg(ctx: QueryCtx): Promise<SveltryIdentity> {
   if (!identity) {
     throw new Error('Unauthenticated');
   }
-  const claims = identity as unknown as Claims;
+  const claims = claimsOf(identity);
   const activeOrganizationId = await resolveActiveOrg(
     ctx,
     claims.subject,
@@ -156,7 +167,7 @@ export async function requireRole(ctx: QueryCtx, min: Role): Promise<SveltryMemb
 export async function optionalOrg(ctx: QueryCtx): Promise<SveltryIdentity | null> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
-  const claims = identity as unknown as Claims;
+  const claims = claimsOf(identity);
   const activeOrganizationId = await resolveActiveOrg(
     ctx,
     claims.subject,
