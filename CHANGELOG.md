@@ -18,6 +18,11 @@ All notable changes to Sveltry are documented here. The format is based on
   constants instead of bare literals; and the API-token lookup carries an explicit note that its
   index compare is intentionally not constant-time (it compares a digest of a 256-bit secret, so a
   timing side channel is infeasible).
+- **Ingest action decomposed.** The ~430-line ingest HTTP action concentrated the whole pipeline in
+  one closure. The per-item-type persistence loops (sessions, session-aggregates, check-ins, replays,
+  profiles, attachments, feedback) are now named module-level helpers, so the handler reads as a
+  sequence of `await persist*(...)` steps. The events/transactions loops stay inline (they feed the
+  per-batch usage counters); loop bodies moved verbatim, so no behavior change.
 
 ### Dependencies
 
