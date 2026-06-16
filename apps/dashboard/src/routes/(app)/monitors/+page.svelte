@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { selectClass } from '$lib/components/ui/control-classes';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { cn, formatDuration, relativeTime } from '$lib/utils';
@@ -116,11 +117,7 @@
           </div>
           <div class="space-y-1.5">
             <Label for="upproject">Project</Label>
-            <select
-              id="upproject"
-              bind:value={projectId}
-              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
+            <select id="upproject" bind:value={projectId} class={selectClass}>
               {#each projects.data ?? [] as p (p._id)}
                 <option value={p._id}>{p.name}</option>
               {/each}

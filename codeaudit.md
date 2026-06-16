@@ -235,7 +235,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Feed an envelope whose header dsn points at an unexpected host and assert the handler uses the server-configured target, not the payload one.
 - Related: Ingest flow (client side of the same envelope path)
 
-### [ARC-002] Notification-channel set is duplicated between the schema validator and a separate frontend enum with no shared source
+### [ARC-002] ~~Notification-channel set is duplicated between the schema validator and a separate frontend enum with no shared source~~ [RESOLVED - RA-Slice 10]
+- Status: RESOLVED (RA-Slice 10). The channel set now has one source: `ALERT_CHANNEL_TYPES` in `@sveltry/types`. The dashboard's `channels.ts` derives `ChannelType` + `CHANNEL_OPTIONS` from it (the label map is keyed `Record<ChannelType, string>` so a new channel forces a label), and the Convex `alertChannelValidator` keeps its explicit literals but a compile-time assertion fails the build if its union diverges from the shared set. Bonus: the audit saw two copies, but `domain.ts` held a THIRD, stale 4-member `AlertChannelType` (missing msteams/pagerduty/opsgenie); it now derives from the shared set too.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Architecture & Design
 - Location: `apps/backend/convex/schema.ts:117-128`, `apps/dashboard/src/lib/components/project/channels.ts:1-19`
 - Evidence: The seven-member channel union (webhook/discord/slack/email/msteams/pagerduty/opsgenie) is defined once as a Convex validator in schema.ts:118-126 and again, independently, as ChannelType plus CHANNEL_OPTIONS in the dashboard's channels.ts:2-19. The frontend list is consumed by MetricAlertsCard, UsageAlertsCard, and AlertRulesCard. There is no shared type linking the two; adding a channel requires editing both files, and a mismatch (e.g. a new channel added only to the schema) would compile cleanly on both sides while silently leaving it unselectable in the UI.
@@ -253,7 +254,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: After extraction, guards.test.ts (DSN auth, idempotency, isolation, rate limit) still passes unchanged, and the top-level ingest function reads as a short sequence of named calls.
 - Related: 
 
-### [QUAL-001] Raw select/textarea repeat a long Tailwind className across many files (no shared UI primitive)
+### [QUAL-001] ~~Raw select/textarea repeat a long Tailwind className across many files (no shared UI primitive)~~ [RESOLVED - RA-Slice 10]
+- Status: RESOLVED (RA-Slice 10) via the shared-const option. `ui/control-classes.ts` exports `selectClass` + `textareaClass`; the repeated base select string (8 occurrences across the 4 alert/usage/metric cards + the project, new-project, and monitors pages) and the mono textarea string (6 in the project page) now reference those consts, so each long className has one definition site. The few width-variant selects (`sm:w-72` etc.) remain inline as genuinely distinct strings.
 - Severity: Low | Confidence: Confirmed | Effort: M | Dimension: Code Quality and Maintainability
 - Location: `apps/dashboard/src/lib/components/project/MetricAlertsCard.svelte:98`, `apps/dashboard/src/routes/(app)/projects/[slug]/+page.svelte:363`
 - Evidence: ui/ has button/input/label/badge/card primitives but no select or textarea; the same long focus-ring className is hand-copied onto 6+ selects and 7 textareas repo-wide.
@@ -262,7 +264,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Grep for the select className returns one definition site.
 - Related: none
 
-### [QUAL-002] Stringly-typed Claims cast (as unknown as Claims) repeated at 3 auth-boundary sites
+### [QUAL-002] ~~Stringly-typed Claims cast (as unknown as Claims) repeated at 3 auth-boundary sites~~ [RESOLVED - RA-Slice 10]
+- Status: RESOLVED (RA-Slice 10). A single `claimsOf(identity: UserIdentity): Claims` helper in `lib/auth.ts` now owns the cast; `requireUser`/`requireOrg`/`optionalOrg` call it, so `as unknown as Claims` appears exactly once.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Code Quality and Maintainability
 - Location: `apps/backend/convex/lib/auth.ts:33`, `apps/backend/convex/lib/auth.ts:99`, `apps/backend/convex/lib/auth.ts:159`
 - Evidence: requireUser/requireOrg/optionalOrg each double-cast identity to Claims to reach legacy org fields, defeating tsc on claims.subject; the same line is copied 3 times at the tenant-auth boundary.
@@ -271,7 +274,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: as unknown as Claims appears at most once in auth.ts.
 - Related: none
 
-### [QUAL-003] uniquePublicId types its ctx as { db: any } instead of the generated QueryCtx
+### [QUAL-003] ~~uniquePublicId types its ctx as { db: any } instead of the generated QueryCtx~~ [RESOLVED - RA-Slice 10]
+- Status: RESOLVED (RA-Slice 10). `uniquePublicId` is now typed `ctx: QueryCtx` and the `(q: any)` was dropped, so the query is fully typed and the two product-code `any` warnings in `projects.ts` are gone.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Code Quality and Maintainability
 - Location: `apps/backend/convex/projects.ts:59`, `apps/backend/convex/projects.ts:64`
 - Evidence: uniquePublicId uses ctx: { db: any } and (q: any); these are the only two product-code any-warnings, while every other helper uses the generated typed ctx.
@@ -280,7 +284,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: bunx eslint projects.ts reports 0 warnings.
 - Related: none
 
-### [QUAL-004] Cron per-tick budget and take() limits use bare literals while a named CRON_ENTITY_CAP exists
+### [QUAL-004] ~~Cron per-tick budget and take() limits use bare literals while a named CRON_ENTITY_CAP exists~~ [RESOLVED - RA-Slice 10]
+- Status: RESOLVED (RA-Slice 10). The per-tick write budget is now a named `MAX_MUTATIONS_PER_TICK` (a distinct concern from the scan cap `CRON_ENTITY_CAP`, with a comment saying so), and the sweep batch sizes are `RETENTION_BATCH` / `ISSUE_SWEEP_BATCH`, so the two `2000`s no longer read as one value and a maintainer tuning one budget sees the other.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Code Quality and Maintainability
 - Location: `apps/backend/convex/maintenance.ts:42`, `apps/backend/convex/maintenance.ts:93`, `apps/backend/convex/maintenance.ts:49`
 - Evidence: CRON_ENTITY_CAP=2000 is named for the scan cap, but the per-tick mutation budgets at lines 42 and 93 are bare 2000 and batch sizes are bare take(200)/take(500); the two 2000s are distinct budgets that only coincidentally share a value.
@@ -435,7 +440,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Add a unit/integration test asserting createWebhook with url='http://169.254.169.254/' and upsertIntegration with siteUrl='http://metadata.google.internal' both throw at create time, and that a 'file://'/'gopher://' scheme is rejected; confirm existing valid http(s) targets still save.
 - Related: none
 
-### [SEC-secrets-002] API token authentication uses a plain DB-indexed hash equality lookup (not constant-time), a deviation from timing-safe token comparison
+### [SEC-secrets-002] ~~API token authentication uses a plain DB-indexed hash equality lookup (not constant-time), a deviation from timing-safe token comparison~~ [RESOLVED - RA-Slice 10, accepted-and-documented]
+- Status: RESOLVED (RA-Slice 10) as the documented accept the finding endorses (no code change needed for this threat model). `resolveApiToken` now carries an explicit comment that the index lookup is intentionally NOT constant-time because the compared value is the SHA-1 digest of a 256-bit secret, not the secret: any timing leaked is about digest-prefix matches, and recovering a digest does not recover the 256-bit preimage needed to authenticate, so a constant-time compare would add nothing here.
 - Severity: Low | Confidence: Likely | Effort: M | Dimension: Security (secrets, crypto, exposure)
 - Location: `apps/backend/convex/apiTokens.ts:93-105 (resolveApiToken, withIndex by_hash eq sha1Hex(rawToken))`
 - Evidence: resolveApiToken hashes the presented bearer token with sha1Hex and looks it up via the by_hash index (q.eq('tokenHash', ...)). A B-tree index equality comparison is not a constant-time compare, so in principle the lookup leaks timing about how far the stored hash prefixes match a candidate. In practice this is heavily mitigated: the comparison is against the SHA-1 *digest* (not the secret), the secret carries 256 bits of entropy, and a TOKEN_RE shape pre-check (apiTokens.ts:95) gates the lookup, making a timing-recovery attack against a hashed, high-entropy value impractical. It is recorded only as a deviation from the timing-safe-compare convention, not a practical break.
@@ -476,9 +482,9 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 
 ## Dimension notes
 
-- **Security (86)**: Authz is exemplary (uniform org re-check, preserved through the refactors; see Strengths) and SSRF/decompression/crypto are sound. The score is held below 90 by the one surviving High (`SEC-inject-001`, stored XSS in commit/tracker URLs) plus Low create-time-validation and timing-comparison nits (`SEC-secrets-001/002`) and the uncapped DSN JSON bodies (`SEC-authz-001`, `SEC-inject-002`).
-- **Architecture and Design (82)**: One-directional protocol boundary, a single coherent authz layer, and a genuinely well-decomposed settings UI. The headline gap (the tenant-table registry's lifecycle consumers having no compile-time link, `ARC-001`) is now closed in RA-Slice 4: purge/restamp are registry-keyed and compile-enforced exhaustive. Remaining below the 90s: a duplicated channel enum (`ARC-002`) and the ~430-line ingest action (`ARC-003`).
-- **Code Quality (88)**: Clean ESLint, near-zero escape hatches, no dead code, a compile-time registry. Only Low nits: repeated Tailwind class strings (`QUAL-001`), a stringly-typed `Claims` cast at 3 sites (`QUAL-002`), a `{ db: any }` ctx (`QUAL-003`), bare cron literals (`QUAL-004`), and the hand-enumerated lifecycle tables (`QUAL-005`).
+- **Security (86; hardened by RA-Slices 1-3, 10)**: Authz is exemplary (uniform org re-check, preserved through the refactors; see Strengths) and SSRF/decompression/crypto are sound. The High (`SEC-inject-001`, stored XSS in commit/tracker URLs) was fixed in RA-Slice 1, the uncapped DSN JSON bodies (`SEC-authz-001`, `SEC-inject-002`) in RA-Slice 2, the create-time SSRF validation (`SEC-secrets-001`) in RA-Slice 1, and the timing-comparison deviation (`SEC-secrets-002`) documented as an accepted, infeasible side channel in RA-Slice 10.
+- **Architecture and Design (82; improved by RA-Slices 4, 10)**: One-directional protocol boundary, a single coherent authz layer, and a genuinely well-decomposed settings UI. The headline gap (the tenant-table registry's lifecycle consumers having no compile-time link, `ARC-001`) was closed in RA-Slice 4, and the duplicated channel enum (`ARC-002`) was unified to one shared source in RA-Slice 10. Remaining: the ~430-line ingest action (`ARC-003`), addressed by extracting named pipeline helpers.
+- **Code Quality (88; improved by RA-Slice 10)**: Clean ESLint, near-zero escape hatches, no dead code, compile-time registries. The Low nits the audit found are now fixed: repeated Tailwind class strings consolidated (`QUAL-001`), the `Claims` cast centralized (`QUAL-002`), the `{ db: any }` ctx typed (`QUAL-003`), bare cron literals named (`QUAL-004`), and the hand-enumerated lifecycle tables made compile-enforced (`QUAL-005`).
 - **Testing (62 at audit time; materially improved by RA-Slice 5)**: The protocol unit layer is strong (175 tests) and the `convex-test` backend harness is real and CI-wired. RA-Slice 5 closed the two biggest gaps: the authz/REST/outbound surface beyond ingest (`TEST-002`, High) now has `safeFetch` redirect-hop, apiV1 org-scoping/write-scope/`by_org_eventId`, and issue-status-parity coverage; and lifecycle purge/transfer (`TEST-001`) is exercised against all 32 tenant tables. Remaining: the dashboard and most of the SDK are untested (`TEST-003/004`) and there is no coverage measurement (`TEST-005`), all scheduled for RA-Slice 11.
 - **Error Handling (82)**: The streaming bomb guard, real idempotency with try/finally blob cleanup, and success-gated cron firing all hold up. The three previously-noted gaps are now closed (RA-Slice 3): session-bucket writes are content-key idempotent (`ERR-001`), the artifact upload cleans up its orphan blob on failure (`ERR-002`), and the spike-counter pre-gate over-count is documented as a deliberate fail-safe accept (`ERR-003`). The id-less check-in duplicate is an accepted, documented edge (no stable retry key exists).
 - **Performance (78 at audit time; improved by RA-Slice 6)**: Every scan is bounded and idempotency lookups are selective. The two Mediums (`PERF-001`/`PERF-002`, the `v.any()` fat-row reads across analytics/rollup/Discover, amplified by reactive re-execution) are now resolved: a lean `transactionsMeta` projection feeds the scalar transaction analytics and the errors Discover caps its payload-reading aggregate lower. A symmetric `eventsMeta` projection for scalar error aggregates is the remaining long-term optimization. The rest are Suspected/Low (serial per-item ingest, sequential uptime probes, the decompressor's chunk merge), all in RA-Slice 11.
@@ -491,7 +497,7 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, RA-Slice 1).
 - **Plan now**: empty. (`ERR-001`, `ARC-001`, `TEST-002`, `TEST-001`, `PERF-001`, `PERF-002`, `OBS-002` all resolved in RA-Slices 3-8.)
 - **Verify first** (Suspected / assumption-dependent): `PERF-003`, `ARC-003`, `DEP-002`. (`QUAL-005` resolved in RA-Slice 4.)
-- **Backlog** (Low, or Medium not on the critical path): `SEC-secrets-001`, `SEC-secrets-002`, `ARC-002`, `QUAL-001`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `TEST-003`, `TEST-004`, `TEST-005`, `PERF-004`, `PERF-005`, `PERF-006`. (Resolved: `SEC-authz-001`, `SEC-inject-002`, `ERR-002`, `ERR-003`, `ERR-004`, `DOC-001`..`DOC-006`, `OBS-001`, `OBS-003`, `OBS-004`, `OBS-005`, `DEP-001`, `DEP-002` in RA-Slices 2-9.)
+- **Backlog** (Low, or Medium not on the critical path): `TEST-003`, `TEST-004`, `TEST-005`, `PERF-004`, `PERF-005`, `PERF-006` (all in RA-Slice 11). (Resolved: `SEC-secrets-001` in RA-Slice 1; `SEC-authz-001`, `SEC-inject-002`, `SEC-secrets-002`, `ERR-002`, `ERR-003`, `ERR-004`, `DOC-001`..`DOC-006`, `OBS-001`, `OBS-003`, `OBS-004`, `OBS-005`, `DEP-001`, `DEP-002`, `ARC-002`, `QUAL-001`..`QUAL-004` in RA-Slices 2-10.)
 
 The first three systemic patterns each cluster several findings (lifecycle-registry tie, body-cap discipline, idempotency propagation); fixing the root closes the members together rather than one at a time.
 

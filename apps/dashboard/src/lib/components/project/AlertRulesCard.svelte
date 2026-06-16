@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { selectClass } from '$lib/components/ui/control-classes';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import { CHANNEL_OPTIONS, type ChannelType } from './channels';
 
@@ -92,11 +93,7 @@
         </div>
         <div class="space-y-1.5">
           <Label for="trigger">Trigger</Label>
-          <select
-            id="trigger"
-            bind:value={trigger}
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
+          <select id="trigger" bind:value={trigger} class={selectClass}>
             <option value="new_issue">New issue</option>
             <option value="regression">Regression</option>
             <option value="event_frequency">Event frequency</option>
@@ -114,11 +111,7 @@
         </div>
         <div class="space-y-1.5">
           <Label for="channelType">Channel</Label>
-          <select
-            id="channelType"
-            bind:value={channelType}
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
+          <select id="channelType" bind:value={channelType} class={selectClass}>
             {#each CHANNEL_OPTIONS as o (o.value)}
               <option value={o.value}>{o.label}</option>
             {/each}

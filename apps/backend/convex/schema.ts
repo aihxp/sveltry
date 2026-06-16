@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from 'convex/server';
-import { v } from 'convex/values';
+import { v, type Infer } from 'convex/values';
+import type { AlertChannelType } from '@sveltry/types';
 
 /** Severity levels, aligned with Sentry's vocabulary. */
 export const levelValidator = v.union(
@@ -115,6 +116,10 @@ export const trackerConfigValidator = v.union(
 );
 
 export const alertChannelValidator = v.object({
+  // The literals are spelled out (Convex needs them for precise typing), but the
+  // set is kept in sync with the shared `ALERT_CHANNEL_TYPES` source by the
+  // compile-time assertion below, so adding a channel in only one place fails the
+  // build instead of silently leaving it unselectable in the UI (see ARC-002).
   type: v.union(
     v.literal('webhook'),
     v.literal('discord'),
@@ -126,6 +131,18 @@ export const alertChannelValidator = v.object({
   ),
   target: v.string(),
 });
+
+// Compile-time tie: the validator's `type` union must equal the shared
+// `AlertChannelType`. If either side gains or drops a channel, one of these
+// assignments stops being `true` and the build fails, naming the drift.
+type _ChannelInValidator = Infer<typeof alertChannelValidator>['type'];
+const _channelTypesInSync: [
+  Exclude<_ChannelInValidator, AlertChannelType>,
+  Exclude<AlertChannelType, _ChannelInValidator>,
+] extends [never, never]
+  ? true
+  : { error: 'alertChannelValidator is out of sync with ALERT_CHANNEL_TYPES' } = true;
+void _channelTypesInSync;
 
 /**
  * The Sveltry event-domain schema. Everything runs on Convex: identity

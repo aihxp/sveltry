@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalQuery, mutation, query } from './_generated/server';
+import { internalQuery, mutation, type QueryCtx, query } from './_generated/server';
 import { ingestFiltersValidator, repoConfigValidator, scrubConfigValidator } from './schema';
 import { recordAudit } from './lib/audit';
 import { requireOrg, requireRole } from './lib/auth';
@@ -56,12 +56,12 @@ export const resolveIngestKey = internalQuery({
   },
 });
 
-async function uniquePublicId(ctx: { db: any }): Promise<string> {
+async function uniquePublicId(ctx: QueryCtx): Promise<string> {
   for (let i = 0; i < 8; i++) {
     const candidate = generatePublicId();
     const existing = await ctx.db
       .query('projects')
-      .withIndex('by_publicId', (q: any) => q.eq('publicId', candidate))
+      .withIndex('by_publicId', (q) => q.eq('publicId', candidate))
       .first();
     if (!existing) return candidate;
   }

@@ -6,6 +6,19 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Internal
+
+- **Architecture + quality nits.** The notification-channel set now has a single shared source
+  (`ALERT_CHANNEL_TYPES` in `@sveltry/types`): the dashboard option list and the Convex validator
+  both derive from it (the validator with a compile-time drift check), and a stale third 4-member
+  copy in `domain.ts` was unified. The repeated `<select>`/`<textarea>` Tailwind class strings were
+  consolidated into shared `selectClass`/`textareaClass` consts. The `as unknown as Claims` cast at
+  the auth boundary is centralized in one `claimsOf()` helper; `uniquePublicId` is now typed with the
+  generated `QueryCtx` (no `any`); the sweep crons' per-tick write budget and batch sizes are named
+  constants instead of bare literals; and the API-token lookup carries an explicit note that its
+  index compare is intentionally not constant-time (it compares a digest of a 256-bit secret, so a
+  timing side channel is infeasible).
+
 ### Dependencies
 
 - **Dependency hygiene.** Pruned the orphaned `@types/pg` left in the install store after the

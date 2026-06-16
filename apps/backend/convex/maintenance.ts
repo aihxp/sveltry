@@ -11,6 +11,13 @@ const HOUR_MS = 60 * 60 * 1000;
 // exceeds it the helper logs, so the truncation is visible rather than silent
 // (full cursor pagination across ticks is the follow-up if that ever happens).
 const CRON_ENTITY_CAP = 2000;
+// Per-tick write budget for the sweep crons: a separate concern from the scan cap
+// above (it bounds row mutations, not the entity list), named so a maintainer
+// tuning one is not misled by the other coincidentally sharing the value 2000.
+const MAX_MUTATIONS_PER_TICK = 2000;
+// Per-table batch sizes for the bounded sweeps.
+const RETENTION_BATCH = 200;
+const ISSUE_SWEEP_BATCH = 500;
 function warnIfCapped(count: number, cron: string, entity: string): void {
   if (count >= CRON_ENTITY_CAP) {
     console.warn(
@@ -39,14 +46,14 @@ export const sweepRetention = internalMutation({
     let deleted = 0;
 
     for (const project of projects) {
-      if (deleted >= 2000) break;
+      if (deleted >= MAX_MUTATIONS_PER_TICK) break;
       const cutoff = now - project.eventRetentionDays * DAY_MS;
 
       const staleEvents = await ctx.db
         .query('events')
         .withIndex('by_project', (q) => q.eq('projectId', project._id).lt('timestamp', cutoff))
         .order('asc')
-        .take(200);
+        .take(RETENTION_BATCH);
       for (const row of staleEvents) {
         await ctx.db.delete(row._id);
         deleted += 1;
@@ -56,7 +63,7 @@ export const sweepRetention = internalMutation({
         .query('transactions')
         .withIndex('by_project', (q) => q.eq('projectId', project._id).lt('timestamp', cutoff))
         .order('asc')
-        .take(200);
+        .take(RETENTION_BATCH);
       for (const row of staleTransactions) {
         await ctx.db.delete(row._id);
         deleted += 1;
@@ -66,7 +73,7 @@ export const sweepRetention = internalMutation({
         .query('sessions')
         .withIndex('by_project', (q) => q.eq('projectId', project._id).lt('lastUpdate', cutoff))
         .order('asc')
-        .take(200);
+        .take(RETENTION_BATCH);
       for (const row of staleSessions) {
         await ctx.db.delete(row._id);
         deleted += 1;
@@ -90,13 +97,13 @@ export const sweepOngoing = internalMutation({
     let updated = 0;
 
     for (const org of orgs) {
-      if (updated >= 2000) break;
+      if (updated >= MAX_MUTATIONS_PER_TICK) break;
       const issues = await ctx.db
         .query('issues')
         .withIndex('by_org_status_lastSeen', (q) =>
           q.eq('organizationId', org.slug).eq('status', 'unresolved'),
         )
-        .take(500);
+        .take(ISSUE_SWEEP_BATCH);
       for (const issue of issues) {
         if (issue.substatus === 'new' && now - issue.firstSeen > SEVEN_DAYS_MS) {
           await ctx.db.patch(issue._id, { substatus: 'ongoing' });

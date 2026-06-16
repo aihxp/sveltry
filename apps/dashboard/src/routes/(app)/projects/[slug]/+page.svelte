@@ -10,6 +10,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
+  import { selectClass, textareaClass } from '$lib/components/ui/control-classes';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { buildDsn } from '$lib/utils';
   import GitBranchIcon from '@lucide/svelte/icons/git-branch';
@@ -450,7 +451,7 @@
                     bind:value={scrubExtra}
                     rows="3"
                     placeholder={'phone\naddress'}
-                    class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    class={textareaClass}
                   ></textarea>
                 </div>
                 <div class="space-y-1.5">
@@ -460,7 +461,7 @@
                     bind:value={scrubSafe}
                     rows="3"
                     placeholder={'auth_method\nsession_count'}
-                    class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    class={textareaClass}
                   ></textarea>
                 </div>
               </div>
@@ -495,7 +496,7 @@
                 bind:value={filterErrors}
                 rows="3"
                 placeholder={'*ResizeObserver loop*\n*Non-Error promise rejection*'}
-                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                class={textareaClass}
               ></textarea>
             </div>
             <div class="space-y-1.5">
@@ -505,7 +506,7 @@
                 bind:value={filterPaths}
                 rows="3"
                 placeholder={'chrome-extension://*\nmoz-extension://*'}
-                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                class={textareaClass}
               ></textarea>
             </div>
             <div class="space-y-1.5">
@@ -515,7 +516,7 @@
                 bind:value={filterReleases}
                 rows="2"
                 placeholder="1.0.0-rc*"
-                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                class={textareaClass}
               ></textarea>
             </div>
             <div class="space-y-1.5">
@@ -525,7 +526,7 @@
                 bind:value={filterEnvironments}
                 rows="2"
                 placeholder={'local\ntest'}
-                class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                class={textareaClass}
               ></textarea>
             </div>
           </div>
@@ -563,11 +564,7 @@
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1.5">
               <Label for="repoProvider">Provider</Label>
-              <select
-                id="repoProvider"
-                bind:value={repoProvider}
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
+              <select id="repoProvider" bind:value={repoProvider} class={selectClass}>
                 <option value="">None</option>
                 <option value="github">GitHub</option>
                 <option value="gitlab">GitLab</option>

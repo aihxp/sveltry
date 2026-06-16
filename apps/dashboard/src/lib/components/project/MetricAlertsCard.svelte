@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { selectClass } from '$lib/components/ui/control-classes';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import { CHANNEL_OPTIONS, type ChannelType } from './channels';
 
@@ -92,11 +93,7 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="space-y-1.5">
           <Label for="maMetric">Metric</Label>
-          <select
-            id="maMetric"
-            bind:value={maMetric}
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
+          <select id="maMetric" bind:value={maMetric} class={selectClass}>
             <option value="p95_latency">p95 latency (ms)</option>
             <option value="error_count">Error count</option>
             <option value="crash_free_rate">Crash-free rate (%)</option>
@@ -124,11 +121,7 @@
         </div>
         <div class="space-y-1.5">
           <Label for="maChannel">Channel</Label>
-          <select
-            id="maChannel"
-            bind:value={maChannelType}
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
+          <select id="maChannel" bind:value={maChannelType} class={selectClass}>
             {#each CHANNEL_OPTIONS as o (o.value)}
               <option value={o.value}>{o.label}</option>
             {/each}

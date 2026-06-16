@@ -9,6 +9,23 @@ import type { SentryLevel } from './sentry.js';
 /** Severity of an issue/event, aligned with Sentry's level vocabulary. */
 export type IssueLevel = SentryLevel;
 
+/**
+ * The notification-channel kinds an alert/metric-alert/usage-alert can deliver to.
+ * Single source of truth: the Convex schema validator (`alertChannelValidator`) and
+ * the dashboard's channel option list both derive from this, with a compile-time
+ * check on the backend so the set cannot drift between the two.
+ */
+export const ALERT_CHANNEL_TYPES = [
+  'webhook',
+  'discord',
+  'slack',
+  'email',
+  'msteams',
+  'pagerduty',
+  'opsgenie',
+] as const;
+export type AlertChannelType = (typeof ALERT_CHANNEL_TYPES)[number];
+
 /** The platform an event originated from. */
 export type Platform =
   | 'javascript'
@@ -138,12 +155,12 @@ export interface Release {
 /** What kind of trigger fires an alert rule. */
 export type AlertTrigger = 'new_issue' | 'regression' | 'event_frequency';
 
-/** Where an alert is delivered. */
-export type AlertChannelType = 'webhook' | 'discord' | 'slack' | 'email';
+// `AlertChannelType` is defined once above, derived from `ALERT_CHANNEL_TYPES`
+// (this used to be a stale 4-member copy here, missing msteams/pagerduty/opsgenie).
 
 export interface AlertChannel {
   type: AlertChannelType;
-  /** Webhook/Discord/Slack URL, or an email address. */
+  /** Webhook/Discord/Slack/MS Teams/PagerDuty/Opsgenie URL or key, or an email address. */
   target: string;
 }
 
