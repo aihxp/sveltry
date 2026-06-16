@@ -6,6 +6,17 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Documentation
+
+- **Corrected doc drift.** `CONTRIBUTING.md` no longer claims shipped features (all envelope item
+  types, email alerts) are unimplemented, and drops the hardcoded "45 passing tests" count (the
+  suite has grown well past it) in favor of "the full protocol suite must pass". `SECURITY.md`'s
+  supported-versions table now names the shipping `0.9.x` line instead of `0.1.x`, and its
+  security-model section gained an outbound-SSRF/egress entry (the `safeFetch` chokepoint was a
+  load-bearing surface it omitted). `SSRF_DOH_RESOLVER` is now documented in `SELF_HOSTING.md` with
+  its three modes and the security implication of disabling the DNS-rebinding check. Plus a CHANGELOG
+  line-count correction.
+
 ### Performance
 
 - **Lean `transactionsMeta` projection for the transaction analytics.** Convex has no column
@@ -81,7 +92,7 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Changed
 
-- **Project settings page decomposed.** The 1521-line project-settings page is split into nine
+- **Project settings page decomposed.** The 1585-line project-settings page is split into nine
   focused, self-contained components (issue tracker, usage, deploys, alert rules, webhooks, metric
   alerts, usage alerts, notification deliveries, source maps) under `$lib/components/project/`; the
   page now composes them and keeps only the cohesive project-configuration and danger-zone sections.

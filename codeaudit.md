@@ -105,7 +105,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Add a new project-scoped table with a projectId to schema.ts and confirm the build now fails (or a test fails) until purgeProjectData and restampProjectOrg are updated, not only until tenantTables.ts is updated.
 - Related: Pairs with any lifecycle-coverage finding from other lenses (purge/restamp/retention table omissions).
 
-### [DOC-001] CONTRIBUTING.md states shipped features (all envelope item types, email alerts) are "not yet persisted / not wired"
+### [DOC-001] ~~CONTRIBUTING.md states shipped features (all envelope item types, email alerts) are "not yet persisted / not wired"~~ [RESOLVED - RA-Slice 7]
+- Status: RESOLVED (RA-Slice 7). The stale "known gaps" paragraph in `CONTRIBUTING.md` was rewritten to match reality: the envelope item types are parsed and persisted and email is wired over SMTP; the genuine remaining gaps are client reports (accepted but not surfaced) and minidumps (tolerated but not decoded), matching `SENTRY_COMPATIBILITY.md` "Known limitations".
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `CONTRIBUTING.md:156-159`
 - Evidence: CONTRIBUTING.md:156-159 reads: "some Sentry envelope item types (transaction, session, attachment, replay, profile, check-in, client report, feedback) are accepted but not yet persisted, and email alert delivery is not yet wired. Please check existing issues before filing a new one for these known gaps." This is false for current code and directly contradicts the project's other docs. All listed item types ARE persisted (ingest.ts:506 recordTransaction; sessions.ts:10/57; replays.ts:6; profiles.ts:8; monitors.ts:19; feedback.ts:6/33) and email IS wired over SMTP (email.ts imports nodemailer; FEATURE_PARITY.md:99 and ROADMAP.md:26 both list email as Done). SENTRY_COMPATIBILITY.md:138-150 marks every one of these item types "Parsed and persisted."
@@ -114,7 +115,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: grep -niE 'not yet persisted|not yet wired' CONTRIBUTING.md returns nothing; the remaining 'known gaps' wording matches SENTRY_COMPATIBILITY.md "Known limitations" (client_report not surfaced, minidump discarded).
 - Related: none
 
-### [DOC-002] CONTRIBUTING.md hardcodes "45 passing tests" for the protocol suite; the suite actually has 175
+### [DOC-002] ~~CONTRIBUTING.md hardcodes "45 passing tests" for the protocol suite; the suite actually has 175~~ [RESOLVED - RA-Slice 7]
+- Status: RESOLVED (RA-Slice 7). Both hardcoded "45 passing" occurrences in `CONTRIBUTING.md` were replaced with a count-free statement ("must all pass" / "the full protocol suite must pass before a change lands"), so the doc cannot drift again as tests are added.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `CONTRIBUTING.md:75`, `CONTRIBUTING.md:87`
 - Evidence: CONTRIBUTING.md:75 comments the pre-PR command as "protocol unit tests (45 passing)" and :87 states "there are 45 passing tests today." Running the suite: `cd packages/protocol && bun test` reports `175 pass / 0 fail` across 23 files. The remediation grew the protocol suite to 23 test files / 175 cases (matching ARCHITECTURE.md:28-30's "one test file per source module") but left the count in CONTRIBUTING.md at its old value, off by 130.
@@ -123,7 +125,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: grep -n '45 passing\|45 passing tests today' CONTRIBUTING.md returns nothing; if a number is kept it equals the output of `cd packages/protocol && bun test` (currently 175).
 - Related: none
 
-### [DOC-003] SECURITY.md supported-versions table lists 0.1.x but the project is 0.9.3; no 0.9.x row exists
+### [DOC-003] ~~SECURITY.md supported-versions table lists 0.1.x but the project is 0.9.3; no 0.9.x row exists~~ [RESOLVED - RA-Slice 7]
+- Status: RESOLVED (RA-Slice 7). The `SECURITY.md` supported-versions table now names `0.9.x | Yes` and `< 0.9 | No`, matching the shipping minor line.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `SECURITY.md:13-19`
 - Evidence: SECURITY.md:13 states fixes go to "the latest minor release line," but the table (SECURITY.md:16-19) only lists `0.1.x | Yes` and `< 0.1 | No`. The actual version is 0.9.3 (package.json, apps/backend/package.json, apps/dashboard/package.json all "version": "0.9.3"; tag v0.9.3). Under the stated policy the supported line is 0.9.x, which the table never names; a 0.9.3 operator cannot tell from this table whether they are on a supported line, and "0.1.x | Yes" is misleading (0.1.x is now several minors old).
@@ -132,7 +135,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: The supported-versions table in SECURITY.md names the minor line matching package.json "version" (0.9.x) as supported; no row claims 0.1.x is the current supported line.
 - Related: none
 
-### [DOC-004] SECURITY.md security-model section omits the outbound-SSRF / egress guard, a load-bearing security surface
+### [DOC-004] ~~SECURITY.md security-model section omits the outbound-SSRF / egress guard, a load-bearing security surface~~ [RESOLVED - RA-Slice 7]
+- Status: RESOLVED (RA-Slice 7). `SECURITY.md`'s security-model list gained an "Outbound request safety (SSRF)" bullet naming `safeFetch` (`lib/net.ts`), the per-redirect-hop literal + DoH-resolved re-validation, the no-body-replay-across-3xx rule, the intentional RFC1918/loopback allowance (only metadata/link-local blocked), the `SSRF_DOH_RESOLVER` knob, and that bypasses are in scope.
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Documentation & Drift
 - Location: `SECURITY.md:65-95`, `apps/backend/convex/lib/net.ts:7-30`
 - Evidence: SECURITY.md:67-95 enumerates the in-scope security-sensitive areas: DSN/ingest auth, multi-tenant isolation, JWT/JWKS, PII scrubbing, rate limiting, root credentials. It never mentions outbound SSRF, the egress chokepoint, or DNS-rebinding defense, even though every outbound webhook/alert/uptime/integration request flows through a redirect-aware, DoH-rebinding-checked safeFetch (lib/net.ts; the orientation lists it as load-bearing). grep -niE 'ssrf|rebind|egress|safefetch|metadata|outbound' SECURITY.md returns nothing. ARCHITECTURE.md:197 and FEATURE_PARITY.md:104 both describe safeFetch/SSRF-guarded delivery, so the omission is specific to the security policy that should scope it.
@@ -311,7 +315,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: If tightened: confirm the narrowed ranges still resolve to the same lockfile entries (bun install --frozen-lockfile passes unchanged) and that dependabot still surfaces majors for review rather than auto-absorbing them.
 - Related: none
 
-### [DOC-005] Operator-facing SSRF_DOH_RESOLVER env var (can disable rebinding defense) is documented nowhere
+### [DOC-005] ~~Operator-facing SSRF_DOH_RESOLVER env var (can disable rebinding defense) is documented nowhere~~ [RESOLVED - RA-Slice 7]
+- Status: RESOLVED (RA-Slice 7). `docs/SELF_HOSTING.md` now documents `SSRF_DOH_RESOLVER` in the env reference with its three modes (default Cloudflare / custom DoH URL / `off`) and a security note that `off` disables only the resolve-time rebinding check while the literal host/scheme guard stays on.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `apps/backend/convex/lib/net.ts:9-17`, `docs/SELF_HOSTING.md`, `apps/backend/convex/health.ts:33-38`
 - Evidence: lib/net.ts:9-17 defines SSRF_DOH_RESOLVER as an operator knob: unset = Cloudflare DoH; a custom URL = custom resolver; '' or 'off' = disable the resolve-time rebinding check (the literal-host guard stays). health.ts:33-38 even exposes its state (default/custom/disabled) in admin configStatus, confirming it is intended as an operator-tunable control. Yet grep -rniE 'SSRF_DOH_RESOLVER|DoH|rebind' over docs/, README.md, SECURITY.md, CONTRIBUTING.md returns nothing, and the SELF_HOSTING.md env reference (which fully documents the SMTP_* and S3_* families) has no row for it.
@@ -320,7 +325,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: grep -rn 'SSRF_DOH_RESOLVER' docs/ returns a row in the env reference describing default/custom/off semantics that match lib/net.ts:11-16.
 - Related: none
 
-### [DOC-006] CHANGELOG 0.9.3 entry cites the pre-split settings page as 1521 lines; it was 1585
+### [DOC-006] ~~CHANGELOG 0.9.3 entry cites the pre-split settings page as 1521 lines; it was 1585~~ [RESOLVED - RA-Slice 7]
+- Status: RESOLVED (RA-Slice 7). The CHANGELOG 0.9.3 entry now reads "1585-line", matching the pre-split file length.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `CHANGELOG.md:12-16`
 - Evidence: CHANGELOG.md:12 says "The 1521-line project-settings page is split into nine focused components." The file immediately before the decompose commit (11b1139~1:apps/dashboard/src/routes/(app)/projects/[slug]/+page.svelte) was 1585 lines; the nine components in apps/dashboard/src/lib/components/project/ and the current 686-line +page.svelte confirm the split happened, only the cited line count is off (by 64).
@@ -470,7 +476,7 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - **Error Handling (82)**: The streaming bomb guard, real idempotency with try/finally blob cleanup, and success-gated cron firing all hold up. The three previously-noted gaps are now closed (RA-Slice 3): session-bucket writes are content-key idempotent (`ERR-001`), the artifact upload cleans up its orphan blob on failure (`ERR-002`), and the spike-counter pre-gate over-count is documented as a deliberate fail-safe accept (`ERR-003`). The id-less check-in duplicate is an accepted, documented edge (no stable retry key exists).
 - **Performance (78 at audit time; improved by RA-Slice 6)**: Every scan is bounded and idempotency lookups are selective. The two Mediums (`PERF-001`/`PERF-002`, the `v.any()` fat-row reads across analytics/rollup/Discover, amplified by reactive re-execution) are now resolved: a lean `transactionsMeta` projection feeds the scalar transaction analytics and the errors Discover caps its payload-reading aggregate lower. A symmetric `eventsMeta` projection for scalar error aggregates is the remaining long-term optimization. The rest are Suspected/Low (serial per-item ingest, sequential uptime probes, the decompressor's chunk merge), all in RA-Slice 11.
 - **Dependencies (88)**: Strong reproducibility and currency; the cookie override is clean. Only Low: a dead `pg` client family still in the install store (`DEP-001`) and catalog pins absorbing brand-new caret-majors (`DEP-002`).
-- **Documentation (84)**: The load-bearing rewritten docs (ARCHITECTURE.md, API.md, parity) verify accurate, but `CONTRIBUTING.md` and `SECURITY.md` were missed in the doc sweep (`DOC-001..004`), and the operator-facing `SSRF_DOH_RESOLVER` is undocumented (`DOC-005`).
+- **Documentation (84 at audit time; improved by RA-Slice 7)**: The load-bearing rewritten docs (ARCHITECTURE.md, API.md, parity) verified accurate, and the drift the audit found is now fixed (RA-Slice 7): `CONTRIBUTING.md`'s stale "known gaps" + test count, `SECURITY.md`'s supported-versions table + the missing SSRF/egress scope entry, the undocumented `SSRF_DOH_RESOLVER` (now in SELF_HOSTING.md), and the CHANGELOG line-count nit (`DOC-001..006`, all resolved).
 - **Observability (82)**: Real `/healthz` readiness, admin-gated `configStatus`, end-to-end drop/filter accounting, per-attempt delivery logs in the UI. Gaps: tracker auto-create failures are not recorded despite the module doc claiming they are (`OBS-001`), no boot-time env validation (`OBS-002`), and a `/healthz` liveness-vs-readiness label mismatch (`OBS-004`).
 
 ## Remediation plan
@@ -478,7 +484,7 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, RA-Slice 1).
 - **Plan now** (high-value Mediums), suggested order: `OBS-002`. (`ERR-001`, `ARC-001`, `TEST-002`, `TEST-001`, `PERF-001`, `PERF-002` resolved in RA-Slices 3-6.)
 - **Verify first** (Suspected / assumption-dependent): `PERF-003`, `ARC-003`, `DEP-002`. (`QUAL-005` resolved in RA-Slice 4.)
-- **Backlog** (Low, or Medium not on the critical path): `SEC-secrets-001`, `SEC-secrets-002`, `ARC-002`, `QUAL-001`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `TEST-003`, `TEST-004`, `TEST-005`, `PERF-004`, `PERF-005`, `PERF-006`, `DEP-001`, `DOC-001`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, `DOC-006`, `OBS-001`, `OBS-003`, `OBS-004`, `OBS-005`. (Resolved: `SEC-authz-001`, `SEC-inject-002`, `ERR-002`, `ERR-003`, `ERR-004` in RA-Slices 2-3.)
+- **Backlog** (Low, or Medium not on the critical path): `SEC-secrets-001`, `SEC-secrets-002`, `ARC-002`, `QUAL-001`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `TEST-003`, `TEST-004`, `TEST-005`, `PERF-004`, `PERF-005`, `PERF-006`, `DEP-001`, `OBS-001`, `OBS-003`, `OBS-004`, `OBS-005`. (Resolved: `SEC-authz-001`, `SEC-inject-002`, `ERR-002`, `ERR-003`, `ERR-004`, `DOC-001`..`DOC-006` in RA-Slices 2-7.)
 
 The first three systemic patterns each cluster several findings (lifecycle-registry tie, body-cap discipline, idempotency propagation); fixing the root closes the members together rather than one at a time.
 

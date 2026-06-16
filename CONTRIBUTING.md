@@ -72,7 +72,7 @@ actions and ingest (.site) `3211`, Convex admin dashboard `6791`, Postgres `5432
 Please run all of these locally before opening a pull request:
 
 ```bash
-bun run --filter '@sveltry/protocol' test   # protocol unit tests (45 passing)
+bun run --filter '@sveltry/protocol' test   # protocol unit tests (must all pass)
 bun run check                               # type and Svelte checks across the repo
 bun run build                               # full build
 bunx prettier --check .                     # formatting
@@ -84,7 +84,8 @@ If `prettier --check` reports issues, run `bunx prettier --write .` to fix them.
 
 The `packages/protocol` package is the compatibility-critical core. It is what lets
 unmodified `@sentry/*` SDKs report to Sveltry, so its behavior must stay exact and
-predictable. It is unit-tested with `bun test`, and there are 45 passing tests today.
+predictable. It is unit-tested with `bun test` (one test file per source module); the
+full protocol suite must pass before a change lands.
 
 For any wire-protocol change (DSN parsing, envelope parsing, auth extraction,
 decompression, normalization, fingerprinting, rate limiting, or response shaping) you
@@ -153,10 +154,12 @@ Please open an issue using the provided issue templates:
   especially helpful when you can attach the raw envelope or the failing request.
 - Feature request: describe the problem you are trying to solve and the outcome you want.
 
-Note that some Sentry envelope item types (transaction, session, attachment, replay,
-profile, check-in, client report, feedback) are accepted but not yet persisted, and
-email alert delivery is not yet wired. Please check existing issues before filing a new
-one for these known gaps.
+The Sentry envelope item types (event, transaction, session, attachment, replay,
+profile, check-in, feedback) are parsed and persisted, and email alert delivery is wired
+over SMTP. The remaining known gaps are narrow: client reports are accepted but not yet
+surfaced in the UI, and minidump payloads are tolerated but not decoded (see
+`docs/SENTRY_COMPATIBILITY.md` "Known limitations"). Please check existing issues before
+filing a new one for these.
 
 ## Code of Conduct
 
