@@ -28,6 +28,54 @@
   const rules = useQuery(api.alerts.listAlertRules, () =>
     projectId ? { projectId } : ('skip' as const),
   );
+
+  // Outbound webhooks: signed POSTs on issue-lifecycle events.
+  const webhooks = useQuery(api.webhooks.listWebhooks, () =>
+    projectId ? { projectId } : ('skip' as const),
+  );
+  const WEBHOOK_EVENTS = [
+    { value: 'issue.resolved', label: 'Issue resolved' },
+    { value: 'issue.unresolved', label: 'Issue unresolved' },
+    { value: 'issue.ignored', label: 'Issue ignored' },
+    { value: 'issue.assigned', label: 'Issue assigned' },
+    { value: 'issue.unassigned', label: 'Issue unassigned' },
+  ] as const;
+  type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]['value'];
+  let webhookUrl = $state('');
+  let webhookEvents = $state<WebhookEvent[]>(['issue.resolved']);
+  let creatingWebhook = $state(false);
+  let webhookError = $state('');
+  let newWebhookSecret = $state('');
+  function toggleWebhookEvent(value: WebhookEvent, checked: boolean) {
+    webhookEvents = checked ? [...webhookEvents, value] : webhookEvents.filter((e) => e !== value);
+  }
+  async function addWebhook(e: SubmitEvent) {
+    e.preventDefault();
+    if (!projectId) return;
+    creatingWebhook = true;
+    webhookError = '';
+    newWebhookSecret = '';
+    try {
+      const res = await client.mutation(api.webhooks.createWebhook, {
+        projectId,
+        url: webhookUrl.trim(),
+        events: webhookEvents,
+      });
+      newWebhookSecret = res.secret;
+      webhookUrl = '';
+      webhookEvents = ['issue.resolved'];
+    } catch (err) {
+      webhookError = err instanceof Error ? err.message : 'Could not create webhook';
+    } finally {
+      creatingWebhook = false;
+    }
+  }
+  async function removeWebhook(id: Id<'webhooks'>) {
+    await client.mutation(api.webhooks.deleteWebhook, { webhookId: id });
+  }
+  async function toggleWebhookEnabled(id: Id<'webhooks'>, enabled: boolean) {
+    await client.mutation(api.webhooks.setWebhookEnabled, { webhookId: id, enabled });
+  }
   const artifacts = useQuery(api.sourcemaps.listProjectArtifacts, () =>
     projectId ? { projectId } : ('skip' as const),
   );
@@ -1020,6 +1068,108 @@
           </div>
           <Button type="submit" size="sm" disabled={savingRule}>
             {savingRule ? 'Adding…' : 'Add alert rule'}
+          </Button>
+        </form>
+      </Card.Content>
+    </Card.Root>
+
+    <Card.Root>
+      <Card.Header>
+        <Card.Title>Webhooks</Card.Title>
+        <Card.Description>
+          POST a signed JSON payload to your endpoint on issue lifecycle events. Each request is
+          signed with the webhook's secret (HMAC-SHA256) in the
+          <code class="font-mono">X-Sveltry-Signature</code> header.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content class="space-y-4">
+        {#if webhooks.isLoading}
+          <p class="text-sm text-muted-foreground">Loading webhooks…</p>
+        {:else if webhooks.error}
+          <p class="text-sm text-destructive">Failed to load webhooks.</p>
+        {:else if webhooks.data && webhooks.data.length > 0}
+          <div class="space-y-2">
+            {#each webhooks.data as wh (wh._id)}
+              <div class="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div class="min-w-0">
+                  <div class="truncate text-sm font-medium">{wh.url}</div>
+                  <div class="truncate text-xs text-muted-foreground">
+                    {wh.events.join(', ')} ·
+                    <code class="font-mono">{wh.secretPrefix}…</code>
+                  </div>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <Badge variant={wh.enabled ? 'success' : 'muted'}>
+                    {wh.enabled ? 'enabled' : 'disabled'}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => toggleWebhookEnabled(wh._id, !wh.enabled)}
+                  >
+                    {wh.enabled ? 'Disable' : 'Enable'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onclick={() => removeWebhook(wh._id)}
+                    aria-label="Delete webhook"
+                  >
+                    <TrashIcon class="size-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-sm text-muted-foreground">No webhooks yet.</p>
+        {/if}
+
+        {#if newWebhookSecret}
+          <div class="space-y-1.5 rounded-lg border border-dashed p-3">
+            <p class="text-xs text-muted-foreground">
+              Copy this signing secret now. You will not be able to see it again.
+            </p>
+            <div class="flex items-center gap-2">
+              <code
+                class="min-w-0 flex-1 truncate rounded bg-muted/40 px-2 py-1.5 font-mono text-xs"
+                >{newWebhookSecret}</code
+              >
+              <CopyButton text={newWebhookSecret} />
+            </div>
+          </div>
+        {/if}
+
+        <form class="space-y-3 rounded-lg border border-dashed p-4" onsubmit={addWebhook}>
+          <div class="space-y-1.5">
+            <Label for="webhookUrl">Endpoint URL</Label>
+            <Input
+              id="webhookUrl"
+              type="url"
+              bind:value={webhookUrl}
+              required
+              placeholder="https://example.com/hooks/sveltry"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Events</Label>
+            <div class="flex flex-wrap gap-x-4 gap-y-2">
+              {#each WEBHOOK_EVENTS as ev (ev.value)}
+                <label class="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    class="size-4"
+                    checked={webhookEvents.includes(ev.value)}
+                    onchange={(e) => toggleWebhookEvent(ev.value, e.currentTarget.checked)}
+                  />
+                  {ev.label}
+                </label>
+              {/each}
+            </div>
+          </div>
+          {#if webhookError}<p class="text-sm text-destructive">{webhookError}</p>{/if}
+          <Button type="submit" size="sm" disabled={creatingWebhook || webhookEvents.length === 0}>
+            {creatingWebhook ? 'Adding…' : 'Add webhook'}
           </Button>
         </form>
       </Card.Content>

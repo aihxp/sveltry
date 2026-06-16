@@ -88,6 +88,15 @@ export const alertTriggerValidator = v.union(
   v.literal('event_frequency'),
 );
 
+/** Issue-lifecycle events an outbound webhook can subscribe to. */
+export const webhookEventValidator = v.union(
+  v.literal('issue.resolved'),
+  v.literal('issue.ignored'),
+  v.literal('issue.unresolved'),
+  v.literal('issue.assigned'),
+  v.literal('issue.unassigned'),
+);
+
 /** Per-project issue-tracker integration config (credentials are self-hoster supplied). */
 export const trackerConfigValidator = v.union(
   v.object({
@@ -764,6 +773,40 @@ export default defineSchema({
     detail: v.optional(v.string()),
     deliveredAt: v.number(),
   })
+    .index('by_issue', ['issueId'])
+    .index('by_project', ['projectId']),
+
+  // Outbound webhooks: a project endpoint that receives a signed JSON POST on issue
+  // lifecycle events. The `secret` is the HMAC signing key (shown once at creation).
+  webhooks: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    url: v.string(),
+    secret: v.string(),
+    events: v.array(webhookEventValidator),
+    enabled: v.boolean(),
+    createdBy: v.string(),
+    createdByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    lastDeliveryAt: v.optional(v.number()),
+  })
+    .index('by_project', ['projectId'])
+    .index('by_org', ['organizationId']),
+
+  // A log of each webhook delivery attempt (one row per webhook per fired event).
+  webhookDeliveries: defineTable({
+    organizationId: v.string(),
+    projectId: v.id('projects'),
+    webhookId: v.id('webhooks'),
+    issueId: v.id('issues'),
+    event: v.string(),
+    url: v.string(),
+    ok: v.boolean(),
+    statusCode: v.optional(v.number()),
+    detail: v.optional(v.string()),
+    deliveredAt: v.number(),
+  })
+    .index('by_webhook', ['webhookId'])
     .index('by_issue', ['issueId'])
     .index('by_project', ['projectId']),
 

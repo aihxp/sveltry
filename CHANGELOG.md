@@ -6,6 +6,17 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Outbound webhooks.** Register a per-project endpoint (under Project Settings -> Webhooks) that
+  receives a signed JSON POST when an issue's lifecycle changes: `issue.resolved`, `issue.ignored`,
+  `issue.unresolved`, `issue.assigned`, `issue.unassigned`, fired from both the dashboard and the
+  public API (status / assignment changes). Each request is signed with the webhook's secret
+  (HMAC-SHA256, in the `X-Sveltry-Signature` header, with a signed timestamp), so consumers can
+  verify authenticity. The secret is generated server-side and shown once. Delivery is SSRF-guarded
+  (`safeFetch`), runs off the triggering mutation (a failing endpoint never blocks it), has an 8s
+  timeout, and every attempt is logged. Managing webhooks is admin-gated and audited.
+
 ## [0.8.0] - 2026-06-15
 
 ### Added
