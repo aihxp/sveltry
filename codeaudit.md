@@ -350,7 +350,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: `bun run lint` (or a new `lint:eslint`) runs ESLint across workspaces and CI fails on rule violations.
 - Related: Would have flagged QUAL-006 (dead deps) and QUAL-007 (any helpers) automatically.
 
-### [QUAL-006] Dead dependencies pg and jose remain in the root catalog
+### [QUAL-006] ~~Dead dependencies pg and jose remain in the root catalog~~ [RESOLVED - Slice 7]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Code Quality & Maintainability
 - Location: `package.json:27`, `package.json:28`
 - Evidence: package.json catalog declares `"pg": "^8.13.0"` (line 27) and `"jose": "^6.0.0"` (line 28). Grep for `from 'pg'`/`from 'jose'`/`require('pg')` across apps and packages (excluding node_modules and _generated) returns zero imports. These are leftovers from the pre-Convex-only / pre-Better-Auth-on-Convex architecture.
@@ -377,7 +377,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: The dispatch loop has a single parse helper; existing protocol/ingest behavior is unchanged (unparseable item is still skipped, batch still succeeds).
 - Related: Same duplication-by-repetition theme as QUAL-001, lower stakes.
 
-### [DEP-001] Known-vulnerable cookie@0.6.0 shipped transitively via pinned @sveltejs/kit 2.65.0
+### [DEP-001] ~~Known-vulnerable cookie@0.6.0 shipped transitively via pinned @sveltejs/kit 2.65.0~~ [RESOLVED - Slice 7]
+- Status: RESOLVED (Slice 7). Note: the audit's "trivial Kit bump" does not work; the latest Kit (2.65.1) still pins `cookie@^0.6.0`. Forced `cookie` to `^0.7.2` via a root `overrides` entry instead; cookie 0.7 keeps the same parse/serialize API, and the dashboard build + svelte-check both pass.
 - Severity: Low | Confidence: Likely | Effort: S | Dimension: Dependencies & Supply Chain
 - Location: `bun.lock:716 (cookie@0.6.0)`, `bun.lock:578 (@sveltejs/kit@2.65.0 -> cookie ^0.6.0)`, `package.json:20 (catalog @sveltejs/kit ^2.65.0)`
 - Evidence: @sveltejs/kit@2.65.0 depends on `cookie: ^0.6.0`, and the lockfile resolves the only cookie instance to 0.6.0. cookie < 0.7.0 is covered by GHSA-pxg6-pf52-xh8x / CVE-2024-47764: out-of-bounds characters in a cookie name, path, or domain are not rejected, permitting cookie-attribute injection. This is a runtime-shipped, internet-facing dependency (the SvelteKit dashboard adapter-node server sets auth/session cookies).
@@ -386,7 +387,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After bumping, `grep -nE '"cookie@' bun.lock` should show a single entry at >= 0.7.0 and no remaining 0.6.x. Run the dashboard build to confirm SvelteKit still type-checks and builds.
 - Related: none
 
-### [DEP-002] Declared dependencies never imported: convex-helpers, @tanstack/table-core, and dashboard zod
+### [DEP-002] ~~Declared dependencies never imported: convex-helpers, @tanstack/table-core, and dashboard zod~~ [RESOLVED - Slice 7]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Dependencies & Supply Chain
 - Location: `apps/backend/package.json:22 (convex-helpers)`, `apps/dashboard/package.json:20 (@tanstack/table-core)`, `apps/dashboard/package.json:43 (zod devDependency)`
 - Evidence: Repo-wide source greps find zero imports for these. convex-helpers: the only references are the catalog declaration (package.json:25) and the backend manifest (apps/backend/package.json:22); no `from 'convex-helpers'` anywhere in apps/backend/convex (excluding _generated). @tanstack/table-core: no `@tanstack`, `table-core`, `ColumnDef`, `TableCore`, or `RowModel` usage in apps/dashboard/src, and no data-table component exists. zod: declared as a dashboard devDependency via catalog but no `from 'zod'` or `z.` runtime usage in apps/dashboard/src.
@@ -395,7 +396,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After removal, `bun install` succeeds, `bun run check` and `bun run build` still pass across all workspaces, and `bun run --filter '@sveltry/protocol' test` is unaffected.
 - Related: none
 
-### [DEP-003] Dead catalog entries pg and jose: declared, referenced by no workspace, imported nowhere, yet maintained by dependabot
+### [DEP-003] ~~Dead catalog entries pg and jose: declared, referenced by no workspace, imported nowhere, yet maintained by dependabot~~ [RESOLVED - Slice 7]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Dependencies & Supply Chain
 - Location: `package.json:27 (catalog pg ^8.13.0)`, `package.json:28 (catalog jose ^6.0.0)`, `.github/dependabot.yml:14 (auth group still lists pg, @types/pg, jose)`
 - Evidence: The migration to Convex-only auth removed all app Postgres and direct JWT handling, but the root catalog still defines `pg` and `jose`. No workspace package.json references either via `catalog:` (grep for `"pg": "catalog:` and `"jose": "catalog:` returns nothing), and no source file imports `pg` or `jose` (both transitively present only inside better-auth/@convex-dev/better-auth, which carry their own pinned copies). dependabot.yml:14 still groups pg/@types/pg/jose under `auth`, so the bot keeps opening PRs to bump catalog entries that resolve to nothing.
@@ -404,7 +405,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After removal, `bun install` resolves cleanly with no unresolved-catalog error, and `grep -nE '"(pg|jose)"' package.json` returns nothing. CI build/type-check still pass.
 - Related: none
 
-### [DEP-004] Floating `@types/bun: latest` undercuts the otherwise-strong reproducibility posture
+### [DEP-004] ~~Floating `@types/bun: latest` undercuts the otherwise-strong reproducibility posture~~ [RESOLVED - Slice 7]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Dependencies & Supply Chain
 - Location: `packages/protocol/package.json:22 ("@types/bun": "latest")`, `bun.lock:632 (currently resolved to @types/bun@1.3.14)`, `package.json:60 (ci:version runs `changeset version && bun update`)`
 - Evidence: Every other dependency in the repo uses a pinned caret or exact range; `@types/bun: "latest"` is the sole floating dist-tag specifier (the other loose specifiers found, `@sentry/sveltekit: ">=9"` and `bun: ">=1.3.0"`, are a peer range and an engines constraint, both appropriate). CI installs use --frozen-lockfile so the locked 1.3.14 is honored there, but the release flow's `ci:version` script runs `bun update`, which re-resolves `latest` to whatever is newest at that moment and rewrites the lockfile, introducing uncontrolled type-definition drift into a release commit.
@@ -413,7 +414,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After the change, `grep -n '@types/bun' packages/protocol/package.json` shows a pinned range (no `latest`), and `bun run --filter '@sveltry/protocol' test` still passes.
 - Related: none
 
-### [DEP-005] Non-OSI FSL-1.1-MIT dependency (@sentry/cli) present in the tree via the testing catalog
+### [DEP-005] Non-OSI FSL-1.1-MIT dependency (@sentry/cli) present in the tree via the testing catalog [WONT-FIX - Slice 7: transitive dev/test dependency, documented, no app-level action]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Dependencies & Supply Chain
 - Location: `bun.lock:518,520 (@sentry/cli / @sentry/cli-darwin @ 2.58.6, FSL-1.1-MIT)`, `bun.lock:516 (@sentry/bundler-plugin-core -> @sentry/cli)`, `packages/sdk/package.json:52 (@sentry/sveltekit: catalog:testing)`, `package.json:44 (testing catalog @sentry/sveltekit ^10.57.0)`
 - Evidence: License aggregation across node_modules surfaces two FSL-1.1-MIT packages, both @sentry/cli binaries. They are pulled by @sentry/sveltekit -> @sentry/vite-plugin -> @sentry/bundler-plugin-core -> @sentry/cli. @sentry/sveltekit appears only as the SDK package's `catalog:testing` devDependency (packages/sdk/package.json:52) and as an optional peer (packages/sdk/package.json:44-49); it is never a runtime dependency of the backend, dashboard, or the published @aihxp/sveltry-sdk artifact (whose `files` is just dist + README). FSL is source-available with a non-compete clause that converts to MIT after two years, and is not OSI-approved.
@@ -422,7 +423,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Confirm @sentry/sveltekit appears only under devDependencies/optional peers (no runtime dependency lists it) and the published SDK `files` field excludes it; a license report scoped to production deps shows no FSL entries.
 - Related: none
 
-### [DEP-006] Duplicate fflate: current 0.8.3 on the hot path plus stale 0.4.8 dragged in by rrweb-player
+### [DEP-006] Duplicate fflate: current 0.8.3 on the hot path plus stale 0.4.8 dragged in by rrweb-player [WONT-FIX - Slice 7: transitive dev/test dependency, documented, no app-level action]
 - Severity: Low | Confidence: Confirmed | Effort: M | Dimension: Dependencies & Supply Chain
 - Location: `bun.lock:772 (fflate@0.8.3, used by packages/protocol)`, `bun.lock:1150 (@rrweb/packer/fflate -> fflate@0.4.8)`, `apps/dashboard/package.json:27 (rrweb-player ^2.0.1)`
 - Evidence: The lockfile contains two fflate versions: 0.8.3 (the protocol package's pinned compression lib, current) and 0.4.8 nested under @rrweb/packer, pulled transitively by rrweb-player@2.0.1 (the replay viewer, dynamically imported in apps/dashboard/.../replays/[id]/+page.svelte). 0.4.8 predates several fflate correctness/perf fixes.
@@ -441,7 +442,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: grep -n 'client_report' ingest.ts and confirm the doc row reflects that discarded_events quantities reach recordUsage's dropped counter.
 - Related: none
 
-### [DOC-004] Dead catalog dependencies (pg, jose) remain in root package.json though nothing imports them
+### [DOC-004] ~~Dead catalog dependencies (pg, jose) remain in root package.json though nothing imports them~~ [RESOLVED - Slice 7]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `package.json:27`, `package.json:28`
 - Evidence: The root workspace catalog still declares pg (^8.13.0) and jose (^6.0.0). Neither is imported anywhere in apps/ or packages/ source (grep for from 'pg'/from 'jose' returns nothing outside node_modules) and neither is referenced by any workspace package.json. Both are leftovers from the pre-Convex-auth era: pg was the old app-Postgres driver and jose the old JWT library, both removed when auth moved fully onto Convex (the Convex-only milestone). Catalog entries are reference-only so they do not get installed unless a workspace names them, but they are now misleading: a reader of package.json could reasonably infer the app still uses a Postgres driver and a hand-rolled JWT path, the exact misconception DOC-002 warns about.
@@ -534,7 +535,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After switching, mint a token, confirm resolveApiToken authenticates it and a tampered token is rejected; confirm existing tokens are handled by the chosen migration (re-issue or dual-hash window).
 - Related: none
 
-### [SEC-secrets-002] Dead crypto/DB dependencies (pg, jose) remain in the root catalog after the Postgres/JWT-library migration
+### [SEC-secrets-002] ~~Dead crypto/DB dependencies (pg, jose) remain in the root catalog after the Postgres/JWT-library migration~~ [RESOLVED - Slice 7]
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Security (secrets, crypto, exposure)
 - Location: `package.json:27`, `package.json:28`
 - Evidence: The root package.json catalog still lists `pg` ^8.13.0 and `jose` ^6.0.0, but a repo-wide search for `from 'pg'`/`require('pg')` and `from 'jose'` across apps/ and packages/ (excluding _generated) returns zero imports. Auth now runs entirely on Convex via @convex-dev/better-auth (auth.config.ts, betterauth.ts) and the app no longer connects to Postgres (docker-compose.yml comments; infra/postgres/init.sql confirms Postgres is only Convex's own store).
@@ -543,7 +544,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After removal, run the workspace build/type-check (`bun run --filter '*' check`) and confirm no module-resolution failures; re-run the import grep to confirm no code referenced them.
 - Related: 
 
-### [SEC-secrets-003] Local dashboard .env template documents a stale Postgres-era auth model (BETTER_AUTH_SECRET + Postgres connection string)
+### [SEC-secrets-003] ~~Local dashboard .env template documents a stale Postgres-era auth model (BETTER_AUTH_SECRET + Postgres connection string)~~ [RESOLVED - Slice 7]
+- Status: RESOLVED in version control (Slice 7). The drift is only in an untracked, gitignored local `apps/dashboard/.env` (a developer's copy, no real secret); the tracked `apps/dashboard/.env.example` already documents the Convex-only "no Postgres" auth model with no `BETTER_AUTH_SECRET`. We do not modify or commit local `.env` files, so nothing tracked needs changing.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Security (secrets, crypto, exposure)
 - Location: `apps/dashboard/.env`
 - Evidence: The on-disk apps/dashboard/.env (untracked, a developer's local copy) still carries the pre-migration template: a 'Better Auth (identity, backed by Postgres)' section, a 'Postgres connection string for the Better Auth `sveltry` database' comment, and `BETTER_AUTH_SECRET=CHANGE_ME_openssl_rand_hex_32`. The current architecture runs auth on Convex with no app Postgres (auth.config.ts, docker-compose.yml), and the tracked apps/dashboard/.env.example has already been updated to the 'Better Auth on Convex (no Postgres)' model without a BETTER_AUTH_SECRET. The placeholder value is `CHANGE_ME...`, not a real secret, so there is no secret exposure, only drift.
@@ -605,7 +607,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), ~~`QUAL-001`~~ (done, Slice 4), ~~`DOC-001`~~ (done, Slice 6).
 - **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), ~~`ERR-002`~~ (done, Slice 5), `TEST-001`.
-- **Verify first** (Suspected / assumption-dependent): `DEP-001` (confirm the transitive `cookie` version and advisory applicability with the ecosystem audit tool, and that a Kit patch bump clears it).
+- **Verify first** (Suspected / assumption-dependent): ~~`DEP-001`~~ (done, Slice 7 - verified the latest Kit still pins `cookie@0.6.0`, so a `cookie@^0.7.2` override was used instead and the dashboard build was re-verified).
 - **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, ~~`OBS-003`~~ (done, Slice 3), ~~`OBS-004`~~ (done, Slice 3), `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)
 
 Note that several Medium findings (`ERR-003`, `ERR-005`, `OBS-004`) are members of the same systemic patterns as the High items above; fixing the root cause closes them together rather than one at a time. (~~`SEC-secrets-001`~~, ~~`ERR-003`~~, ~~`ERR-005`~~ done, Slices 1-2.)

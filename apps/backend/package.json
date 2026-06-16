@@ -19,7 +19,6 @@
     "@sveltry/types": "workspace:*",
     "better-auth": "catalog:",
     "convex": "catalog:",
-    "convex-helpers": "catalog:",
     "nodemailer": "^8.0.11"
   },
   "devDependencies": {
