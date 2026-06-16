@@ -41,6 +41,7 @@ import { internal } from './_generated/api';
 import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { levelValidator } from './schema';
+import { generateShortId } from './lib/slug';
 
 const decoder = new TextDecoder();
 
@@ -603,6 +604,7 @@ export const recordEvent = internalMutation({
         firstSeen: args.timestamp,
         lastSeen: args.timestamp,
         errorType: args.errorType,
+        shortId: generateShortId(),
       });
       if (args.userId) await markIssueUser(ctx, issueId, args.userId);
     }

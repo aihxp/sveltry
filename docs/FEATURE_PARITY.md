@@ -25,7 +25,8 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Regression detection | Done | A resolved issue that recurs reopens with substatus `regressed`. |
 | Event and user counts | Done | `count` and `userCount` tracked per issue; `firstSeen` / `lastSeen` maintained. |
 | Triage aging | Done | Hourly `sweepOngoing` cron ages `new` issues older than 7 days to `ongoing`. |
-| Issue search | Done | Full-text search over issue titles (Convex search index) with status/level filters. |
+| Issue search | Done | Full-text search over issue titles (Convex search index) with status/level filters; pasting an issue short id (`PROJ-1A2B3C`, or the bare `1A2B3C`) jumps straight to it. |
+| Issue short ids | Done | Each new issue gets a short, human-friendly id (`<PROJECT_SLUG>-<id>`, a random Crockford-base32 string) shown on the list and detail page, returned in the public API, and searchable. |
 | Saved views | Done | Named, org-shared issue-list presets (query, status, level) you can save and one-click apply. |
 | Merge issues | Done | Merge a duplicate issue into another from the issue detail page (events and counts move). |
 | Unmerge issues | Done | A merge is recorded (source snapshot + moved events); the issue page can undo it, recreating the issue and moving its events back. Reversible for merges performed after this shipped. |

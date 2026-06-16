@@ -11,6 +11,7 @@
     userCount: number;
     lastSeen: number;
     substatus: string;
+    shortId?: string | null;
     project?: { slug: string; name: string } | null;
   };
   let { issue }: { issue: IssueLike } = $props();
@@ -37,7 +38,10 @@
       {/if}
     </div>
     <div class="truncate font-mono text-xs text-muted-foreground">
-      {issue.culprit}{#if issue.project}<span class="text-muted-foreground/60">
+      {#if issue.shortId && issue.project}<span class="text-foreground/60"
+          >{issue.project.slug.toUpperCase()}-{issue.shortId}</span
+        > ·
+      {/if}{issue.culprit}{#if issue.project}<span class="text-muted-foreground/60">
           · {issue.project.name}</span
         >{/if}
     </div>

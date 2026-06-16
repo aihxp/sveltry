@@ -89,7 +89,7 @@ Valuable, but a larger surface or a new subsystem:
 - **Source-code integration.** GitHub / GitLab / Bitbucket: "open in repo" stack-frame links
   already ship (a per-project repo config builds a link from each in-app frame to its file and line
   on the provider's web UI, URL-only, no token). Still to come: suspect commits from SCM and
-  auto-resolve from commit messages.
+  auto-resolve from commit messages (issues now carry a short id for commit messages to reference).
 - **Account security and provisioning.** Two-factor auth (TOTP), then SSO (SAML / OIDC) and SCIM.
 - **Finer percentiles.** p99 ships on the performance views (the stats table and a
   p50 / p95 / p99 selector on the latency-over-time chart). Still to come: higher-resolution

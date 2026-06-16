@@ -29,6 +29,7 @@ const DEFAULT_LIMIT = 50;
 function issueView(i: Doc<'issues'>) {
   return {
     id: i._id,
+    shortId: i.shortId ?? null,
     title: i.title,
     culprit: i.culprit,
     level: i.level,

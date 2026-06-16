@@ -343,6 +343,10 @@ export default defineSchema({
     snoozeUntil: v.optional(v.number()),
     assigneeId: v.optional(v.string()),
     errorType: v.optional(v.string()),
+    /** Short, human-friendly id for referencing the issue (e.g. in commit messages);
+     * displayed as `<PROJECT_SLUG>-<shortId>`. Optional: issues created before this
+     * feature have none. */
+    shortId: v.optional(v.string()),
     /** A linked tracker ticket (Jira/Linear), set once created from this issue. */
     trackerProvider: v.optional(v.string()),
     trackerKey: v.optional(v.string()),
@@ -352,6 +356,7 @@ export default defineSchema({
     .index('by_project_status_lastSeen', ['projectId', 'status', 'lastSeen'])
     .index('by_org_status_lastSeen', ['organizationId', 'status', 'lastSeen'])
     .index('by_project_lastSeen', ['projectId', 'lastSeen'])
+    .index('by_org_shortId', ['organizationId', 'shortId'])
     .searchIndex('search_title', {
       searchField: 'title',
       filterFields: ['organizationId', 'status', 'level', 'platform', 'projectId'],

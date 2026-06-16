@@ -1,7 +1,9 @@
 import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import type { Doc } from './_generated/dataModel';
 import { requireOrg, requireRole } from './lib/auth';
+import { generateShortId } from './lib/slug';
 import { issueStatusValidator, issueSubstatusValidator, levelValidator } from './schema';
 
 /** Paginated issue list, scoped to the org and optionally a single project. */
@@ -101,6 +103,16 @@ export const searchIssues = query({
     const term = args.query.trim();
     if (!term) return [];
 
+    const projectCache = new Map<string, { slug: string; name: string } | null>();
+    const withProject = async (issue: Doc<'issues'>) => {
+      const key = issue.projectId as unknown as string;
+      if (!projectCache.has(key)) {
+        const p = await ctx.db.get(issue.projectId);
+        projectCache.set(key, p ? { slug: p.slug, name: p.name } : null);
+      }
+      return { ...issue, project: projectCache.get(key) ?? null };
+    };
+
     const issues = await ctx.db
       .query('issues')
       .withSearchIndex('search_title', (s) => {
@@ -111,18 +123,32 @@ export const searchIssues = query({
         return b;
       })
       .take(Math.min(args.limit ?? 50, 100));
+    const results = await Promise.all(issues.map(withProject));
 
-    const projectCache = new Map<string, { slug: string; name: string } | null>();
-    return Promise.all(
-      issues.map(async (issue) => {
-        const key = issue.projectId as unknown as string;
-        if (!projectCache.has(key)) {
-          const p = await ctx.db.get(issue.projectId);
-          projectCache.set(key, p ? { slug: p.slug, name: p.name } : null);
-        }
-        return { ...issue, project: projectCache.get(key) ?? null };
-      }),
-    );
+    // Short-id jump: a query like `WEB-1A2B3C` (or the bare `1A2B3C`) resolves to its
+    // issue. We PREPEND the exact short-id match (deduped) rather than returning it
+    // alone, so a real title-search word that happens to be short-id-shaped is never
+    // hidden. The candidate is the trailing token; we only look it up when it is
+    // shaped like a short id (Crockford base32, no I/L/O/U).
+    const candidate = (
+      term.includes('-') ? term.slice(term.lastIndexOf('-') + 1) : term
+    ).toUpperCase();
+    if (/^[0-9A-HJKMNP-TV-Z]{6,9}$/.test(candidate)) {
+      const match = await ctx.db
+        .query('issues')
+        .withIndex('by_org_shortId', (q) =>
+          q.eq('organizationId', activeOrganizationId).eq('shortId', candidate),
+        )
+        .first();
+      if (
+        match &&
+        (!args.projectId || match.projectId === args.projectId) &&
+        !results.some((r) => r._id === match._id)
+      ) {
+        results.unshift(await withProject(match));
+      }
+    }
+    return results;
   },
 });
 
@@ -330,6 +356,7 @@ export const unmergeIssue = mutation({
       firstSeen: s.firstSeen,
       lastSeen: s.firstSeen,
       errorType: s.errorType,
+      shortId: generateShortId(),
     });
 
     let movedBack = 0;

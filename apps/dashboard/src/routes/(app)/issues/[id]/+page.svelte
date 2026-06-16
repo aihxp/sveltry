@@ -204,6 +204,11 @@
         <div class="flex items-center gap-2">
           <LevelBadge level={i.level} />
           <Badge variant={i.status === 'unresolved' ? 'outline' : 'muted'}>{i.status}</Badge>
+          {#if i.shortId && i.project}
+            <span class="font-mono text-xs text-muted-foreground"
+              >{i.project.slug.toUpperCase()}-{i.shortId}</span
+            >
+          {/if}
           {#if i.project}<span class="text-xs text-muted-foreground">{i.project.name}</span>{/if}
         </div>
         <h1 class="text-xl font-bold tracking-tight">{i.title}</h1>
