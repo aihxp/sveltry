@@ -11,7 +11,7 @@ updates:
       convex:
         patterns: ['convex', 'convex-svelte', 'convex-helpers']
       auth:
-        patterns: ['better-auth', 'pg', '@types/pg', 'jose']
+        patterns: ['better-auth', 'jose']
       # Batch everything else (prettier, changesets, types, etc.) into a single
       # PR instead of one per dependency, to cut review churn.
       tooling:
