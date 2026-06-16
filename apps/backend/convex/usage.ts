@@ -4,6 +4,7 @@ import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { requireOrg } from './lib/auth';
+import { readCappedJson } from './lib/body';
 import { resolveDsnRequest } from './lib/dsnAuth';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -240,12 +241,14 @@ export const recordDeployHttp = httpAction(async (ctx, request) => {
   if (!auth.ok) return auth.response;
   const resolved = auth.resolved;
 
-  let body: { release?: string; environment?: string; name?: string; url?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return ingestError(400, 'invalid JSON body', [], cors);
-  }
+  const parsed = await readCappedJson(request);
+  if (!parsed.ok) return ingestError(parsed.status, parsed.reason, [], cors);
+  const body = parsed.json as {
+    release?: string;
+    environment?: string;
+    name?: string;
+    url?: string;
+  };
   if (!body.release) return ingestError(400, 'missing release', [], cors);
 
   await ctx.runMutation(internal.usage.recordDeploy, {
