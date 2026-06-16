@@ -416,6 +416,21 @@ Also back up the Postgres volume (or take a managed snapshot) so the
 `convex_self_hosted` database, the Convex backend's own store, is captured. Restore
 Convex data with `bunx convex import`.
 
+## Health and metrics
+
+`GET /healthz` (on the backend `.site` origin) is a **readiness** probe: it runs a
+real bounded DB read and returns `503` when the backend cannot serve, not just when
+the process is up. Wire it to a load balancer's readiness check or a Kubernetes
+`readinessProbe`; do not use it as a `livenessProbe`, since a DB-touching check can
+flap a healthy process into a restart loop during a brief DB blip.
+
+There is no Prometheus/OpenTelemetry `/metrics` endpoint: for this single-node
+self-hosted target, rely on the Convex dashboard for per-function request rates,
+latency, and error counts, and on the backend log stream for the crons' summary
+lines and the delivery-failure warnings (webhooks, alerts, metric/usage/uptime/
+tracker). Admins can also pull `health.configStatus` (surfaced as a banner on the
+Settings page) to confirm `SITE_URL`, SMTP, S3, and the SSRF resolver are configured.
+
 ## Troubleshooting
 
 - **Port conflicts.** The defaults are Postgres 5432, backend (`.cloud`) 3210,

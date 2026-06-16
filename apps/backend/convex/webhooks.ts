@@ -261,6 +261,15 @@ export const dispatch = internalAction({
       } catch (err) {
         detail = err instanceof Error ? err.message : String(err);
       }
+      // Mirror the other delivery paths (metric/usage/uptime/tracker) by logging a
+      // failure line too, so an operator grepping logs sees webhook failures, not
+      // only the per-project Deliveries UI. The target URL is omitted (it can carry
+      // a secret); the webhook id correlates back to the row.
+      if (!ok) {
+        console.warn(
+          `webhook delivery failed: org=${organizationId} webhook=${wh._id} event=${event} status=${statusCode ?? 'none'} detail=${detail ?? 'unknown'}`,
+        );
+      }
       await ctx.runMutation(internal.webhooks.recordWebhookDelivery, {
         organizationId,
         projectId,

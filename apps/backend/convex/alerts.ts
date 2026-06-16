@@ -260,6 +260,14 @@ export const dispatchForEvent = internalAction({
         } catch (err) {
           detail = err instanceof Error ? err.message : String(err);
         }
+        // Log issue-alert delivery failures too, for parity with the metric/usage/
+        // uptime/tracker paths. The channel target is omitted (a webhook URL or
+        // email can be sensitive); ruleId + channel type correlate to the row.
+        if (!ok) {
+          console.warn(
+            `issue alert delivery failed: org=${issue.organizationId} rule=${rule._id} channel=${channel.type} detail=${detail ?? 'unknown'}`,
+          );
+        }
         await ctx.runMutation(internal.alerts.recordDelivery, {
           organizationId: issue.organizationId,
           projectId: issue.projectId,

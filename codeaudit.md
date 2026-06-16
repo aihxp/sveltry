@@ -165,7 +165,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Unit/integration test that forces recordArtifact to throw (e.g. inject a conflicting concurrent write) and asserts no _storage object remains; or add an assertion that every stored storageId is referenced by a row after upload.
 - Related: Same root cause as the ingest orphan-blob guard, applied inconsistently; ERR-001 and ERR-002 together show idempotency/cleanup discipline was applied to the hot path but not uniformly to the upload paths.
 
-### [OBS-001] Tracker auto-create failures are not recorded in notificationDeliveries despite the module doc claiming they are
+### [OBS-001] ~~Tracker auto-create failures are not recorded in notificationDeliveries despite the module doc claiming they are~~ [RESOLVED - RA-Slice 8]
+- Status: RESOLVED (RA-Slice 8) via option (a). `runTrackerCreate` (`integrations.ts`) now records every attempt (success and failure) into `notificationDeliveries` with `source: 'tracker'` (channel type = the provider, target = the Jira site / `linear`), so a misconfigured tracker integration shows up in the dashboard's Notification deliveries UI as the module doc promised, not just a backend `console.error`. `loadForCreate` was extended to return the issue's `organizationId`/`projectId` for the record.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Observability & Operability
 - Location: `apps/backend/convex/integrations.ts:204-270`, `apps/backend/convex/notifications.ts:5-9`
 - Evidence: notifications.ts:5-9 documents notificationDeliveries as covering 'the non-issue notification paths (metric alerts, quota/usage alerts, tracker auto-create)'. But runTrackerCreate (integrations.ts:204-270) only emits console.error on failure (line 264) and calls clearTrackerClaim; it never calls internal.notifications.record. grep confirms the only notifications.record callers are metricAlerts.ts:275 and usageAlerts.ts:184. So when an auto-created tracker ticket silently fails (the outcome is discarded by the dispatchForEvent caller), the operator sees nothing in the NotificationDeliveriesCard UI where the doc implies it would appear; the only signal is a raw backend console line.
@@ -174,7 +175,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: With a project that has auto-create enabled and an integration pointing at an endpoint that returns 500, ingest a new-issue event; confirm a row with source 'tracker_create' and ok:false appears via notifications.listRecent / NotificationDeliveriesCard. Or, if going the doc route, confirm the comment no longer lists tracker auto-create.
 - Related: none
 
-### [OBS-002] No boot-time validation of required env vars; misconfiguration degrades silently until an admin manually pulls configStatus
+### [OBS-002] ~~No boot-time validation of required env vars; misconfiguration degrades silently until an admin manually pulls configStatus~~ [RESOLVED - RA-Slice 8]
+- Status: RESOLVED (RA-Slice 8). `configStatus` now computes an actionable `warnings[]` (SITE_URL unset; an alert rule uses an email channel while SMTP is unconfigured, gated on actual use so a no-SMTP deployment without email channels is not warned), and the Settings page renders those warnings as a visible banner for admins/owners, so a misconfiguration surfaces proactively instead of only via the admin pull. Backend tests assert the email-channel warning toggles with channel presence.
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Observability & Operability
 - Location: `apps/backend/convex/health.ts:24-41`, `apps/backend/convex/email.ts:26-34`, `apps/backend/convex/alerts.ts:192-193`, `apps/backend/convex/webhooks.ts:220`
 - Evidence: A grep for validateEnv/requireEnv/assertEnv/throw-on-missing-env across the backend returns nothing. Every env consumer defaults silently: email.sendEmail returns {ok:false,skipped:true} when SMTP_HOST is unset (email.ts:27-28); SITE_URL defaults to '' so alert/webhook issueUrl becomes undefined and links render blank (alerts.ts:192-193, webhooks.ts:220). The only readout is configStatus, which is admin-gated and pull-based (health.ts:24-41), nothing surfaces the missing config at deploy time or on a dashboard banner.
@@ -355,7 +357,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Send a multi-hundred-MB JSON body to /releases/commits with a valid DSN key and confirm a 413 (or a documented platform rejection) rather than the handler buffering it.
 - Related: All three share lib/dsnAuth.resolveDsnRequest / the apiV1 token gate; a shared capped-body reader would cover them and the ingest/artifact paths uniformly.
 
-### [OBS-003] Inconsistent failure-logging convention: the issue-lifecycle webhook dispatch path emits no console diagnostic on failure
+### [OBS-003] ~~Inconsistent failure-logging convention: the issue-lifecycle webhook dispatch path emits no console diagnostic on failure~~ [RESOLVED - RA-Slice 8]
+- Status: RESOLVED (RA-Slice 8). `webhooks.dispatch` and `alerts.dispatchForEvent` now emit a `console.warn` on a failed delivery (channel type + status/detail + correlating webhook/rule id), matching the metric/usage/uptime/tracker convention. The target URL is deliberately omitted from the log so a webhook secret in the URL is never leaked; the DB delivery row (with the URL) remains the detailed record.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Observability & Operability
 - Location: `apps/backend/convex/webhooks.ts:240-276`, `apps/backend/convex/alerts.ts:243-274`
 - Evidence: Across the outbound delivery paths the convention is: record the attempt to a *Deliveries table AND console.error/warn on failure, see metricAlerts.ts:287, usageAlerts.ts:196, monitors.ts:298, integrations.ts:264. The issue-lifecycle webhook dispatch (webhooks.ts:240-276) records each attempt into webhookDeliveries with ok/statusCode/detail but emits no console line on a non-2xx or thrown error. The issue-alert dispatch in alerts.ts:243-274 likewise records to alertDeliveries with no console.error on failure.
@@ -364,7 +367,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Point a webhook at an endpoint returning 500, fire an issue-status change, and confirm a console.warn appears alongside the webhookDeliveries row; confirm the log line does not include the secret-bearing target URL.
 - Related: none
 
-### [OBS-004] /healthz is documented as 'liveness' but is implemented (and elsewhere described) as a readiness check
+### [OBS-004] ~~/healthz is documented as 'liveness' but is implemented (and elsewhere described) as a readiness check~~ [RESOLVED - RA-Slice 8]
+- Status: RESOLVED (RA-Slice 8). `FEATURE_PARITY.md` and `SENTRY_COMPATIBILITY.md` now call `/healthz` a readiness probe (DB-touching, 503 when degraded), and `SELF_HOSTING.md` gained a "Health and metrics" section explaining it is a readiness probe (wire to a load-balancer/readinessProbe, not a livenessProbe, to avoid restart loops on a DB blip).
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Observability & Operability
 - Location: `docs/FEATURE_PARITY.md:63`, `apps/backend/convex/http.ts:48-49`, `docs/SENTRY_COMPATIBILITY.md:49`
 - Evidence: The probe runs a real DB read and returns 503 when the query throws (http.ts:50-64, health.ts:10-17), that is a readiness check (it gates on the backend's ability to serve, not just process liveness). http.ts:48-49 correctly calls it a 'Readiness probe'. But FEATURE_PARITY.md:63 labels it 'GET /healthz for liveness' and SENTRY_COMPATIBILITY.md:49 calls it a generic 'health check'.
@@ -373,7 +377,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Confirm docs consistently call /healthz a readiness probe and that SELF_HOSTING.md mentions it; no code change required.
 - Related: none
 
-### [OBS-005] No metrics/tracing endpoint and no startup/migration log signal; cron rollup has no summary log
+### [OBS-005] ~~No metrics/tracing endpoint and no startup/migration log signal; cron rollup has no summary log~~ [RESOLVED - RA-Slice 8]
+- Status: RESOLVED (RA-Slice 8). `rollupTransactions` now emits a summary `console.log` (buckets upserted) for parity with the other crons, and `SELF_HOSTING.md`'s new "Health and metrics" section documents that there is intentionally no `/metrics` endpoint for the single-node self-hosted target (rely on the Convex dashboard for per-function metrics and the log stream for cron summaries + delivery-failure warnings).
 - Severity: Low | Confidence: Confirmed | Effort: M | Dimension: Observability & Operability
 - Location: `apps/backend/convex/maintenance.ts:115-191`, `apps/backend/convex/crons.ts:16-21`
 - Evidence: A repo-wide grep for /metrics, prometheus, opentelemetry, or tracing finds no instrumentation endpoint (expected and acceptable for a single-node self-hosted OSS target, Convex provides its own function-level dashboards). There is no migration directory (find -iname '*migrat*' returns nothing; SELF_HOSTING.md:69 states there is 'no separate schema-migration step' by design). Minor: rollupTransactions (maintenance.ts) is the one cron with no success/summary console line, unlike sweepRetention/evaluateMetricAlerts/etc., so its per-tick work is invisible unless it throws (Convex still logs uncaught throws).
@@ -477,14 +482,14 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - **Performance (78 at audit time; improved by RA-Slice 6)**: Every scan is bounded and idempotency lookups are selective. The two Mediums (`PERF-001`/`PERF-002`, the `v.any()` fat-row reads across analytics/rollup/Discover, amplified by reactive re-execution) are now resolved: a lean `transactionsMeta` projection feeds the scalar transaction analytics and the errors Discover caps its payload-reading aggregate lower. A symmetric `eventsMeta` projection for scalar error aggregates is the remaining long-term optimization. The rest are Suspected/Low (serial per-item ingest, sequential uptime probes, the decompressor's chunk merge), all in RA-Slice 11.
 - **Dependencies (88)**: Strong reproducibility and currency; the cookie override is clean. Only Low: a dead `pg` client family still in the install store (`DEP-001`) and catalog pins absorbing brand-new caret-majors (`DEP-002`).
 - **Documentation (84 at audit time; improved by RA-Slice 7)**: The load-bearing rewritten docs (ARCHITECTURE.md, API.md, parity) verified accurate, and the drift the audit found is now fixed (RA-Slice 7): `CONTRIBUTING.md`'s stale "known gaps" + test count, `SECURITY.md`'s supported-versions table + the missing SSRF/egress scope entry, the undocumented `SSRF_DOH_RESOLVER` (now in SELF_HOSTING.md), and the CHANGELOG line-count nit (`DOC-001..006`, all resolved).
-- **Observability (82)**: Real `/healthz` readiness, admin-gated `configStatus`, end-to-end drop/filter accounting, per-attempt delivery logs in the UI. Gaps: tracker auto-create failures are not recorded despite the module doc claiming they are (`OBS-001`), no boot-time env validation (`OBS-002`), and a `/healthz` liveness-vs-readiness label mismatch (`OBS-004`).
+- **Observability (82 at audit time; improved by RA-Slice 8)**: Real `/healthz` readiness, admin-gated `configStatus`, end-to-end drop/filter accounting, per-attempt delivery logs in the UI. All five gaps are now closed (RA-Slice 8): tracker auto-create failures record to `notificationDeliveries` (`OBS-001`), `configStatus` surfaces actionable warnings as a Settings banner (`OBS-002`), webhook/issue-alert dispatch failures now log (`OBS-003`), `/healthz` is documented as readiness everywhere (`OBS-004`), and the rollup cron has a summary log with a documented metrics-scope note (`OBS-005`).
 
 ## Remediation plan
 
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, RA-Slice 1).
-- **Plan now** (high-value Mediums), suggested order: `OBS-002`. (`ERR-001`, `ARC-001`, `TEST-002`, `TEST-001`, `PERF-001`, `PERF-002` resolved in RA-Slices 3-6.)
+- **Plan now**: empty. (`ERR-001`, `ARC-001`, `TEST-002`, `TEST-001`, `PERF-001`, `PERF-002`, `OBS-002` all resolved in RA-Slices 3-8.)
 - **Verify first** (Suspected / assumption-dependent): `PERF-003`, `ARC-003`, `DEP-002`. (`QUAL-005` resolved in RA-Slice 4.)
-- **Backlog** (Low, or Medium not on the critical path): `SEC-secrets-001`, `SEC-secrets-002`, `ARC-002`, `QUAL-001`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `TEST-003`, `TEST-004`, `TEST-005`, `PERF-004`, `PERF-005`, `PERF-006`, `DEP-001`, `OBS-001`, `OBS-003`, `OBS-004`, `OBS-005`. (Resolved: `SEC-authz-001`, `SEC-inject-002`, `ERR-002`, `ERR-003`, `ERR-004`, `DOC-001`..`DOC-006` in RA-Slices 2-7.)
+- **Backlog** (Low, or Medium not on the critical path): `SEC-secrets-001`, `SEC-secrets-002`, `ARC-002`, `QUAL-001`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `TEST-003`, `TEST-004`, `TEST-005`, `PERF-004`, `PERF-005`, `PERF-006`, `DEP-001`. (Resolved: `SEC-authz-001`, `SEC-inject-002`, `ERR-002`, `ERR-003`, `ERR-004`, `DOC-001`..`DOC-006`, `OBS-001`, `OBS-003`, `OBS-004`, `OBS-005` in RA-Slices 2-8.)
 
 The first three systemic patterns each cluster several findings (lifecycle-registry tie, body-cap discipline, idempotency propagation); fixing the root closes the members together rather than one at a time.
 

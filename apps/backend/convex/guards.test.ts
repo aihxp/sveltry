@@ -395,6 +395,36 @@ describe('multi-tenant isolation', () => {
   });
 });
 
+describe('config warnings (OBS-002)', () => {
+  test('warns when an email alert channel exists while SMTP is unconfigured', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+    await t.run((ctx) =>
+      ctx.db.insert('alertRules', {
+        organizationId: 'org-a',
+        projectId,
+        name: 'R',
+        trigger: 'new_issue',
+        channels: [{ type: 'email', target: 'x@example.com' }],
+        isEnabled: true,
+        createdAt: 0,
+      }),
+    );
+    const asAdmin = t.withIdentity({ subject: 'u', activeOrganizationId: 'org-a' });
+    const status = await asAdmin.query(api.health.configStatus, {});
+    // SMTP is unset in the test env, and an email channel now exists.
+    expect(status.warnings.some((w) => w.toLowerCase().includes('email channel'))).toBe(true);
+  });
+
+  test('no email-channel warning when no email channel is configured', async () => {
+    const t = convexTest(schema, modules);
+    await seed(t);
+    const asAdmin = t.withIdentity({ subject: 'u', activeOrganizationId: 'org-a' });
+    const status = await asAdmin.query(api.health.configStatus, {});
+    expect(status.warnings.some((w) => w.toLowerCase().includes('email channel'))).toBe(false);
+  });
+});
+
 describe('per-key rate limiting', () => {
   test('checkRateLimit allows up to the limit, then throttles', async () => {
     const t = convexTest(schema, modules);

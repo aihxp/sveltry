@@ -189,6 +189,9 @@ export const rollupTransactions = internalMutation({
         upserts += 1;
       }
     }
+    // Summary line for parity with the other crons (sweepRetention etc.), so an
+    // operator can confirm from logs that the hourly rollup ran and did work.
+    if (upserts) console.log(`rollupTransactions: upserted ${upserts} latency rollup buckets`);
     return { upserts };
   },
 });

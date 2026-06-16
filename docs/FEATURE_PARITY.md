@@ -60,7 +60,7 @@ For sequencing and what is coming Next vs Later, see [ROADMAP.md](./ROADMAP.md).
 | Content-Type tolerance | Done | Ignored, since browser SDKs send an empty Content-Type to dodge CORS preflight. |
 | SDK-friendly success response | Done | HTTP 200 `application/json` `{"id":"<32-hex>"}` with NO rate-limit headers, so SDKs do not back off. |
 | Error responses | Done | Bad/missing key -> 401 with `X-Sentry-Error`; malformed body -> 400 with `{detail, causes}`; throttle -> 429 + `Retry-After`. |
-| CORS preflight | Done | `OPTIONS /api/*` handled; `GET /healthz` for liveness. |
+| CORS preflight | Done | `OPTIONS /api/*` handled; `GET /healthz` is a readiness probe (touches the DB). |
 | security / minidump endpoints | Partial | Recognized and tolerated (HTTP 200) but not stored. |
 | transaction / session / sessions / replay / check_in items | Done | Persisted: performance, release health, cron monitors, and session replay. |
 | profile items | Done | Persisted; rendered as a flamegraph on the Profiles page. |

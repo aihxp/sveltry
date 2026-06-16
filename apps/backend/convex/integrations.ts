@@ -130,6 +130,8 @@ export const loadForCreate = internalQuery({
       .first();
     const project = await ctx.db.get(issue.projectId);
     return {
+      organizationId: issue.organizationId,
+      projectId: issue.projectId,
       config: row && row.isEnabled ? (row.config as TrackerConfig) : null,
       autoCreate: row?.autoCreate ?? false,
       title: `[${project?.name ?? 'project'}] ${issue.title}`,
@@ -252,6 +254,22 @@ export const runTrackerCreate = internalAction({
     } catch (err) {
       outcome = { ok: false, detail: err instanceof Error ? err.message : String(err) };
     }
+
+    // Record the attempt in notificationDeliveries (the documented home for the
+    // non-issue notification paths, incl. tracker auto-create), so a failure is
+    // visible in the dashboard's Notification deliveries UI, not just the log.
+    const target = data.config.type === 'jira' ? data.config.siteUrl : 'linear';
+    await ctx.runMutation(internal.notifications.record, {
+      organizationId: data.organizationId,
+      projectId: data.projectId,
+      source: 'tracker',
+      sourceId: issueId,
+      label: `${data.config.type} ticket`,
+      channelType: data.config.type,
+      target,
+      ok: outcome.ok,
+      detail: outcome.ok ? undefined : (outcome.detail ?? 'unknown'),
+    });
 
     if (outcome.ok) {
       await ctx.runMutation(internal.integrations.recordTrackerLink, {
