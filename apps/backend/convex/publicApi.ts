@@ -313,6 +313,13 @@ export const apiIssueEvents = internalQuery({
   },
 });
 
+/** Maps an issue status to its outbound-webhook lifecycle event. */
+const WEBHOOK_STATUS_EVENT: Record<'unresolved' | 'resolved' | 'ignored', string> = {
+  resolved: 'issue.resolved',
+  ignored: 'issue.ignored',
+  unresolved: 'issue.unresolved',
+};
+
 /** Set an issue's status (resolve / ignore / unresolve), scoped to the org. */
 export const apiSetIssueStatus = internalMutation({
   args: { organizationId: v.string(), issueId: v.string(), status: issueStatusValidator },
@@ -333,6 +340,14 @@ export const apiSetIssueStatus = internalMutation({
       substatus,
       resolvedInRelease: undefined,
     });
+    if (issue.status !== status) {
+      await ctx.scheduler.runAfter(0, internal.webhooks.dispatch, {
+        organizationId,
+        projectId: issue.projectId,
+        event: WEBHOOK_STATUS_EVENT[status],
+        issueId: issue._id,
+      });
+    }
     return true;
   },
 });
@@ -369,7 +384,16 @@ export const apiAssignIssue = internalMutation({
     }
 
     // `issues.assigneeId` is v.optional(v.string()); undefined clears it.
-    await ctx.db.patch(issue._id, { assigneeId: assigneeId ?? undefined });
+    const next = assigneeId ?? undefined;
+    await ctx.db.patch(issue._id, { assigneeId: next });
+    if (issue.assigneeId !== next) {
+      await ctx.scheduler.runAfter(0, internal.webhooks.dispatch, {
+        organizationId,
+        projectId: issue.projectId,
+        event: next ? 'issue.assigned' : 'issue.unassigned',
+        issueId: issue._id,
+      });
+    }
     return 'ok';
   },
 });

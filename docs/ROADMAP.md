@@ -79,8 +79,8 @@ Highest-value additions that build on the existing tables:
 
 - **Public API, even deeper.** The v1 API now covers projects, releases, members, issues, events
   (list, org-wide detail, and a strict project-scoped lookup), deploys, cursor pagination, issue
-  assignment, and triage writes. Still to come: an artifacts resource and outbound webhooks for API
-  consumers.
+  assignment, and triage writes. Outbound webhooks ship (signed issue-lifecycle deliveries, managed
+  in project settings). Still to come: an artifacts resource.
 
 ## Later
 

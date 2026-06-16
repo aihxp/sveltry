@@ -48,6 +48,7 @@ import type * as teams from "../teams.js";
 import type * as transactions from "../transactions.js";
 import type * as usage from "../usage.js";
 import type * as usageAlerts from "../usageAlerts.js";
+import type * as webhooks from "../webhooks.js";
 
 import type {
   ApiFromModules,
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   transactions: typeof transactions;
   usage: typeof usage;
   usageAlerts: typeof usageAlerts;
+  webhooks: typeof webhooks;
 }>;
 
 /**

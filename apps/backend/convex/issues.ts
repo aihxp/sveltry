@@ -1,6 +1,7 @@
 import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { internal } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
 import { requireOrg, requireRole } from './lib/auth';
 import { generateShortId } from './lib/slug';
@@ -215,8 +216,24 @@ export const setIssueStatus = mutation({
       substatus: substatus ?? defaultSubstatus,
       resolvedInRelease: status === 'resolved' ? resolvedInRelease : undefined,
     });
+    // Fire a lifecycle webhook only when the status actually changed.
+    if (issue.status !== status) {
+      await ctx.scheduler.runAfter(0, internal.webhooks.dispatch, {
+        organizationId: issue.organizationId,
+        projectId: issue.projectId,
+        event: WEBHOOK_STATUS_EVENT[status],
+        issueId,
+      });
+    }
   },
 });
+
+/** Maps an issue status to its outbound-webhook lifecycle event. */
+const WEBHOOK_STATUS_EVENT: Record<'unresolved' | 'resolved' | 'ignored', string> = {
+  resolved: 'issue.resolved',
+  ignored: 'issue.ignored',
+  unresolved: 'issue.unresolved',
+};
 
 /** Assign or unassign an issue. */
 export const assignIssue = mutation({
@@ -226,6 +243,15 @@ export const assignIssue = mutation({
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.organizationId !== activeOrganizationId) throw new Error('Issue not found');
     await ctx.db.patch(issueId, { assigneeId });
+    // Fire a webhook only when the assignee actually changed.
+    if (issue.assigneeId !== assigneeId) {
+      await ctx.scheduler.runAfter(0, internal.webhooks.dispatch, {
+        organizationId: issue.organizationId,
+        projectId: issue.projectId,
+        event: assigneeId ? 'issue.assigned' : 'issue.unassigned',
+        issueId,
+      });
+    }
   },
 });
 
