@@ -52,6 +52,22 @@ function envelope(eventId: string): string {
   );
 }
 
+/** An envelope carrying a single `sessions` aggregate item (no event id). */
+function sessionAggEnvelope(release: string, exited: number, crashed: number): string {
+  const payload = {
+    attrs: { release, environment: 'production' },
+    aggregates: [{ started: '2026-01-01T00:00:00.000Z', exited, crashed }],
+  };
+  return (
+    JSON.stringify({}) +
+    '\n' +
+    JSON.stringify({ type: 'sessions' }) +
+    '\n' +
+    JSON.stringify(payload) +
+    '\n'
+  );
+}
+
 describe('ingest DSN authentication', () => {
   test('rejects an unknown / inactive DSN key with 401', async () => {
     const t = convexTest(schema, modules);
@@ -106,6 +122,35 @@ describe('ingest idempotency', () => {
     const usage = await t.run((ctx) => ctx.db.query('usageDaily').collect());
     const totalEvents = usage.reduce((s, u) => s + u.eventCount, 0);
     expect(totalEvents).toBe(1);
+  });
+});
+
+describe('session-aggregate idempotency (ERR-001)', () => {
+  test('re-sending the same sessions aggregate is a no-op, but distinct counts still insert', async () => {
+    const t = convexTest(schema, modules);
+    await seed(t);
+    const body = sessionAggEnvelope('1.0.0', 3, 1);
+    // Two identical deliveries (the second models a full-batch SDK retry).
+    for (let i = 0; i < 2; i++) {
+      const res = await t.fetch(`/api/${PUBLIC_ID}/envelope/?sentry_key=${KEY}`, {
+        method: 'POST',
+        body,
+      });
+      expect(res.status).toBe(200);
+    }
+    let buckets = await t.run((ctx) => ctx.db.query('sessionBuckets').collect());
+    expect(buckets.length).toBe(1);
+    expect(buckets[0]!.exited + buckets[0]!.crashed).toBe(4);
+
+    // A genuinely distinct delivery (different counts, same minute) still inserts,
+    // so additive aggregation across legitimate flushes is preserved.
+    const res = await t.fetch(`/api/${PUBLIC_ID}/envelope/?sentry_key=${KEY}`, {
+      method: 'POST',
+      body: sessionAggEnvelope('1.0.0', 5, 0),
+    });
+    expect(res.status).toBe(200);
+    buckets = await t.run((ctx) => ctx.db.query('sessionBuckets').collect());
+    expect(buckets.length).toBe(2);
   });
 });
 

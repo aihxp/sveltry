@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { sha1Hex } from '@sveltry/protocol';
 import { internalMutation, query } from './_generated/server';
 import { requireOrg } from './lib/auth';
 
@@ -71,6 +72,30 @@ export const recordSessionBuckets = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
+    // A `sessions` aggregate item carries no event id, so a mid-batch failure
+    // anywhere in the envelope makes the SDK retry the WHOLE envelope and these
+    // buckets would be re-inserted, inflating releaseHealth's session/crash
+    // counts. Dedup the entire delivery on a content key (release + environment
+    // + every bucket value): an identical re-delivery is a no-op, while a
+    // genuinely distinct delivery (different counts, even for the same minute)
+    // has a different key and still inserts, so additive aggregation across
+    // flushes is preserved. The buckets are inserted under one shared key, so
+    // two same-minute buckets within one envelope are both kept.
+    const ingestKey = sha1Hex(
+      JSON.stringify([
+        args.release,
+        args.environment,
+        args.buckets.map((b) => [b.bucketStart, b.exited, b.errored, b.crashed, b.abnormal]),
+      ]),
+    );
+    const duplicate = await ctx.db
+      .query('sessionBuckets')
+      .withIndex('by_project_ingestKey', (q) =>
+        q.eq('projectId', args.projectId).eq('ingestKey', ingestKey),
+      )
+      .first();
+    if (duplicate) return;
+
     const now = Date.now();
     for (const b of args.buckets) {
       await ctx.db.insert('sessionBuckets', {
@@ -84,6 +109,7 @@ export const recordSessionBuckets = internalMutation({
         crashed: b.crashed,
         abnormal: b.abnormal,
         receivedAt: now,
+        ingestKey,
       });
     }
   },

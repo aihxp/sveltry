@@ -66,6 +66,14 @@ export const recordCheckIn = internalMutation({
         });
       }
     } else {
+      // No check_in_id: a malformed/edge check-in with no client-supplied id. We
+      // accept a possible duplicate raw-history row on a full-batch SDK retry
+      // rather than synthesize a key, because the only stable field here is
+      // `timestamp`, which is the ingest action's receivedAt and therefore
+      // DIFFERS on each retry delivery, so no key derived from these args would
+      // actually dedup a retry. The monitor roll-up below is already idempotent
+      // (max-timestamp patch), so this only duplicates id-less history rows,
+      // which Sentry cron check-ins normally avoid by carrying a check_in_id.
       await ctx.db.insert('checkIns', {
         organizationId: args.organizationId,
         projectId: args.projectId,
