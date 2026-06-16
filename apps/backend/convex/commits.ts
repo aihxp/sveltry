@@ -1,7 +1,6 @@
 import { v } from 'convex/values';
 import {
   corsHeaders,
-  extractAuth,
   frameRef,
   ingestError,
   parseResolvedShortIds,
@@ -11,6 +10,7 @@ import type { SentryEventPayload, SentryException, SentryStackFrame } from '@sve
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
 import { requireOrg } from './lib/auth';
+import { resolveDsnRequest } from './lib/dsnAuth';
 
 // ---------------------------------------------------------------------------
 // Upload: POST /releases/commits?o=<publicId>&sentry_key=<key>
@@ -52,14 +52,9 @@ function commitTimestamp(c: UploadCommit, fallback: number): number {
 export const uploadCommits = httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const cors = corsHeaders(request.headers.get('origin') ?? '*');
-  const auth = extractAuth(request.headers.get('x-sentry-auth'), url.searchParams);
-  const publicKey = auth.sentry_key;
-  const publicId = url.searchParams.get('o') ?? '';
-  if (!publicKey) return ingestError(401, 'missing sentry_key', [], cors);
-  if (!publicId) return ingestError(400, 'missing project id (o=<publicId>)', [], cors);
-
-  const resolved = await ctx.runQuery(internal.projects.resolveIngestKey, { publicId, publicKey });
-  if (!resolved) return ingestError(401, 'invalid dsn', [], cors);
+  const auth = await resolveDsnRequest(ctx, request, url, cors);
+  if (!auth.ok) return auth.response;
+  const resolved = auth.resolved;
 
   let body: { release?: string; commits?: UploadCommit[] };
   try {

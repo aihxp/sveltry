@@ -26,6 +26,8 @@ import type * as invitations from "../invitations.js";
 import type * as issues from "../issues.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_dsnAuth from "../lib/dsnAuth.js";
+import type * as lib_issueStatus from "../lib/issueStatus.js";
 import type * as lib_net from "../lib/net.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_tenantTables from "../lib/tenantTables.js";
@@ -77,6 +79,8 @@ declare const fullApi: ApiFromModules<{
   issues: typeof issues;
   "lib/audit": typeof lib_audit;
   "lib/auth": typeof lib_auth;
+  "lib/dsnAuth": typeof lib_dsnAuth;
+  "lib/issueStatus": typeof lib_issueStatus;
   "lib/net": typeof lib_net;
   "lib/slug": typeof lib_slug;
   "lib/tenantTables": typeof lib_tenantTables;
