@@ -40,7 +40,12 @@ import type {
   SentryUserReport,
 } from '@sveltry/types';
 import { internal } from './_generated/api';
-import { httpAction, internalMutation, type MutationCtx } from './_generated/server';
+import {
+  type ActionCtx,
+  httpAction,
+  internalMutation,
+  type MutationCtx,
+} from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { levelValidator } from './schema';
 import { generateShortId } from './lib/slug';
@@ -54,6 +59,230 @@ function pushParsed<T>(into: T[], payload: Uint8Array): void {
     into.push(JSON.parse(decoder.decode(payload)) as T);
   } catch {
     // Skip an unparseable envelope item.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-item-type persistence. The ingest action fans the parsed envelope out to
+// these named helpers (one per item type) so the top-level handler reads as a
+// sequence of named steps rather than ten inline near-identical loops. Each is a
+// thin loop over already-normalized items; the events/transactions loops stay in
+// the handler because they feed the per-batch usage counters. `IngestTarget` is
+// the resolved-DSN context every helper needs (project, org, scrubbing config).
+// ---------------------------------------------------------------------------
+
+type IngestTarget = {
+  projectId: Id<'projects'>;
+  organizationId: string;
+  scrubPii: boolean;
+  scrubConfig?: Parameters<typeof scrubPayload>[1];
+};
+
+async function persistSessions(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  sessions: SentrySession[],
+  receivedAt: number,
+): Promise<void> {
+  for (const payload of sessions) {
+    const s = normalizeSession(payload, { receivedAt });
+    if (!s.sid) continue;
+    await ctx.runMutation(internal.sessions.recordSession, {
+      projectId: target.projectId,
+      organizationId: target.organizationId,
+      sid: s.sid,
+      did: s.did,
+      release: s.release,
+      environment: s.environment,
+      status: s.status,
+      errors: s.errors,
+      startedAt: s.startedAt,
+      timestamp: s.timestamp,
+    });
+  }
+}
+
+async function persistSessionAggregates(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  sessionAggregates: SentrySessionAggregates[],
+  receivedAt: number,
+): Promise<void> {
+  for (const payload of sessionAggregates) {
+    const agg = normalizeSessionAggregates(payload, { receivedAt });
+    if (agg.buckets.length === 0) continue;
+    await ctx.runMutation(internal.sessions.recordSessionBuckets, {
+      projectId: target.projectId,
+      organizationId: target.organizationId,
+      release: agg.release,
+      environment: agg.environment,
+      buckets: agg.buckets,
+    });
+  }
+}
+
+async function persistCheckIns(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  checkIns: SentryCheckIn[],
+  receivedAt: number,
+): Promise<void> {
+  for (const payload of checkIns) {
+    const c = normalizeCheckIn(payload, { receivedAt });
+    if (!c.monitorSlug) continue;
+    await ctx.runMutation(internal.monitors.recordCheckIn, {
+      projectId: target.projectId,
+      organizationId: target.organizationId,
+      monitorSlug: c.monitorSlug,
+      checkInId: c.checkInId,
+      status: c.status,
+      durationMs: c.durationMs,
+      environment: c.environment,
+      release: c.release,
+      timestamp: c.timestamp,
+      expectedIntervalSeconds: c.expectedIntervalSeconds,
+    });
+  }
+}
+
+async function persistReplays(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  replayEvents: SentryReplayEvent[],
+  replayRecordings: Uint8Array[],
+  receivedAt: number,
+): Promise<void> {
+  // A replay_event (metadata) is paired with a replay_recording (the rrweb stream)
+  // in the same envelope. Store the decompressed recording in file storage and roll
+  // the metadata onto the replay row.
+  for (let i = 0; i < replayEvents.length; i++) {
+    const meta = replayEvents[i]!;
+    const recording = replayRecordings[i];
+    if (!meta.replay_id || !recording) continue;
+    // Store the rrweb recording body as-is (it may be gzip/deflate compressed by
+    // the SDK). Decompression happens in the browser at playback, where
+    // DecompressionStream is reliable. `.slice()` detaches the nested subarray view.
+    const { header, body } = splitReplayRecording(recording);
+    const storageId = await ctx.storage.store(
+      new Blob([body.slice() as BlobPart], { type: 'application/octet-stream' }),
+    );
+    const segmentId = (header.segment_id as number) ?? meta.segment_id ?? i;
+    // Drop the just-stored blob if the row was deduped (retry) or the insert threw,
+    // so a failed/duplicate write never leaks an orphaned storage object.
+    let kept = false;
+    try {
+      const res = await ctx.runMutation(internal.replays.recordReplaySegment, {
+        projectId: target.projectId,
+        organizationId: target.organizationId,
+        replayId: meta.replay_id,
+        segmentId,
+        storageId,
+        timestamp: receivedAt,
+        url: meta.urls?.[0],
+        errorCount: meta.error_ids?.length ?? 0,
+        platform: meta.platform,
+        environment: meta.environment,
+      });
+      kept = res.inserted;
+    } finally {
+      if (!kept) await ctx.storage.delete(storageId).catch(() => {});
+    }
+  }
+}
+
+async function persistProfiles(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  profiles: SentryProfile[],
+  receivedAt: number,
+): Promise<void> {
+  for (const payload of profiles) {
+    const p = normalizeProfile(payload, { receivedAt });
+    if (!p.profileId || p.sampleCount === 0) continue;
+    await ctx.runMutation(internal.profiles.recordProfile, {
+      projectId: target.projectId,
+      organizationId: target.organizationId,
+      profileId: p.profileId,
+      transactionName: p.transactionName,
+      sampleCount: p.sampleCount,
+      durationMs: p.durationMs,
+      platform: p.platform,
+      release: p.release,
+      environment: p.environment,
+      timestamp: p.timestamp,
+      payload: target.scrubPii ? scrubPayload(payload, target.scrubConfig) : payload,
+    });
+  }
+}
+
+async function persistAttachments(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  attachmentItems: EnvelopeItem[],
+  attachEventId: string,
+): Promise<void> {
+  // Stored in file storage, linked to the envelope's event id.
+  for (const item of attachmentItems) {
+    const storageId = await ctx.storage.store(
+      new Blob([item.payload.slice() as BlobPart], {
+        type: item.header.content_type ?? 'application/octet-stream',
+      }),
+    );
+    let kept = false;
+    try {
+      const res = await ctx.runMutation(internal.feedback.recordAttachment, {
+        projectId: target.projectId,
+        organizationId: target.organizationId,
+        eventId: attachEventId,
+        filename: item.header.filename ?? 'attachment',
+        contentType: item.header.content_type,
+        attachmentType: item.header.attachment_type,
+        size: item.payload.byteLength,
+        storageId,
+      });
+      kept = res.inserted;
+    } finally {
+      if (!kept) await ctx.storage.delete(storageId).catch(() => {});
+    }
+  }
+}
+
+async function persistFeedback(
+  ctx: ActionCtx,
+  target: IngestTarget,
+  userReports: SentryUserReport[],
+  feedbacks: SentryEventPayload[],
+): Promise<void> {
+  // Legacy `user_report` and the newer `feedback` event shape.
+  for (const r of userReports) {
+    if (!r.comments) continue;
+    await ctx.runMutation(internal.feedback.recordFeedback, {
+      projectId: target.projectId,
+      organizationId: target.organizationId,
+      eventId: r.event_id,
+      name: r.name,
+      email: r.email,
+      message: target.scrubPii ? scrubString(r.comments) : r.comments,
+    });
+  }
+  for (const f of feedbacks) {
+    const fb = (f.contexts?.feedback ?? {}) as {
+      message?: string;
+      contact_email?: string;
+      name?: string;
+    };
+    if (!fb.message) continue;
+    await ctx.runMutation(internal.feedback.recordFeedback, {
+      projectId: target.projectId,
+      organizationId: target.organizationId,
+      eventId: f.event_id,
+      name: fb.name,
+      email: fb.contact_email,
+      // When PII scrubbing is on, redact embedded secrets (cards/SSNs/tokens) from
+      // the free-text message, consistent with event scrubbing. The submitter's own
+      // name/email are intentional contact info and kept.
+      message: target.scrubPii ? scrubString(fb.message) : fb.message,
+    });
   }
 }
 
@@ -332,164 +561,16 @@ export const ingest = httpAction(async (ctx, request) => {
     if (res.inserted) newTransactions += 1;
   }
 
-  for (const payload of sessions) {
-    const s = normalizeSession(payload, { receivedAt });
-    if (!s.sid) continue;
-    await ctx.runMutation(internal.sessions.recordSession, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      sid: s.sid,
-      did: s.did,
-      release: s.release,
-      environment: s.environment,
-      status: s.status,
-      errors: s.errors,
-      startedAt: s.startedAt,
-      timestamp: s.timestamp,
-    });
-  }
-
-  for (const payload of sessionAggregates) {
-    const agg = normalizeSessionAggregates(payload, { receivedAt });
-    if (agg.buckets.length === 0) continue;
-    await ctx.runMutation(internal.sessions.recordSessionBuckets, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      release: agg.release,
-      environment: agg.environment,
-      buckets: agg.buckets,
-    });
-  }
-
-  for (const payload of checkIns) {
-    const c = normalizeCheckIn(payload, { receivedAt });
-    if (!c.monitorSlug) continue;
-    await ctx.runMutation(internal.monitors.recordCheckIn, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      monitorSlug: c.monitorSlug,
-      checkInId: c.checkInId,
-      status: c.status,
-      durationMs: c.durationMs,
-      environment: c.environment,
-      release: c.release,
-      timestamp: c.timestamp,
-      expectedIntervalSeconds: c.expectedIntervalSeconds,
-    });
-  }
-
-  // Replays: a replay_event (metadata) is paired with a replay_recording (the
-  // rrweb stream) in the same envelope. Store the decompressed recording in file
-  // storage and roll the metadata onto the replay row.
-  for (let i = 0; i < replayEvents.length; i++) {
-    const meta = replayEvents[i]!;
-    const recording = replayRecordings[i];
-    if (!meta.replay_id || !recording) continue;
-    // Store the rrweb recording body as-is (it may be gzip/deflate compressed by
-    // the SDK). Decompression happens in the browser at playback, where
-    // DecompressionStream is reliable. `.slice()` detaches the nested subarray view.
-    const { header, body } = splitReplayRecording(recording);
-    const storageId = await ctx.storage.store(
-      new Blob([body.slice() as BlobPart], { type: 'application/octet-stream' }),
-    );
-    const segmentId = (header.segment_id as number) ?? meta.segment_id ?? i;
-    // Drop the just-stored blob if the row was deduped (retry) or the insert
-    // threw, so a failed/duplicate write never leaks an orphaned storage object.
-    let kept = false;
-    try {
-      const res = await ctx.runMutation(internal.replays.recordReplaySegment, {
-        projectId: resolved.projectId,
-        organizationId: resolved.organizationId,
-        replayId: meta.replay_id,
-        segmentId,
-        storageId,
-        timestamp: receivedAt,
-        url: meta.urls?.[0],
-        errorCount: meta.error_ids?.length ?? 0,
-        platform: meta.platform,
-        environment: meta.environment,
-      });
-      kept = res.inserted;
-    } finally {
-      if (!kept) await ctx.storage.delete(storageId).catch(() => {});
-    }
-  }
-
-  for (const payload of profiles) {
-    const p = normalizeProfile(payload, { receivedAt });
-    if (!p.profileId || p.sampleCount === 0) continue;
-    await ctx.runMutation(internal.profiles.recordProfile, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      profileId: p.profileId,
-      transactionName: p.transactionName,
-      sampleCount: p.sampleCount,
-      durationMs: p.durationMs,
-      platform: p.platform,
-      release: p.release,
-      environment: p.environment,
-      timestamp: p.timestamp,
-      payload: resolved.scrubPii ? scrubPayload(payload, resolved.scrubConfig) : payload,
-    });
-  }
-
-  // Attachments: stored in file storage, linked to the envelope's event id.
-  const attachEventId = coerceEventId(firstId ?? headerEventId);
-  for (const item of attachmentItems) {
-    const storageId = await ctx.storage.store(
-      new Blob([item.payload.slice() as BlobPart], {
-        type: item.header.content_type ?? 'application/octet-stream',
-      }),
-    );
-    let kept = false;
-    try {
-      const res = await ctx.runMutation(internal.feedback.recordAttachment, {
-        projectId: resolved.projectId,
-        organizationId: resolved.organizationId,
-        eventId: attachEventId,
-        filename: item.header.filename ?? 'attachment',
-        contentType: item.header.content_type,
-        attachmentType: item.header.attachment_type,
-        size: item.payload.byteLength,
-        storageId,
-      });
-      kept = res.inserted;
-    } finally {
-      if (!kept) await ctx.storage.delete(storageId).catch(() => {});
-    }
-  }
-
-  // User feedback: legacy `user_report` and the newer `feedback` event shape.
-  for (const r of userReports) {
-    if (!r.comments) continue;
-    await ctx.runMutation(internal.feedback.recordFeedback, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      eventId: r.event_id,
-      name: r.name,
-      email: r.email,
-      message: resolved.scrubPii ? scrubString(r.comments) : r.comments,
-    });
-  }
-  for (const f of feedbacks) {
-    const fb = (f.contexts?.feedback ?? {}) as {
-      message?: string;
-      contact_email?: string;
-      name?: string;
-    };
-    if (!fb.message) continue;
-    await ctx.runMutation(internal.feedback.recordFeedback, {
-      projectId: resolved.projectId,
-      organizationId: resolved.organizationId,
-      eventId: f.event_id,
-      name: fb.name,
-      email: fb.contact_email,
-      // When PII scrubbing is on, redact embedded secrets (cards/SSNs/tokens)
-      // from the free-text message, consistent with event scrubbing. The
-      // submitter's own name/email are intentional contact info and kept.
-      message: resolved.scrubPii ? scrubString(fb.message) : fb.message,
-    });
-  }
+  // Persist the remaining item types. These do not touch the per-batch usage
+  // counters (only events/transactions above do), so each is a self-contained
+  // named step over its already-parsed items.
+  await persistSessions(ctx, resolved, sessions, receivedAt);
+  await persistSessionAggregates(ctx, resolved, sessionAggregates, receivedAt);
+  await persistCheckIns(ctx, resolved, checkIns, receivedAt);
+  await persistReplays(ctx, resolved, replayEvents, replayRecordings, receivedAt);
+  await persistProfiles(ctx, resolved, profiles, receivedAt);
+  await persistAttachments(ctx, resolved, attachmentItems, coerceEventId(firstId ?? headerEventId));
+  await persistFeedback(ctx, resolved, userReports, feedbacks);
 
   // One usage write per ingest batch (not per event), with client-side and
   // server-side (quota/spike) drops folded in, and inbound-filter drops tracked
