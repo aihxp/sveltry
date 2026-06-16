@@ -136,7 +136,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verification: Adversarially verified; holds at High. Confirmed runUptimeChecks (monitors.ts:280) is the only outbound path not routed through safeFetch, and the create-time BLOCKED_UPTIME_HOSTS check has no DNS-resolve step. Evidence correction: decimal/hex-encoded IPs and the EC2 IPv6 IMDS literal ARE normalized or matched at create time; the load-bearing bypasses that genuinely reach the unguarded per-minute fetch are (a) a DNS name whose A/AAAA resolves to a blocked IP, (b) the rest of 169.254.0.0/16 (e.g. 169.254.169.255), and (c) fe80::* link-local. Admin / self-host-bootstrap gating keeps it below Critical.
 - Related: Same root cause as any future outbound path added without the safeFetch chokepoint; treat safeFetch as the single mandatory egress for every user-influenced URL.
 
-### [SEC-inject-002] Decompression-bomb guard runs after full inflation; no request-body cap on ingest
+### [SEC-inject-002] ~~Decompression-bomb guard runs after full inflation; no request-body cap on ingest~~ [RESOLVED - Slice 2]
+- Status: RESOLVED (Slice 2). `decompressBody` now streams through fflate `Decompress` and aborts when the running output exceeds the cap (bounds peak memory regardless of input), and ingest + artifact upload reject bodies over 200 MiB with `413` before buffering. New protocol tests cover the gzip/deflate bomb abort. `packages/protocol/src/decompress.ts`, `ingest.ts`, `sourcemaps.ts`.
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: Security -- Injection, SSRF, Input Safety
 - Location: `packages/protocol/src/decompress.ts:24-41`, `apps/backend/convex/ingest.ts:113-122`, `apps/backend/convex/http.ts:42-61`
 - Evidence: decompressBody calls fflate `decompressSync(bytes)` at decompress.ts:27 with NO `out` buffer, then checks `buf.byteLength > MAX_DECOMPRESSED_BYTES` (200 MiB) at :28. fflate inflates the entire payload into a dynamically grown buffer FIRST; the size check is post-hoc, so a small gzip/zlib bomb that expands to multiple gigabytes exhausts isolate memory before the guard ever executes. fflate's InflateOptions does expose an `out` buffer that truncates output to a fixed size (verified in node_modules/.bun/fflate@0.8.3/.../index.d.ts:44-50) -- the safe bound exists but is unused. Compounding this, neither the ingest endpoint (ingest.ts:115 `new Uint8Array(await request.arrayBuffer())`) nor the artifact upload (sourcemaps/http.ts:61) imposes any application-level Content-Length / body-size cap, and the route is internet-facing and DSN-authenticated (not user-authenticated). A grep for content-length/413/maxBytes across the backend finds no body cap anywhere.
@@ -210,7 +211,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Re-read README.md lines 28-56 in isolation (no other docs) and confirm a first-time reader cannot conclude the application connects to Postgres.
 - Related: none
 
-### [ERR-003] Decompression-bomb guard checks size only after full in-memory expansion
+### [ERR-003] ~~Decompression-bomb guard checks size only after full in-memory expansion~~ [RESOLVED - Slice 2]
+- Status: RESOLVED (Slice 2). Same fix as SEC-inject-002: incremental streaming decompression with an abort-on-cap.
 - Severity: Medium | Confidence: Confirmed | Effort: M | Dimension: Error Handling & Resilience
 - Location: `packages/protocol/src/decompress.ts:24-41`, `apps/backend/convex/ingest.ts:112-122`
 - Evidence: inflate() calls fflate's `decompressSync(bytes)` (line 26) which fully decompresses into a single in-memory Uint8Array, and ONLY THEN checks `buf.byteLength > MAX_DECOMPRESSED_BYTES` (200 MiB) at line 28. The 200 MiB cap therefore does not prevent the allocation: a malicious ~200 KB gzip bomb that expands toward or past 200 MiB is fully materialized in the isolate's memory before the limit is consulted, and the limit only rejects after the fact. There is no pre-check on the compressed body size in ingest.ts either (request.arrayBuffer() at ingest.ts:115 is unbounded before decompression).
@@ -292,7 +294,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: With dozens of enabled alerts over a busy org, measure evaluateMetricAlerts wall-clock and total rows read per tick before/after; confirm it no longer grows linearly in serial round-trips.
 - Related: none
 
-### [SEC-secrets-001] Internet-facing DSN-authed write endpoints read the full request body and decompress with only a post-hoc size check (DoS surface)
+### [SEC-secrets-001] ~~Internet-facing DSN-authed write endpoints read the full request body and decompress with only a post-hoc size check (DoS surface)~~ [RESOLVED - Slice 2]
+- Status: RESOLVED (Slice 2). Ingest and artifact upload now reject bodies over `MAX_REQUEST_BODY_BYTES` (200 MiB) via `413` before buffering (Content-Length pre-check + post-read guard), and decompression is incrementally bounded.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Security (secrets, crypto, exposure)
 - Location: `apps/backend/convex/ingest.ts:115`, `packages/protocol/src/decompress.ts:24-41`, `apps/backend/convex/sourcemaps.ts:61`, `apps/backend/convex/sourcemaps.ts:96-99`
 - Evidence: The ingest action does `const raw = new Uint8Array(await request.arrayBuffer())` (ingest.ts:115) with no prior Content-Length or byte-length check, then calls decompressBody(). For a gzip/deflate body, decompress.ts:24-33 inflate() calls fflate's one-shot `decompressSync(bytes)` and only afterward checks `buf.byteLength > MAX_DECOMPRESSED_BYTES` (200 MiB). The decompressed buffer is therefore fully materialized in the isolate's memory before the cap is enforced, so a small compressed bomb expanding to hundreds of MB / GB is decompressed in full first. sourcemaps.ts uploadArtifact has the same unbounded `request.arrayBuffer()` (line 61) and stores the blob to Convex file storage with no size cap on the non-S3 fallback path (lines 96-99; only the S3-offload branch is bounded, at 4 MiB). The DSN publicKey that 'authenticates' these endpoints is embedded in client-side SDK config (packages/sdk/src/config.ts) and is semi-public by Sentry's design, so the auth gate does not exclude a determined attacker. Per-key rate-limit, monthly quota, and spike protection (ingest.ts:99-110, 234-254) are all opt-in and only fire when configured, so a default project has no throttle on this path.
@@ -587,11 +590,11 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 ## Remediation plan
 
 - **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), `QUAL-001`, `DOC-001`.
-- **Plan now** (High, M or L), suggested order: `SEC-inject-002`, `ERR-001`, `OBS-002`, `ERR-002`, `TEST-001`.
+- **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), `ERR-001`, `OBS-002`, `ERR-002`, `TEST-001`.
 - **Verify first** (Suspected / assumption-dependent): `DEP-001` (confirm the transitive `cookie` version and advisory applicability with the ecosystem audit tool, and that a Kit patch bump clears it).
 - **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, `OBS-003`, `OBS-004`, `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)
 
-Note that several Medium findings (`ERR-003`, `ERR-005`, `OBS-004`) are members of the same systemic patterns as the High items above; fixing the root cause closes them together rather than one at a time.
+Note that several Medium findings (`ERR-003`, `ERR-005`, `OBS-004`) are members of the same systemic patterns as the High items above; fixing the root cause closes them together rather than one at a time. (~~`SEC-secrets-001`~~, ~~`ERR-003`~~, ~~`ERR-005`~~ done, Slices 1-2.)
 
 ## Scope and limitations
 

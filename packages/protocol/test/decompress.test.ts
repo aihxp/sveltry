@@ -28,4 +28,27 @@ describe('decompressBody', () => {
     await expect(decompressBody(bytes, 'br')).rejects.toBeInstanceOf(DecodeError);
     await expect(decompressBody(bytes, 'zstd')).rejects.toBeInstanceOf(DecodeError);
   });
+
+  // Decompression-bomb guard: a small compressed body that inflates past the cap
+  // must be rejected mid-stream, not after fully inflating. We pass a tiny cap so
+  // the test never allocates the real 200 MiB.
+  test('aborts a body that inflates past the cap (gzip bomb)', async () => {
+    const bomb = new Uint8Array(gzipSync(new Uint8Array(64 * 1024))); // 64 KiB of zeros, ~tiny gzipped
+    await expect(decompressBody(bomb, 'gzip', 1024)).rejects.toBeInstanceOf(DecodeError);
+    await expect(decompressBody(bomb, 'gzip', 1024)).rejects.toThrow(/too large/);
+  });
+
+  test('aborts a deflate body that inflates past the cap', async () => {
+    const bomb = new Uint8Array(deflateSync(new Uint8Array(64 * 1024)));
+    await expect(decompressBody(bomb, 'deflate', 1024)).rejects.toThrow(/too large/);
+  });
+
+  test('allows a body that inflates within the cap', async () => {
+    const gz = new Uint8Array(gzipSync(bytes));
+    expect((await decompressBody(gz, 'gzip', bytes.length + 64)).byteLength).toBe(bytes.length);
+  });
+
+  test('rejects an oversize identity body', async () => {
+    await expect(decompressBody(bytes, 'identity', 16)).rejects.toThrow(/too large/);
+  });
 });

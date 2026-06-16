@@ -17,6 +17,15 @@ All notable changes to Sveltry are documented here. The format is based on
   Probes now use `safeFetch` (literal denylist + DoH-resolved-IP rebinding check,
   re-validated on every redirect hop), and the create-time check reuses the shared
   `isBlockedHost` denylist instead of a 3-host literal set.
+- **Decompression of ingest bodies is now bounded incrementally, with a request-body
+  cap.** The previous one-shot `decompressSync` inflated the entire payload before
+  checking the 200 MiB limit, so a small compressed body could force a multi-GiB
+  allocation (the deflate path grew an unbounded buffer; the gzip path pre-allocated
+  from the attacker-controlled ISIZE trailer). Decompression now streams through
+  `fflate`'s `Decompress` and aborts the moment the running output exceeds the cap,
+  bounding peak memory regardless of input. The ingest and artifact-upload endpoints
+  also reject bodies larger than 200 MiB (`413`) before buffering, instead of reading
+  an unbounded request body.
 
 ## [0.9.0] - 2026-06-16
 

@@ -11,6 +11,7 @@ import {
   ingestError,
   ingestSuccess,
   matchCompiledFilter,
+  MAX_REQUEST_BODY_BYTES,
   normalizeCheckIn,
   normalizeEvent,
   normalizeProfile,
@@ -109,10 +110,30 @@ export const ingest = httpAction(async (ctx, request) => {
     }
   }
 
-  // Read + decompress the raw body.
+  // Reject an oversize body before buffering it (honest clients send a length).
+  const declaredLen = Number(request.headers.get('content-length') ?? '');
+  if (Number.isFinite(declaredLen) && declaredLen > MAX_REQUEST_BODY_BYTES) {
+    return ingestError(
+      413,
+      'payload too large',
+      [`body exceeds ${MAX_REQUEST_BODY_BYTES} bytes`],
+      cors,
+    );
+  }
+
+  // Read + decompress the raw body. The decompressor aborts a bomb mid-stream,
+  // and the raw-size check below catches a body whose Content-Length lied.
   let body: Uint8Array;
   try {
     const raw = new Uint8Array(await request.arrayBuffer());
+    if (raw.byteLength > MAX_REQUEST_BODY_BYTES) {
+      return ingestError(
+        413,
+        'payload too large',
+        [`body exceeds ${MAX_REQUEST_BODY_BYTES} bytes`],
+        cors,
+      );
+    }
     body = await decompressBody(raw, request.headers.get('content-encoding'));
   } catch (err) {
     if (err instanceof DecodeError) {
