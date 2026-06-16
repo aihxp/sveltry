@@ -6,6 +6,19 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Observability
+
+- **Closed the observability gaps.** Tracker auto-create (Jira/Linear) now records each attempt to
+  `notificationDeliveries`, so a misconfigured integration shows up in the dashboard's Notification
+  deliveries UI as documented, not just a backend log line. `configStatus` computes actionable
+  warnings (SITE_URL unset; an email alert channel configured while SMTP is not) and the Settings
+  page renders them as a banner for admins, so a misconfiguration surfaces proactively instead of
+  only via the admin pull. Webhook and issue-alert delivery failures now emit a `console.warn`
+  (channel/status/detail, with the target URL omitted so a webhook secret is never logged), matching
+  the metric/usage/uptime/tracker paths. The hourly transaction-rollup cron logs a summary line. And
+  `/healthz` is now consistently documented as a readiness probe (not liveness) across the docs, with
+  a new "Health and metrics" section in `SELF_HOSTING.md`.
+
 ### Documentation
 
 - **Corrected doc drift.** `CONTRIBUTING.md` no longer claims shipped features (all envelope item

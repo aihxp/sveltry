@@ -46,7 +46,7 @@ Ingestion is served by Convex HTTP actions on the `.site` origin. The HTTP route
 - `POST /api/<id>/envelope/` - modern envelope endpoint. Accepts all item types.
 - `POST /api/<id>/store/` - legacy single-event endpoint. Body is one JSON event.
 - `OPTIONS /api/...` - CORS preflight.
-- `GET /healthz` - health check.
+- `GET /healthz` - readiness probe (touches the DB; returns 503 if the backend cannot serve).
 
 The project id is extracted from the path by `projectIdFromPath`. It also recognizes
 `security` and `minidump` routes and tolerates them: such requests return `200` but the

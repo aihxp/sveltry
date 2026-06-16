@@ -11,6 +11,7 @@
   import { Label } from '$lib/components/ui/label';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
+  import AlertTriangleIcon from '@lucide/svelte/icons/triangle-alert';
   import { relativeTime } from '$lib/utils';
 
   const auth = useAuth();
@@ -121,6 +122,14 @@
     await client.mutation(api.apiTokens.revokeApiToken, { tokenId: id });
   }
 
+  // Deployment config warnings (admin/owner only): surfaces a misconfiguration
+  // (e.g. SITE_URL unset, or an email channel without SMTP) proactively here
+  // instead of only via the admin configStatus pull.
+  const config = useQuery(api.health.configStatus, () =>
+    auth.isAuthenticated && canManage ? {} : ('skip' as const),
+  );
+  const configWarnings = $derived(config.data?.warnings ?? []);
+
   // Audit log (admin/owner only).
   const auditLog = useQuery(api.audit.listAuditLog, () =>
     auth.isAuthenticated && canManage ? { limit: 50 } : ('skip' as const),
@@ -160,6 +169,23 @@
 
 <div class="mx-auto max-w-2xl space-y-6">
   <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
+
+  {#if configWarnings.length > 0}
+    <div
+      class="border-warning/40 bg-warning/10 text-warning-foreground flex gap-3 rounded-md border p-3 text-sm"
+      role="alert"
+    >
+      <AlertTriangleIcon class="text-warning mt-0.5 size-4 shrink-0" />
+      <div class="space-y-1">
+        <p class="font-medium">Deployment configuration</p>
+        <ul class="list-disc space-y-1 pl-4">
+          {#each configWarnings as warning (warning)}
+            <li>{warning}</li>
+          {/each}
+        </ul>
+      </div>
+    </div>
+  {/if}
 
   <Card.Root>
     <Card.Header><Card.Title>Account</Card.Title></Card.Header>
