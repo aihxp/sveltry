@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Protocol test suite
-        run: bun run --filter '@sveltry/protocol' test
+      - name: Test suites (all workspaces)
+        run: bun run --filter '*' --if-present test
 
       - name: Type-check all workspaces
         run: bun run check

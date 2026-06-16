@@ -11,5 +11,5 @@
     "types": ["node"]
   },
   "include": ["convex/**/*.ts"],
-  "exclude": ["convex/_generated"]
+  "exclude": ["convex/_generated", "convex/**/*.test.ts"]
 }

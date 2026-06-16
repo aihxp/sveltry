@@ -38,6 +38,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc --noEmit",
+    "test": "bun test",
     "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
