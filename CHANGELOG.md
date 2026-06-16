@@ -6,6 +6,8 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-15
+
 ### Added
 
 - **Public API: deploys + strict event lookup.** The v1 REST API gains `GET
@@ -317,7 +319,8 @@ The first release: a complete, Sentry-wire-compatible error-tracking vertical sl
 - **Tooling**: Bun workspaces with a shared dependency catalog, CI (test/type-check/build/format),
   Changesets-based releases, and a publishable SDK package.
 
-[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/aihxp/sveltry/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/aihxp/sveltry/releases/tag/v0.6.0
 [0.5.0]: https://github.com/aihxp/sveltry/releases/tag/v0.5.0
 [0.4.0]: https://github.com/aihxp/sveltry/releases/tag/v0.4.0
 [0.3.0]: https://github.com/aihxp/sveltry/releases/tag/v0.3.0
