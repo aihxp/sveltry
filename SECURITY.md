@@ -15,8 +15,8 @@ not receive backported fixes; upgrade to a supported version to stay protected.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | Yes                |
-| < 0.1   | No                 |
+| 0.9.x   | Yes                |
+| < 0.9   | No                 |
 
 ## Reporting a vulnerability
 
@@ -87,6 +87,18 @@ Sveltry's trust boundaries and the areas we consider most security-sensitive:
   removed are in scope.
 - Per-key rate limiting. The optional fixed-window per-key limit protects against
   ingest abuse. Bypasses that defeat throttling are in scope.
+- Outbound request safety (SSRF). Every outbound request the server makes on a
+  user's behalf (issue-lifecycle webhooks, metric/usage alert channels, uptime
+  probes, issue-tracker integrations) goes through `safeFetch`
+  (`apps/backend/convex/lib/net.ts`): a literal host/scheme guard plus a
+  DoH-resolved-IP check that defeats DNS rebinding, both re-applied on every
+  redirect hop, and a non-GET body is never replayed across a 301/302/303. Cloud
+  metadata and link-local addresses are blocked; RFC1918 and loopback are
+  intentionally reachable because a self-hoster's webhook/alert target is often on
+  a private network (so that allowance is by design, not a gap). The DoH resolver
+  is operator-tunable via `SSRF_DOH_RESOLVER` (see `docs/SELF_HOSTING.md`). Any
+  way to make the server fetch a blocked target, or to slip a blocked host past
+  the per-hop re-validation, is in scope.
 - Root credentials. The Convex admin key and the `INSTANCE_SECRET` are root
   credentials for a deployment. They must never be committed to the repository or
   shared. Generate the admin key with

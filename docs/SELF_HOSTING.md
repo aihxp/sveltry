@@ -169,6 +169,24 @@ bunx convex env set S3_FORCE_PATH_STYLE "true"  # "true" for MinIO (fine for R2)
 bunx convex env set S3_OFFLOAD_MIN_BYTES "102400"  # only offload blobs this size or larger
 ```
 
+To tune the **outbound SSRF guard's DNS-rebinding check**, set `SSRF_DOH_RESOLVER`.
+Every outbound webhook/alert/uptime/integration request goes through `safeFetch`, which
+(beyond a literal host/scheme denylist re-checked on each redirect hop) resolves the
+target hostname over DNS-over-HTTPS and rejects it if any A/AAAA record is a blocked IP,
+defeating DNS rebinding. This var controls that resolve step:
+
+```sh
+# Unset (default): resolve via Cloudflare DoH (https://cloudflare-dns.com/dns-query).
+bunx convex env set SSRF_DOH_RESOLVER "https://dns.google/resolve"  # a custom DoH endpoint
+bunx convex env set SSRF_DOH_RESOLVER "off"                          # disable the resolve check
+```
+
+Set a custom URL if Cloudflare DoH is unreachable from your network. Setting it to `off`
+(or empty) disables only the resolve-time rebinding check; the literal host/scheme guard
+stays on, but a hostname whose DNS record points at a blocked IP would no longer be
+caught, so leave it enabled unless you have a specific reason. The current mode shows up
+in the admin `configStatus` readout.
+
 `SITE_URL` is the dashboard origin and must equal `PUBLIC_APP_URL`; it is Better
 Auth's trusted-origin check, and a mismatch fails sign-in with "Invalid origin". In
 production, use your real dashboard origin.
