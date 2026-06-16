@@ -72,6 +72,7 @@
         "tw-animate-css": "catalog:",
         "typescript": "catalog:",
         "vite": "catalog:",
+        "vitest": "catalog:testing",
       },
     },
     "packages/protocol": {

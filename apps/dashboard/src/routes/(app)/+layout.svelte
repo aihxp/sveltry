@@ -4,6 +4,7 @@
   import { useQuery, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
   import { authClient } from '$lib/auth-client';
+  import { authRedirect } from '$lib/auth-redirect';
   import Logo from '$lib/components/Logo.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { cn } from '$lib/utils';
@@ -53,11 +54,14 @@
     auth.isAuthenticated ? {} : ('skip' as const),
   );
   $effect(() => {
-    if (!auth.isLoading && !auth.isAuthenticated) {
-      goto(`/login?redirectTo=${encodeURIComponent(page.url.pathname)}`);
-    } else if (auth.isAuthenticated && !activeOrg.isLoading && activeOrg.data === null) {
-      goto('/onboarding');
-    }
+    const target = authRedirect({
+      authLoading: auth.isLoading,
+      authenticated: auth.isAuthenticated,
+      orgLoading: activeOrg.isLoading,
+      activeOrg: activeOrg.data,
+      path: page.url.pathname,
+    });
+    if (target) goto(target);
   });
 
   async function signOut() {
