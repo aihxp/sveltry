@@ -146,7 +146,7 @@ Sveltry parses every item in an envelope but only persists what it currently mod
 | `replay_recording`| Parsed and persisted (rrweb recording)   |
 | `profile`        | Parsed and persisted (flamegraph)         |
 | `check_in`       | Parsed and persisted (cron monitors)      |
-| `client_report`  | Accepted (200), not yet persisted         |
+| `client_report`  | Accepted (200); discarded-event counts folded into usage accounting |
 | `feedback`       | Parsed and persisted (user feedback)      |
 
 "Accepted, not yet persisted" means the request succeeds with `200` and the SDK is happy,

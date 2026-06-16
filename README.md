@@ -31,8 +31,9 @@ Sentry wire protocol, groups your errors into issues, and streams them to a live
   browser, Python, Go, and the rest) send events straight to Sveltry. No custom client to maintain.
 - **Reactive by default.** New issues appear in the dashboard the instant they are ingested, over a
   WebSocket, powered by Convex. No polling, no refresh.
-- **Self-hosted.** Your data lives on your infrastructure: open-source Convex (backed by Postgres)
-  and a SvelteKit app, all in Docker.
+- **Self-hosted.** Your data lives on your infrastructure: the app runs entirely on self-hosted
+  open-source Convex (which uses Postgres only as its own internal storage engine) plus a SvelteKit
+  app, all in Docker. The application itself never talks to Postgres directly.
 - **Private.** Default PII scrubbing happens at ingest, before anything is written. Identity never
   leaves your Convex deployment.
 
@@ -66,7 +67,7 @@ Prerequisites: [Bun](https://bun.com) 1.3+, Docker, and `openssl`.
 ```sh
 git clone https://github.com/aihxp/sveltry.git
 cd sveltry
-./scripts/setup.sh        # secrets, Postgres + Convex, deploy, migrate
+./scripts/setup.sh        # secrets, Postgres + Convex, deploy functions
 bun run dev:dashboard     # http://localhost:5173
 ```
 
