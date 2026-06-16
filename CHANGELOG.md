@@ -6,6 +6,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Project settings page decomposed.** The 1521-line project-settings page is split into nine
+  focused, self-contained components (issue tracker, usage, deploys, alert rules, webhooks, metric
+  alerts, usage alerts, notification deliveries, source maps) under `$lib/components/project/`; the
+  page now composes them and keeps only the cohesive project-configuration and danger-zone sections.
+  No behavior change.
+
 ### Added
 
 - **ESLint static analysis.** Added an ESLint flat config (typescript-eslint + eslint-plugin-svelte,
