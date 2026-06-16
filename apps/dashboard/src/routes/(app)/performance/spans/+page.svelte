@@ -5,7 +5,6 @@
   import { api } from '$convex/_generated/api';
   import * as Card from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
-  import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import EmptyState from '$lib/components/EmptyState.svelte';

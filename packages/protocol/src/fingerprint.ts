@@ -6,7 +6,7 @@ import type {
   SentryStackFrame,
 } from '@sveltry/types';
 import { sha1Hex } from './hash.js';
-import { culpritFrame, exceptionValues, messageString } from './normalize.js';
+import { exceptionValues, messageString } from './normalize.js';
 
 const DEFAULT_TOKEN = '{{ default }}';
 

@@ -94,7 +94,7 @@
           </div>
         </div>
         <pre class="overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs"><code
-            >Sentry.init({'{'} dsn: '{dsn}' {'}'});</code
+            >Sentry.init({'{'} dsn: '{dsn}' });</code
           ></pre>
         <div class="flex gap-2">
           <Button href={`/projects/${result.slug}`}>Go to project</Button>

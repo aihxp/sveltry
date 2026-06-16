@@ -6,6 +6,12 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **ESLint static analysis.** Added an ESLint flat config (typescript-eslint + eslint-plugin-svelte,
+  Svelte 5 aware) wired into `bun run lint` and CI, on top of the strict TypeScript compiler and
+  prettier. The first run found and removed real dead code (unused imports).
+
 ## [0.9.2] - 2026-06-16
 
 ### Security

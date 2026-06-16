@@ -600,7 +600,7 @@
         <h1 class="text-2xl font-bold tracking-tight">{project.name}</h1>
         <p class="font-mono text-sm text-muted-foreground">{project.slug}</p>
       </div>
-      <Button variant="outline" href={`/issues`}>View issues</Button>
+      <Button variant="outline" href="/issues">View issues</Button>
     </div>
 
     <Card.Root>
@@ -868,7 +868,7 @@
                 id="filterReleases"
                 bind:value={filterReleases}
                 rows="2"
-                placeholder={'1.0.0-rc*'}
+                placeholder="1.0.0-rc*"
                 class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               ></textarea>
             </div>

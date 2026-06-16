@@ -79,7 +79,7 @@
         class="mx-auto mt-12 max-w-xl overflow-x-auto rounded-lg border bg-card p-4 text-left font-mono text-sm text-muted-foreground"><code
           >Sentry.init({'{'}
   dsn: <span class="text-primary">'https://KEY@ingest.your-domain.com/1'</span>,
-{'}'});</code
+});</code
         ></pre>
     </section>
 
