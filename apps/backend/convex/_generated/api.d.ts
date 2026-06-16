@@ -28,6 +28,7 @@ import type * as lib_audit from "../lib/audit.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_net from "../lib/net.js";
 import type * as lib_slug from "../lib/slug.js";
+import type * as lib_tenantTables from "../lib/tenantTables.js";
 import type * as maintenance from "../maintenance.js";
 import type * as metricAlerts from "../metricAlerts.js";
 import type * as monitors from "../monitors.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/net": typeof lib_net;
   "lib/slug": typeof lib_slug;
+  "lib/tenantTables": typeof lib_tenantTables;
   maintenance: typeof maintenance;
   metricAlerts: typeof metricAlerts;
   monitors: typeof monitors;

@@ -311,6 +311,33 @@ export const purgeProjectData = internalMutation({
           .withIndex('by_project', (q) => q.eq('projectId', pid))
           .take(BATCH),
       )) || more;
+    // Webhooks + their delivery log + cron notification deliveries. These were
+    // historically missing here, so deleting a project orphaned them (including
+    // a plaintext webhook secret). Registered in TENANT_SCOPED_TABLES.
+    more =
+      (await purgeRows(
+        ctx,
+        await db
+          .query('webhooks')
+          .withIndex('by_project', (q) => q.eq('projectId', pid))
+          .take(BATCH),
+      )) || more;
+    more =
+      (await purgeRows(
+        ctx,
+        await db
+          .query('webhookDeliveries')
+          .withIndex('by_project', (q) => q.eq('projectId', pid))
+          .take(BATCH),
+      )) || more;
+    more =
+      (await purgeRows(
+        ctx,
+        await db
+          .query('notificationDeliveries')
+          .withIndex('by_project', (q) => q.eq('projectId', pid))
+          .take(BATCH),
+      )) || more;
 
     if (more) {
       await ctx.scheduler.runAfter(0, internal.projectLifecycle.purgeProjectData, {
@@ -562,6 +589,33 @@ export const restampProjectOrg = internalMutation({
           count += comments.length;
         }
         return { count, isDone: p.isDone, cursor: p.continueCursor };
+      },
+      // Webhooks + delivery logs + cron notification deliveries move with the
+      // project (they carry organizationId). Historically absent here, which left
+      // a transferred project's webhook rows stamped with the SOURCE org's id.
+      async (c) => {
+        const p = await db
+          .query('webhooks')
+          .withIndex('by_project', (q) => q.eq('projectId', pid))
+          .paginate({ numItems: BATCH, cursor: c });
+        for (const r of p.page) await db.patch(r._id, { organizationId: to });
+        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+      },
+      async (c) => {
+        const p = await db
+          .query('webhookDeliveries')
+          .withIndex('by_project', (q) => q.eq('projectId', pid))
+          .paginate({ numItems: BATCH, cursor: c });
+        for (const r of p.page) await db.patch(r._id, { organizationId: to });
+        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
+      },
+      async (c) => {
+        const p = await db
+          .query('notificationDeliveries')
+          .withIndex('by_project', (q) => q.eq('projectId', pid))
+          .paginate({ numItems: BATCH, cursor: c });
+        for (const r of p.page) await db.patch(r._id, { organizationId: to });
+        return { count: p.page.length, isDone: p.isDone, cursor: p.continueCursor };
       },
       // Detach steps: these rows belong to the SOURCE org (a user's saved view, a
       // dashboard's widget) and must NOT move; only their optional project pointer

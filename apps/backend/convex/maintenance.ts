@@ -7,9 +7,15 @@ const SEVEN_DAYS_MS = 7 * DAY_MS;
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * Prune events past each project's retention window. Bounded per run so a single
- * cron tick never exceeds Convex transaction limits; the daily schedule plus the
- * bound keeps storage in check without long-running mutations.
+ * Prune telemetry past each project's retention window. Bounded per run so a
+ * single cron tick never exceeds Convex transaction limits; the daily schedule
+ * plus the bound keeps storage in check without long-running mutations.
+ *
+ * Covers the time-series tables that carry a `(projectId, timestamp)` index:
+ * `events`, `transactions`, and `sessions` (its time field is `lastUpdate`).
+ * The blob-backed tables (replays, profiles, attachments) need a project+time
+ * index and storage-blob cleanup before they can be pruned here; until then
+ * they are removed only on project delete. See TENANT_SCOPED_TABLES.
  */
 export const sweepRetention = internalMutation({
   args: {},
@@ -21,17 +27,38 @@ export const sweepRetention = internalMutation({
     for (const project of projects) {
       if (deleted >= 2000) break;
       const cutoff = now - project.eventRetentionDays * DAY_MS;
-      const stale = await ctx.db
+
+      const staleEvents = await ctx.db
         .query('events')
         .withIndex('by_project', (q) => q.eq('projectId', project._id).lt('timestamp', cutoff))
         .order('asc')
         .take(200);
-      for (const event of stale) {
-        await ctx.db.delete(event._id);
+      for (const row of staleEvents) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+
+      const staleTransactions = await ctx.db
+        .query('transactions')
+        .withIndex('by_project', (q) => q.eq('projectId', project._id).lt('timestamp', cutoff))
+        .order('asc')
+        .take(200);
+      for (const row of staleTransactions) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+
+      const staleSessions = await ctx.db
+        .query('sessions')
+        .withIndex('by_project', (q) => q.eq('projectId', project._id).lt('lastUpdate', cutoff))
+        .order('asc')
+        .take(200);
+      for (const row of staleSessions) {
+        await ctx.db.delete(row._id);
         deleted += 1;
       }
     }
-    if (deleted) console.log(`sweepRetention: deleted ${deleted} expired events`);
+    if (deleted) console.log(`sweepRetention: deleted ${deleted} expired telemetry rows`);
     return { deleted };
   },
 });
