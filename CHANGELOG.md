@@ -15,6 +15,13 @@ All notable changes to Sveltry are documented here. The format is based on
   shared `httpUrlOnly` helper), with a defense-in-depth `safeHref()` guard at the render sites. The
   webhook create form now applies the same SSRF/scheme guard `safeFetch` uses at delivery, so an
   obviously bad target (metadata/link-local) is rejected up front instead of only at dispatch.
+- **Uniform request-body caps on the secondary JSON endpoints.** The DSN/org-token JSON endpoints
+  (`set-commits`, `deploys`, public-API issue-assign) buffered `request.json()` with no explicit
+  size limit, unlike the ingest and artifact-upload paths. They now read through a shared
+  `readCappedJson` helper that rejects an over-`Content-Length` body (and re-checks the actual
+  buffered byte length, catching a lying header) against a new 10 MiB `MAX_JSON_BODY_BYTES` cap,
+  returning 413 before any parse and 400 on malformed JSON. Authenticated-caller hardening, closing
+  the body-cap inconsistency.
 
 ## [0.9.3] - 2026-06-16
 

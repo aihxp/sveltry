@@ -65,7 +65,7 @@ Ordered: the lone Quick win first, then the High on Plan-now, then the highest-v
 ## Systemic patterns (root causes)
 
 - **The registry promises schema-drift safety but its lifecycle consumers are hand-maintained and untested.** Members: `ARC-001`, `QUAL-005`, `TEST-001`. Root fix: drive `purgeProjectData`/`restampProjectOrg` from a `Record<ProjectScopedTable, (ctx,pid)=>...>` that TypeScript requires to be exhaustive over the registry (compile error on a registered table with no drainer), and add a `convex-test` that seeds all tenant tables then asserts purge-empties / restamp-rewrites. Makes the registry load-bearing at compile AND run time, not just in comments.
-- **Body-cap discipline applied to the hot endpoints but not the secondary DSN/org-token JSON endpoints.** Members: `SEC-authz-001`, `SEC-inject-002`, `ERR-004`. Root fix: extract a single capped-body reader (Content-Length pre-check + `arrayBuffer` re-check against `MAX_REQUEST_BODY_BYTES`, returning 413) and route `commits.uploadCommits`, `usage.recordDeployHttp`, and the public-API POST reads through it, mirroring `ingest.ts`/`sourcemaps.ts`.
+- ~~**Body-cap discipline applied to the hot endpoints but not the secondary DSN/org-token JSON endpoints.**~~ [RESOLVED - RA-Slice 2] Members: `SEC-authz-001`, `SEC-inject-002`, `ERR-004`. Root fix applied: `apps/backend/convex/lib/body.ts` `readCappedJson` (Content-Length pre-check + `arrayBuffer` re-check against the new `MAX_JSON_BODY_BYTES` = 10 MiB, returning 413 on over-size / 400 on invalid JSON), now routing `commits.uploadCommits`, `usage.recordDeployHttp`, and the public-API assign POST, mirroring `ingest.ts`/`sourcemaps.ts`.
 - **Idempotency/orphan-cleanup discipline added to the ingest hot path but not propagated to sibling write paths.** Members: `ERR-001`, `ERR-002`, `ERR-003`. Root fix: apply the same content-key upsert + try/finally blob-cleanup + insert-only counting used in `recordEvent`/replay/attachment to `recordSessionBuckets`, the empty-id check-in branch, `uploadArtifact`, and the spike counter, so a mid-batch SDK retry never double-records health data, leaks a blob, or over-trips spike protection.
 - **Fat-row reads: the full `v.any()` Sentry payload materialized to extract scalar columns.** Members: `PERF-001`, `PERF-002`. Root fix: denormalize the scalar fields these queries need as top-level columns (or a lean `transactions_meta` projection without payload) so analytics/rollup/Discover scans stop transferring span blobs they discard, especially on the reactive performance page.
 
@@ -330,7 +330,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Test: simulate a batch whose first event records and whose second mutation throws, retry, and assert the spikeWindows count equals the true number of accepted events (not 2x).
 - Related: none
 
-### [ERR-004] DSN/org-token JSON endpoints (commits, deploys, public-API assign) read request.json() with no explicit body cap, unlike ingest and artifact upload
+### [ERR-004] ~~DSN/org-token JSON endpoints (commits, deploys, public-API assign) read request.json() with no explicit body cap, unlike ingest and artifact upload~~ [RESOLVED - RA-Slice 2]
+- Status: RESOLVED (RA-Slice 2). The three endpoints now read their body through `lib/body.readCappedJson` (10 MiB `MAX_JSON_BODY_BYTES` cap, Content-Length pre-check + `arrayBuffer` re-check, 413 on over-size, 400 on malformed JSON), mirroring the ingest/artifact paths. See `commits.ts:61-65`, `usage.ts:244-252`, `publicApi.ts` (assign POST).
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Error Handling & Resilience
 - Location: `apps/backend/convex/commits.ts:61`, `apps/backend/convex/usage.ts:245`, `apps/backend/convex/publicApi.ts:562`
 - Evidence: ingest.ts:125-147 and sourcemaps.ts:57-74 both enforce MAX_REQUEST_BODY_BYTES via a Content-Length pre-check plus a post-arrayBuffer re-check. The commit-upload (commits.ts:61), deploy (usage.ts:245), and public-API assign (publicApi.ts:562) handlers call request.json() directly with no cap, relying solely on Convex's platform-level HTTP limit. These are authenticated (DSN key or org Bearer token), so the surface is a credentialed tenant, not anonymous.
@@ -421,7 +422,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Confirm the comment at apiTokens.ts:96-98 (entropy + preimage-resistance rationale) is retained; optionally add a note that the index lookup is intentionally not constant-time because the compared value is a digest of a 256-bit secret.
 - Related: none
 
-### [SEC-authz-001] Two DSN-authenticated JSON endpoints parse the request body with no explicit size cap
+### [SEC-authz-001] ~~Two DSN-authenticated JSON endpoints parse the request body with no explicit size cap~~ [RESOLVED - RA-Slice 2]
+- Status: RESOLVED (RA-Slice 2). `uploadCommits` and `recordDeployHttp` now buffer through `lib/body.readCappedJson`, which rejects a Content-Length over `MAX_JSON_BODY_BYTES` (10 MiB) up front and re-checks the actual `arrayBuffer` byte length (catching a lying Content-Length), returning 413, before any `JSON.parse`. Mirrors `uploadArtifact`/ingest.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Security - Auth & Multi-Tenant Authorization
 - Location: `apps/backend/convex/commits.ts:61`, `apps/backend/convex/usage.ts (recordDeployHttp, request.json())`
 - Evidence: uploadCommits (commits.ts:59-64) and recordDeployHttp (usage.ts recordDeployHttp) call `await request.json()` immediately after resolveDsnRequest with no Content-Length check and no raw-byteLength re-check. By contrast the sibling DSN endpoint uploadArtifact applies MAX_REQUEST_BODY_BYTES twice (sourcemaps.ts:57-74) and the main ingest path checks declaredLen then re-checks raw byteLength (ingest.ts:125-141). Both endpoints require a valid, active DSN key, so this is authenticated-caller exposure, not anonymous.
@@ -430,7 +432,8 @@ Sorted by (adversarially-adjusted) severity, then dimension. Each block is self-
 - Verify the fix: Add a test posting a >cap body with a valid DSN key to /releases/commits and /deploys and assert 413; confirm a normal small body still returns 201.
 - Related: none
 
-### [SEC-inject-002] DSN-authenticated set-commits and deploy endpoints buffer request.json() with no body cap
+### [SEC-inject-002] ~~DSN-authenticated set-commits and deploy endpoints buffer request.json() with no body cap~~ [RESOLVED - RA-Slice 2]
+- Status: RESOLVED (RA-Slice 2). Both endpoints route through `lib/body.readCappedJson` (10 MiB `MAX_JSON_BODY_BYTES` cap enforced before `JSON.parse`), so an oversized commits/deploy body is rejected with 413 before it is buffered-and-parsed. The per-commit message slice + array handling in `commits.ts` is unchanged (still bounded now that the whole body is capped).
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Security -- Injection, SSRF, Input Safety
 - Location: `apps/backend/convex/commits.ts:61`, `apps/backend/convex/usage.ts:245`
 - Evidence: uploadCommits (commits.ts:61) and recordDeployHttp (usage.ts:245) both call `await request.json()` directly with no Content-Length pre-check and no post-parse size guard, unlike ingest.ts (124-148) and sourcemaps.ts (57-71) which both apply MAX_REQUEST_BODY_BYTES before/after buffering. commits.ts only slices the per-commit message to 1000 chars AFTER the full body is parsed in memory (commits.ts:73), and there is no cap on commits.length, so a single request can force a large JSON parse + array allocation. Both endpoints are DSN-key authenticated via resolveDsnRequest, so this is not anonymous.

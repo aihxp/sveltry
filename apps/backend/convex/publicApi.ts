@@ -5,6 +5,7 @@ import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery } from './_generated/server';
 import { issueStatusValidator } from './schema';
 import type { Doc } from './_generated/dataModel';
+import { readCappedJson } from './lib/body';
 import { applyIssueStatusTransition } from './lib/issueStatus';
 
 // ---------------------------------------------------------------------------
@@ -557,12 +558,9 @@ export const apiV1 = httpAction(async (ctx, request) => {
     parts[2] === 'assign'
   ) {
     if (resolved.scope !== 'write') return json({ error: 'token is read-only' }, 403, cors);
-    let body: { assigneeId?: unknown };
-    try {
-      body = await request.json();
-    } catch {
-      return json({ error: 'invalid body' }, 400, cors);
-    }
+    const parsed = await readCappedJson(request);
+    if (!parsed.ok) return json({ error: parsed.reason }, parsed.status, cors);
+    const body = parsed.json as { assigneeId?: unknown };
     const assigneeId = body.assigneeId;
     if (assigneeId !== null && typeof assigneeId !== 'string') {
       return json({ error: 'assigneeId must be a string or null' }, 400, cors);

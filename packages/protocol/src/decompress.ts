@@ -20,6 +20,14 @@ export const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024; // 200 MiB, per the env
  */
 export const MAX_REQUEST_BODY_BYTES = MAX_DECOMPRESSED_BYTES;
 
+/**
+ * Cap for the small-JSON DSN/org-token endpoints (set-commits, deploys, public
+ * API writes). These carry a commit list / a deploy record / a triage request,
+ * all KB-scale; 10 MiB is generous while bounding an unbounded `request.json()`
+ * buffer-and-parse DoS on these secondary endpoints.
+ */
+export const MAX_JSON_BODY_BYTES = 10 * 1024 * 1024;
+
 export class DecodeError extends Error {
   constructor(
     message: string,

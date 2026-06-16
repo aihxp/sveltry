@@ -11,6 +11,7 @@ import type { SentryEventPayload, SentryException, SentryStackFrame } from '@sve
 import { internal } from './_generated/api';
 import { httpAction, internalMutation, internalQuery, query } from './_generated/server';
 import { requireOrg } from './lib/auth';
+import { readCappedJson } from './lib/body';
 import { resolveDsnRequest } from './lib/dsnAuth';
 
 // ---------------------------------------------------------------------------
@@ -57,12 +58,9 @@ export const uploadCommits = httpAction(async (ctx, request) => {
   if (!auth.ok) return auth.response;
   const resolved = auth.resolved;
 
-  let body: { release?: string; commits?: UploadCommit[] };
-  try {
-    body = await request.json();
-  } catch {
-    return ingestError(400, 'invalid JSON body', [], cors);
-  }
+  const parsed = await readCappedJson(request);
+  if (!parsed.ok) return ingestError(parsed.status, parsed.reason, [], cors);
+  const body = parsed.json as { release?: string; commits?: UploadCommit[] };
   if (!body.release) return ingestError(400, 'missing release', [], cors);
   if (!Array.isArray(body.commits)) return ingestError(400, 'missing commits array', [], cors);
 
