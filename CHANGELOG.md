@@ -6,6 +6,14 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency cleanup.** Removed dead dependencies that nothing imported (`pg`, `jose` left over
+  from the pre-Convex auth migration; `convex-helpers`; `@tanstack/table-core`; and the dashboard's
+  `zod`), pinned `@types/bun` to a concrete version instead of `latest`, and forced the transitive
+  `cookie` dependency to `^0.7.2` (via an override) to clear the known-vulnerable `cookie@0.6.0` that
+  the latest `@sveltejs/kit` still pins.
+
 ### Fixed
 
 - **Ingest is now idempotent on an SDK retry.** Usage accounting counted every event

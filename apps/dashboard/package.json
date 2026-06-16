@@ -17,7 +17,6 @@
     "@lucide/svelte": "catalog:",
     "@mmailaender/convex-better-auth-svelte": "0.8.0",
     "@sveltry/types": "workspace:*",
-    "@tanstack/table-core": "catalog:",
     "better-auth": "catalog:",
     "bits-ui": "catalog:",
     "clsx": "catalog:",
@@ -39,7 +38,6 @@
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:",
-    "zod": "catalog:"
+    "vite": "catalog:"
   }
 }
