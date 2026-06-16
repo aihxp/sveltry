@@ -1,5 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { scrubPayload } from '../src/scrub.js';
+import { scrubPayload, scrubString } from '../src/scrub.js';
+
+describe('scrubString (free-text redaction, e.g. feedback messages)', () => {
+  test('redacts embedded credit cards, SSNs, and bearer tokens', () => {
+    expect(scrubString('card 4111 1111 1111 1111 here')).not.toContain('4111');
+    expect(scrubString('ssn 123-45-6789')).not.toContain('123-45-6789');
+    expect(scrubString('Authorization: Bearer abc.def.ghi')).toContain('[Filtered]');
+  });
+  test('leaves ordinary text untouched', () => {
+    expect(scrubString('the button is broken on mobile')).toBe('the button is broken on mobile');
+  });
+});
 
 describe('scrubPayload - default ruleset (back-compat)', () => {
   test('redacts values under sensitive key names', () => {

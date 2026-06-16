@@ -1,9 +1,12 @@
 import type { QueryCtx } from '../_generated/server';
 
 /**
- * The verified identity Sveltry expects from a Better Auth JWT. `subject` is the
- * user id; `activeOrganizationId` is a custom claim set via Better Auth's
- * `jwt.definePayload`, which Convex forwards on the identity object.
+ * The active-org identity Sveltry resolves for a request. `subject` is the user
+ * id (from the verified Better Auth JWT) and `activeOrganizationId` is resolved
+ * by {@link resolveActiveOrg} from Convex (`userSettings`), NOT read directly off
+ * the JWT: the current Better Auth setup does not put the active org in the token.
+ * The optional `activeOrganizationId` / `org` JWT claims below are only a legacy
+ * fallback for an older provider (see {@link resolveActiveOrg}).
  */
 export interface SveltryIdentity {
   subject: string;
@@ -55,13 +58,20 @@ export async function resolveActiveOrg(
       .withIndex('by_org_user', (q) => q.eq('organizationId', active).eq('userId', userId))
       .first();
     if (member) return active;
-    // Allow an org that has no role rows yet (self-hosted bootstrap, see roleFor);
-    // only treat the pointer as stale when the org has members the caller is not in.
+    // Allow an org that has no role rows yet (self-hosted bootstrap, see roleFor),
+    // but ONLY for the user who created it -- otherwise a stale pointer to a
+    // member-less org would resolve to an org the caller has no relationship to.
     const anyMember = await ctx.db
       .query('memberRoles')
       .withIndex('by_org', (q) => q.eq('organizationId', active))
       .first();
-    if (!anyMember) return active;
+    if (!anyMember) {
+      const org = await ctx.db
+        .query('organizations')
+        .withIndex('by_slug', (q) => q.eq('slug', active))
+        .first();
+      if (org?.createdBy === userId) return active;
+    }
   }
 
   if (jwtClaim) return jwtClaim;

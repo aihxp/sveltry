@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { authClient } from '$lib/auth-client';
+  import { safeRedirectPath } from '$lib/utils';
   import AuthShell from '$lib/components/AuthShell.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -30,7 +31,7 @@
     }
     // Invitees come in with ?redirectTo=/invite/<token> and accept there instead
     // of creating a new org.
-    await goto(page.url.searchParams.get('redirectTo') ?? '/onboarding');
+    await goto(safeRedirectPath(page.url.searchParams.get('redirectTo'), '/onboarding'));
   }
 </script>
 

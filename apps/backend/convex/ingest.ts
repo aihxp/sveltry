@@ -24,6 +24,7 @@ import {
   rateLimited,
   requestOrigin,
   scrubPayload,
+  scrubString,
   splitReplayRecording,
   corsHeaders,
 } from '@sveltry/protocol';
@@ -489,7 +490,7 @@ export const ingest = httpAction(async (ctx, request) => {
       eventId: r.event_id,
       name: r.name,
       email: r.email,
-      message: r.comments,
+      message: resolved.scrubPii ? scrubString(r.comments) : r.comments,
     });
   }
   for (const f of feedbacks) {
@@ -505,7 +506,10 @@ export const ingest = httpAction(async (ctx, request) => {
       eventId: f.event_id,
       name: fb.name,
       email: fb.contact_email,
-      message: fb.message,
+      // When PII scrubbing is on, redact embedded secrets (cards/SSNs/tokens)
+      // from the free-text message, consistent with event scrubbing. The
+      // submitter's own name/email are intentional contact info and kept.
+      message: resolved.scrubPii ? scrubString(fb.message) : fb.message,
     });
   }
 

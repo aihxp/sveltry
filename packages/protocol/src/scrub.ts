@@ -66,7 +66,10 @@ function keyIsSensitive(key: string, c: CompiledScrub): boolean {
   return false;
 }
 
-function scrubString(value: string): string {
+/** Redact embedded secrets (credit cards, SSNs, bearer tokens) from a free-text
+ * string. Exported so non-event free text (e.g. a user-feedback message) can be
+ * scrubbed consistently with event payloads when a project enables PII scrubbing. */
+export function scrubString(value: string): string {
   return value
     .replace(CREDIT_CARD, REDACTED)
     .replace(SSN, REDACTED)
