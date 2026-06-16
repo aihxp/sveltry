@@ -86,7 +86,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verification: Adversarially verified; holds at High and was understated. webhooks and webhookDeliveries (schema.ts:781-811, both carry projectId + organizationId) appear in NEITHER purgeProjectData NOR restampProjectOrg, so deleting a project orphans rows including the plaintext webhook secret, and transferring a project leaves those rows stamped with the old organizationId (a live cross-tenant isolation residue). The retention sweep prunes only events.
 - Related: Ties to the org-id naming in QUAL-004; both stem from the per-table tenant key being threaded manually.
 
-### [DOC-001] ARCHITECTURE.md is systematically stale: six claims contradict the code and the sibling docs
+### [DOC-001] ~~ARCHITECTURE.md is systematically stale: six claims contradict the code and the sibling docs~~ [RESOLVED - Slice 6]
+- Status: RESOLVED (Slice 6). Rewrote all six: the protocol test-count line is now drift-proof, the decompression description says fflate (not DecompressionStream), the table list reflects ~45 tables and points at the registry, alerting lists all seven channels + SMTP-wired email + safeFetch egress, the cron section lists all eight crons, and the "only event persisted" / "analytics ceiling" bullets now reflect that all item types and the performance/replay/Discover tiers ship.
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: Documentation & Drift
 - Location: `docs/ARCHITECTURE.md:28`, `docs/ARCHITECTURE.md:105-106`, `docs/ARCHITECTURE.md:189-192`, `docs/ARCHITECTURE.md:198-199`, `docs/ARCHITECTURE.md:225-236`, `docs/ARCHITECTURE.md:40`, `docs/ARCHITECTURE.md:239`
 - Evidence: ARCHITECTURE.md was written for the 0.1.0 vertical slice and never updated to 0.9.0, so it now actively misdescribes the system. (1) Line 28 claims protocol has '45 passing bun tests'; actual count is 169 across 23 files. (2) Lines 105-106 present a 9-table list ('Tables: organizations, projects, projectKeys, issues, events, releases, alertRules, alertDeliveries, ingestWindows') as the schema; schema.ts defines 44 tables (transactions, sessions, replays, profiles, checkIns, monitors, apiTokens, webhooks, teams, etc. all absent). (3) Lines 189-192 state 'Email is not yet wired: with no SMTP transport it is a logged no-op... SMTP is on the Next horizon'; email is fully wired (email.ts uses nodemailer, alerts.ts:247-249 calls internal.email.sendEmail) and FEATURE_PARITY/ROADMAP mark it Done. (4) Lines 198-199 list only 2 crons (sweepRetention, sweepOngoing); crons.ts defines 9 (uptime checks, metric alerts, missed check-ins, transaction rollup, usage alerts, rate-limit prune). (5) Lines 225-236 (the 'known limitations') claim 'Only the event item type is parsed and persisted' and that transaction/session/replay/profile/check_in/etc 'return HTTP 200... but are not yet persisted', and that performance/replay/dashboards 'depend on adding a dedicated analytics store' on the Later horizon; ingest.ts:306-459 persists all of these and FEATURE_PARITY marks them Done. (6) Line 40 and line 239 say the protocol decompresses 'via DecompressionStream'; decompress.ts:3-9 explicitly uses fflate precisely because DecompressionStream is absent from the Convex isolate.
@@ -197,7 +198,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After extraction, the page file is a short composition shell and each settings concern lives in a sub-200-line component; build + check still pass.
 - Related: Same monolithic-page tendency appears at lower magnitude in issues/[id]/+page.svelte (506) and settings/+page.svelte (428).
 
-### [QUAL-003] Schema docblock contradicts itself and the actual Convex-only architecture
+### [QUAL-003] ~~Schema docblock contradicts itself and the actual Convex-only architecture~~ [RESOLVED - Slice 6]
+- Status: RESOLVED (Slice 6). The schema docblock and the teams-table comment no longer claim identity/orgs live in "Better Auth's Postgres"; they state auth runs on the Convex Better Auth component and Postgres is only Convex's own storage engine.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Code Quality & Maintainability
 - Location: `apps/backend/convex/schema.ts:130-139`
 - Evidence: The top-level schema docblock (schema.ts:131-133) states 'Identity (users/sessions/orgs) lives in Postgres via Better Auth' and that organizationId is 'the Better Auth org id'. Six lines below, the inline comment (schema.ts:136-139) states the opposite: 'The Convex-native source of truth: slug is the tenant key used as organizationId ... now authoritative so the org model lives entirely in Convex.' The codebase confirms the latter: no `from 'pg'` import anywhere, and an `organizations` Convex table is defined right there.
@@ -206,7 +208,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: Re-read schema.ts:130-139 and confirm the docblock and inline comment agree and both say Convex-native.
 - Related: Reinforced by the dead pg/jose deps in QUAL-006 and the org-slug naming in QUAL-004.
 
-### [DOC-002] README 'Convex (backed by Postgres)' framing reads as 'the app runs on Postgres' to a single-fetch reader
+### [DOC-002] ~~README 'Convex (backed by Postgres)' framing reads as 'the app runs on Postgres' to a single-fetch reader~~ [RESOLVED - Slice 6]
+- Status: RESOLVED (Slice 6). The README feature bullet now states the app runs entirely on self-hosted Convex, which uses Postgres only as its own internal storage engine, and that the application never talks to Postgres directly.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `README.md:34`, `README.md:51`, `README.md:73`, `README.md:94`, `README.md:120`
 - Evidence: The README repeatedly couples Convex and Postgres without the qualifier the deeper docs are careful to add. Line 34: 'open-source Convex (backed by Postgres) and a SvelteKit app'. The how-it-works ASCII diagram line 51 labels the data store box 'Convex (backed by Postgres)'. Line 73 'with its Postgres store', line 94 'the Convex Postgres store', and the tech-stack table line 120 'PostgreSQL 17 (storage for the self-hosted Convex backend)'. Only the tech-stack table makes the 'only Convex's own store' relationship explicit; the prose and the diagram do not, and the README never states the Sveltry app itself does not connect to Postgres. ARCHITECTURE.md section 7 and SELF_HOSTING.md both state this clearly ('The Sveltry app does not connect to Postgres directly'), but a README-only reader never sees it. The orientation notes an external reviewer reading only the README wrongly concluded the app runs on Postgres; this phrasing is the cause.
@@ -428,7 +431,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After any rrweb-player bump, `grep -nE '"fflate@|/fflate' bun.lock` ideally collapses to a single modern version; otherwise confirm the 0.4.8 copy stays confined to the lazily-loaded replay chunk.
 - Related: none
 
-### [DOC-003] SENTRY_COMPATIBILITY.md marks client_report 'not yet persisted' but ingest aggregates it into usage; contradicts FEATURE_PARITY
+### [DOC-003] ~~SENTRY_COMPATIBILITY.md marks client_report 'not yet persisted' but ingest aggregates it into usage; contradicts FEATURE_PARITY~~ [RESOLVED - Slice 6]
+- Status: RESOLVED (Slice 6). The compatibility table now says `client_report` is accepted and its discarded-event counts are folded into usage accounting.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `docs/SENTRY_COMPATIBILITY.md:149`, `docs/SENTRY_COMPATIBILITY.md:152-153`
 - Evidence: The envelope item-type table line 149 lists 'client_report | Accepted (200), not yet persisted', and lines 152-153 define that phrase as 'no aggregation, storage, or UI surface exists for that item type yet'. But ingest.ts:473-475 reads each client_report's discarded_events quantities and folds them into the project's usage 'dropped' counter via internal.usage.recordUsage. FEATURE_PARITY.md:68 correctly marks client_report Done: 'SDK-dropped-event counts are accumulated into the project usage totals.' So there IS aggregation, contradicting this doc's own definition.
@@ -446,7 +450,8 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 - Verify the fix: After removal, run bun install and bun run build across workspaces; grep -rn "from 'pg'\|from 'jose'" apps packages stays empty, confirming nothing depended on the catalog entries.
 - Related: none
 
-### [DOC-005] README quick-start comment claims setup.sh runs a 'migrate' step that does not exist
+### [DOC-005] ~~README quick-start comment claims setup.sh runs a 'migrate' step that does not exist~~ [RESOLVED - Slice 6]
+- Status: RESOLVED (Slice 6). The quick-start comment now reads "secrets, Postgres + Convex, deploy functions" (no phantom migrate step).
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Documentation & Drift
 - Location: `README.md:69`
 - Evidence: README.md:69 annotates the quick-start command as './scripts/setup.sh        # secrets, Postgres + Convex, deploy, migrate'. setup.sh has no migration step: grep for 'migrat'/'schema' in scripts/setup.sh returns nothing, and both SELF_HOSTING.md:66-69 and the script itself state auth tables are created by the Convex schema push with 'no separate schema-migration step'. The word 'migrate' is a leftover from the old Better-Auth-on-Postgres flow that did have a migration.
@@ -598,7 +603,7 @@ Sorted by severity, then dimension. Each block is self-contained. Finding IDs ar
 
 ## Remediation plan
 
-- **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), ~~`QUAL-001`~~ (done, Slice 4), `DOC-001`.
+- **Quick wins** (High, Confirmed, S): ~~`SEC-inject-001`~~ (done, Slice 1), ~~`QUAL-001`~~ (done, Slice 4), ~~`DOC-001`~~ (done, Slice 6).
 - **Plan now** (High, M or L), suggested order: ~~`SEC-inject-002`~~ (done, Slice 2), ~~`ERR-001`~~ (done, Slice 3), ~~`OBS-002`~~ (done, Slice 3), ~~`ERR-002`~~ (done, Slice 5), `TEST-001`.
 - **Verify first** (Suspected / assumption-dependent): `DEP-001` (confirm the transitive `cookie` version and advisory applicability with the ecosystem audit tool, and that a Kit patch bump clears it).
 - **Backlog** (Low, or Medium not on the critical path): `SEC-authz-001`, `SEC-authz-002`, `SEC-authz-003`, `SEC-secrets-002`, `SEC-secrets-003`, `SEC-secrets-004`, `SEC-inject-003`, `ARC-001`, `ARC-002`, `ARC-003`, `QUAL-002`, `QUAL-003`, `QUAL-004`, `QUAL-005`, `QUAL-006`, `QUAL-007`, `QUAL-008`, `TEST-002`, `TEST-003`, `TEST-004`, `TEST-005`, `ERR-003`, `ERR-004`, `ERR-005`, `ERR-006`, `ERR-007`, `PERF-001`, `PERF-002`, `PERF-003`, `PERF-004`, `PERF-005`, `DEP-002`, `DEP-003`, `DEP-004`, `DEP-005`, `DEP-006`, `DOC-002`, `DOC-003`, `DOC-004`, `DOC-005`, ~~`OBS-003`~~ (done, Slice 3), ~~`OBS-004`~~ (done, Slice 3), `OBS-005`, `OBS-006`. (~~`ERR-005`~~ done, Slice 1.)

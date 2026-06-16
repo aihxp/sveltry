@@ -128,9 +128,12 @@ export const alertChannelValidator = v.object({
 });
 
 /**
- * The Sveltry event-domain schema. Identity (users/sessions/orgs) lives in
- * Postgres via Better Auth; this database holds projects, DSN keys, and the
- * issue/event data, all scoped by `organizationId` (the Better Auth org id).
+ * The Sveltry event-domain schema. Everything runs on Convex: identity
+ * (users/sessions/jwks) is provided by the `@convex-dev/better-auth` component
+ * and organizations are modeled natively here. This schema holds the domain
+ * data (projects, DSN keys, issues/events, and the rest), all scoped by
+ * `organizationId` (the org `slug`). The only Postgres in the system is the
+ * self-hosted Convex backend's own internal storage engine.
  */
 export default defineSchema({
   // Organizations (tenants). The Convex-native source of truth: `slug` is the
@@ -283,8 +286,8 @@ export default defineSchema({
     .index('by_org_email', ['organizationId', 'email']),
 
   // Teams group an org's members and own a subset of its projects (Sentry's teams).
-  // Modeled in Convex (alongside projects and all other data) rather than in Better
-  // Auth's Postgres, so project/team access logic lives in one place.
+  // Modeled natively in Convex alongside projects and all other data, so project
+  // and team access logic lives in one place.
   teams: defineTable({
     organizationId: v.string(),
     name: v.string(),

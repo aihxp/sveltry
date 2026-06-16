@@ -25,7 +25,9 @@ apps/
 packages/
   protocol/    @sveltry/protocol: the pure wire-protocol core. DSN parse, envelope
                parser, auth extract, decompress, normalize, fingerprint (SHA-1),
-               id generation, rate limit, HTTP responses. 45 passing bun tests.
+               source-map symbolication helpers, SSRF guard, PII scrub, id
+               generation, rate limit, HTTP responses. A per-module bun test
+               suite (one test file per source module).
   types/       @sveltry/types: shared Sentry payload + domain types.
   sdk/         @aihxp/sveltry-sdk: helpers that point Sentry SDKs at Sveltry
                (DSN builder, recommendedSentryOptions, createTunnelHandler).
@@ -37,7 +39,8 @@ scripts/       setup.sh, the one-command local bring-up.
 ```
 
 The split that matters most: `packages/protocol` is deliberately free of Convex, SvelteKit, and
-Node specifics. It is plain TypeScript over web-standard APIs (`DecompressionStream`, `crypto`),
+Node specifics. It is plain TypeScript over web-standard `crypto` plus the pure-JS `fflate`
+decompressor (chosen because `DecompressionStream` is absent from the self-hosted Convex isolate),
 so it is unit-testable in isolation and reusable from any runtime. The Convex ingest action is a
 thin host that wires that core to storage.
 
@@ -102,8 +105,12 @@ The defining decision is the Issue versus Event split, the same model Sentry use
   contexts, request, user) is stored verbatim in a `payload` blob field, plus a small indexed `tags`
   field for filtering.
 
-Tables (`apps/backend/convex/schema.ts`): `organizations`, `projects`, `projectKeys`, `issues`,
-`events`, `releases`, `alertRules`, `alertDeliveries`, `ingestWindows`. Key indexes:
+Tables (`apps/backend/convex/schema.ts`): the schema has grown well past the original error-tracking
+core to around 45 tables spanning issues/events, performance (transactions, rollups), release health
+(sessions, buckets), replays, profiles, cron + uptime monitors, alerting (rules, metric/usage alerts,
+delivery logs), webhooks, source-map artifacts, API tokens, teams, saved views, dashboards, and usage
+accounting. The project-scoped subset is enumerated and schema-checked in
+`apps/backend/convex/lib/tenantTables.ts`. The load-bearing core and its key indexes:
 
 - `issues.by_project_fingerprint` `[projectId, fingerprint]` - the upsert key on every ingest. This
   is the hottest lookup in the system, so it is the primary issue index.
@@ -184,19 +191,27 @@ ingest.
 
 **Alerting.** `alertRules` are configured per project. A rule has a `trigger`
 (`new_issue` | `regression` | `event_frequency`), an optional `threshold` and `minLevel`, and one or
-more channels (`webhook` | `discord` | `slack` | `email`). When `recordEvent` finishes, it schedules
-the `alerts.dispatchForEvent` internal action. That action loads the project's enabled rules, decides
-whether each one fires for this event, and delivers via `fetch` to webhook / Discord / Slack. Email
-is not yet wired: with no SMTP transport it is a logged no-op, recorded as undelivered. Every attempt
-is written to `alertDeliveries` for an audit trail. SMTP is on the Next horizon in
-[ROADMAP.md](./ROADMAP.md).
+more channels (`webhook` | `slack` | `discord` | `email` | `msteams` | `pagerduty` | `opsgenie`).
+When `recordEvent` finishes, it schedules the `alerts.dispatchForEvent` internal action. That action
+loads the project's enabled rules, decides whether each one fires for this event, and delivers
+through `safeFetch` (the SSRF-guarded egress chokepoint). Email is fully wired: it runs in a Node
+action over SMTP (`nodemailer`). Every attempt is written to `alertDeliveries` for an audit trail.
+Cron-driven alerts (metric and quota/usage) record their outcomes to `notificationDeliveries`, which
+the dashboard surfaces. Separately, threshold/metric alerts, quota-usage alerts, and outbound
+webhooks each have their own evaluation/delivery paths.
 
-**Crons** (`apps/backend/convex/crons.ts`), each bounded per run so a single invocation cannot run
-unbounded:
+**Crons** (`apps/backend/convex/crons.ts`), eight jobs, each bounded per run so a single invocation
+cannot run unbounded:
 
-- `sweepRetention` (daily) prunes events older than each project's configured retention.
-- `sweepOngoing` (hourly) ages `new` issues older than 7 days to `ongoing`, so triage state reflects
-  reality without manual upkeep.
+- `sweepRetention` (daily) prunes `events`, `transactions`, and `sessions` older than each project's
+  configured retention.
+- `sweepOngoing` (hourly) ages `new` issues older than 7 days to `ongoing`.
+- `rollupTransactions` (hourly) recomputes transaction-latency histograms for the trend view.
+- `sweepRateLimitWindows` (daily) drops rolled-over ingest rate-limit windows.
+- `runUptimeChecks` (every minute) probes due HTTP uptime monitors through `safeFetch`.
+- `evaluateMetricAlerts` (every 5 minutes) evaluates latency / error-rate / crash-free alerts.
+- `detectMissedCheckIns` (every 5 minutes) flags cron monitors that missed their window.
+- `evaluateUsageAlerts` (hourly) fires when a project nears its monthly quota.
 
 ## 7. Why Postgres backs only the Convex backend
 
@@ -222,22 +237,24 @@ Convex appends the derived name itself. See [SELF_HOSTING.md](./SELF_HOSTING.md)
   more resources, plus optional S3 / R2 blob offload via the `S3_BUCKET` env vars (see
   [SELF_HOSTING.md](./SELF_HOSTING.md)).
 
-- **Accepted-but-not-stored envelope items.** Only the `event` item type is parsed and persisted.
-  `transaction`, `session` / `sessions`, `attachment`, `replay_*`, `profile`, `check_in`,
-  `client_report`, and `feedback` items return HTTP 200 (so SDKs do not back off or retry) but are
-  not yet persisted or aggregated. See [SENTRY_COMPATIBILITY.md](./SENTRY_COMPATIBILITY.md).
+- **Envelope item coverage.** All the common item types are now parsed and persisted, not just
+  `event`: `transaction` (performance + traces), `session` / `sessions` (release health),
+  `attachment`, `replay_event` / `replay_recording`, `profile`, `check_in`, and `feedback`.
+  `client_report` is accepted and its discarded-event counts are folded into usage accounting. See
+  [SENTRY_COMPATIBILITY.md](./SENTRY_COMPATIBILITY.md) for the per-type table.
 
-- **The analytics tier is the real ceiling.** Convex over Postgres is excellent for the
+- **Analytics precision is the real ceiling.** Convex over Postgres is excellent for the
   document-and-index workload that error tracking is (upsert an issue, insert an event, subscribe to
-  a filtered list). It is not a columnar or time-series engine, so percentile aggregates over
-  arbitrary windows are out of reach today. The Later horizon in [ROADMAP.md](./ROADMAP.md), namely
-  performance / tracing, Discover-style dashboards, metric alerts, and session replay, depends on
-  adding a dedicated analytics store. The `session` / `sessions` items already accepted at ingest are
-  the seam where release-health aggregation will plug in once that tier exists.
+  a filtered list), and performance monitoring, distributed tracing, Discover, custom dashboards,
+  metric alerts, and session replay all ship on top of it (with cron-built histogram rollups for
+  percentiles). What remains out of reach without a dedicated columnar/time-series tier is the
+  highest-resolution tail accuracy (p99.9 and tighter) over arbitrary windows; that is the Later
+  horizon in [ROADMAP.md](./ROADMAP.md).
 
-- **Compression.** Only `gzip` and `deflate` request bodies are decompressed (via
-  `DecompressionStream`); `br` and `zstd` return 400. This matches what mainstream JS SDKs send and
-  avoids pulling in extra native codecs.
+- **Compression.** Only `gzip` and `deflate` request bodies are decompressed (via the pure-JS
+  `fflate`, since `DecompressionStream` is absent from the Convex isolate); `br` and `zstd` return
+  400. Decompression is streamed with an incremental size cap so a decompression bomb cannot exhaust
+  memory, and oversized request bodies are rejected with `413`.
 
 For anything in the Next or Later horizons, the existing tables and the protocol package are designed
 to be extended rather than replaced: new envelope item types parse into the same normalize step, new
