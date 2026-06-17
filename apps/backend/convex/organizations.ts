@@ -135,6 +135,62 @@ export const listMembers = query({
   },
 });
 
+/**
+ * First-run progress for the Overview's setup checklist: whether the active org
+ * has a project and has received any event, plus whether this user dismissed the
+ * checklist. Reactive, so the steps tick off live as the user creates a project
+ * and sends a first event.
+ */
+export const onboardingStatus = query({
+  args: {},
+  returns: v.object({
+    hasProject: v.boolean(),
+    hasEvent: v.boolean(),
+    dismissed: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const { subject, activeOrganizationId } = await requireOrg(ctx);
+    const project = await ctx.db
+      .query('projects')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .first();
+    const event = await ctx.db
+      .query('events')
+      .withIndex('by_org', (q) => q.eq('organizationId', activeOrganizationId))
+      .first();
+    const settings = await ctx.db
+      .query('userSettings')
+      .withIndex('by_user', (q) => q.eq('userId', subject))
+      .first();
+    return {
+      hasProject: project !== null,
+      hasEvent: event !== null,
+      dismissed: settings?.onboardingDismissed ?? false,
+    };
+  },
+});
+
+/** Permanently hide the first-run setup checklist for the caller. */
+export const dismissOnboarding = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { subject, activeOrganizationId } = await requireOrg(ctx);
+    const existing = await ctx.db
+      .query('userSettings')
+      .withIndex('by_user', (q) => q.eq('userId', subject))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { onboardingDismissed: true });
+    } else {
+      await ctx.db.insert('userSettings', {
+        userId: subject,
+        activeOrganizationId,
+        onboardingDismissed: true,
+      });
+    }
+  },
+});
+
 /** Upsert the per-user active-org pointer. */
 async function setActive(ctx: MutationCtx, userId: string, organizationId: string): Promise<void> {
   const existing = await ctx.db

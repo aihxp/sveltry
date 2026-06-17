@@ -170,6 +170,8 @@ export default defineSchema({
   userSettings: defineTable({
     userId: v.string(),
     activeOrganizationId: v.optional(v.string()),
+    /** Whether the user dismissed the first-run setup checklist on the Overview. */
+    onboardingDismissed: v.optional(v.boolean()),
   }).index('by_user', ['userId']),
 
   projects: defineTable({

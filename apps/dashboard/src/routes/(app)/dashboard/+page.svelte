@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import IssueRow from '$lib/components/IssueRow.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
+  import SetupChecklist from '$lib/components/SetupChecklist.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
 
   const auth = useAuth();
@@ -36,6 +37,9 @@
     </div>
     <Button href="/issues">View all issues</Button>
   </div>
+
+  <!-- First-run guide: self-hides once a project exists and a first event lands, or on dismiss. -->
+  <SetupChecklist />
 
   <div class="grid grid-cols-3 gap-4">
     {#each cards as c (c.label)}
