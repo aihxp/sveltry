@@ -71,7 +71,7 @@ defaults are kept so this score is comparable to a re-run.
 2. `[JRN-001]` No navigation on mobile / narrow viewports - High, M - the sidebar is hidden below `md` with no menu to replace it, so a phone user cannot reach most of the app. [RESOLVED - UX-Slice 3]
 3. `[USE-002]` No success feedback after any mutation - Medium, M - saves, creates, and deletes succeed silently, so the user cannot tell an action worked. [RESOLVED - UX-Slice 1]
 4. `[CNT-001]` Raw `error.toString()` strings shown to users on load failures - Medium, S - list views render technical error text instead of a human, recoverable message. [RESOLVED - UX-Slice 4]
-5. `[FRM-001]` Search inputs are placeholder-only (no accessible label) - Medium, S - the label vanishes on input and is an unreliable accessible name for screen readers.
+5. `[FRM-001]` Search inputs are placeholder-only (no accessible label) - Medium, S - the label vanishes on input and is an unreliable accessible name for screen readers. [RESOLVED - UX-Slice 5]
 
 ## Strengths (preserve these)
 
@@ -168,7 +168,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Force a query error (e.g. disconnect the backend) and confirm the view shows a plain message + Retry, with no raw object string in the DOM.
 - Related: systemic "Technical strings surface where human copy belongs."
 
-### [FRM-001] Search inputs are placeholder-only (no accessible label)
+### [FRM-001] Search inputs are placeholder-only (no accessible label) [RESOLVED - UX-Slice 5]
+- Resolution: Added `aria-label` to both placeholder-only search inputs, "Search issues by title" (`issues/+page.svelte`) and "Search issues to merge" (`issues/[id]/+page.svelte`); the `Input` component forwards it to the underlying `<input>`. Verified at runtime that the search input's accessible name is "Search issues by title".
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Forms and Input
 - Location: `issues/+page.svelte:99` (`<Input ... placeholder="Search issues by title…" />`), `issues/[id]/+page.svelte:434` (the merge-search input).
 - Evidence: These inputs carry a `placeholder` but no visible `<Label>` and no `aria-label`. Placeholder-as-label disappears the moment the user types, and a placeholder is not a reliable accessible name for assistive tech (Baymard; WCAG label-in-name).
@@ -177,7 +178,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Inspect the input's accessible name in the a11y tree (it should be "Search issues," not empty); confirm with a screen reader that the field is announced.
 - Related: none.
 
-### [ACC-001] No `prefers-reduced-motion` handling for the live/pulse animations
+### [ACC-001] No `prefers-reduced-motion` handling for the live/pulse animations [RESOLVED - UX-Slice 5]
+- Resolution: Added a global `@media (prefers-reduced-motion: reduce)` block to `apps/dashboard/src/app.css` that collapses animation and transition durations (and disables looping) so the live/pulse dots, spinners, and skeleton shimmer stop moving for users who request reduced motion. New motion added in earlier slices (toast entrance, mobile drawer) was already built motion-reduce-aware or transition-free. Verified the rule is present in the served stylesheet.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Accessibility and Inclusive Design
 - Location: 6 `animate-pulse` usages (e.g. the "live" indicator dot on the Overview/landing, skeleton loaders); no `motion-reduce:` utility or `prefers-reduced-motion` media query anywhere in `apps/dashboard/src`.
 - Evidence: Animations are unconditional. `animate-pulse` is a gentle opacity loop (not a vestibular-trigger like parallax or large transl/scale), so the risk is mild, but inclusive-design guidance is to honor the OS reduced-motion setting.
@@ -186,7 +188,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Enable "reduce motion" in the OS and confirm the live dot and spinners stop animating.
 - Related: none.
 
-### [USE-003] Native `<details>` dropdowns do not close on outside-click or Escape
+### [USE-003] Native `<details>` dropdowns do not close on outside-click or Escape [RESOLVED - UX-Slice 5]
+- Resolution: Added a window `pointerdown` handler that closes either header `<details>` (Help, user menu) when the click lands outside it, extended the existing key handler so Escape closes an open menu, and `afterNavigate` now also closes them. Verified at runtime: each menu opens, then closes on an outside click and on Escape.
 - Severity: Low | Confidence: Confirmed | Effort: S | Dimension: Usability and Heuristics
 - Location: `(app)/+layout.svelte` (the Help `<details>` and the user-avatar `<details>`).
 - Evidence: The header menus are native `<details>/<summary>`. A native `<details>` only toggles via its summary, it does not close when the user clicks elsewhere or presses Escape, which are the conventions users expect of a dropdown/menu.
