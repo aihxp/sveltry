@@ -8,6 +8,7 @@
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
   import CopyButton from '$lib/components/CopyButton.svelte';
+  import { toast, errorMessage } from '$lib/toast.svelte';
   import { relativeTime } from '$lib/utils';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
 
@@ -52,6 +53,7 @@
       newWebhookSecret = res.secret;
       webhookUrl = '';
       webhookEvents = ['issue.resolved'];
+      toast.success('Webhook created');
     } catch (err) {
       webhookError = err instanceof Error ? err.message : 'Could not create webhook';
     } finally {
@@ -62,7 +64,12 @@
     await client.mutation(api.webhooks.deleteWebhook, { webhookId: id });
   }
   async function toggleWebhookEnabled(id: Id<'webhooks'>, enabled: boolean) {
-    await client.mutation(api.webhooks.setWebhookEnabled, { webhookId: id, enabled });
+    try {
+      await client.mutation(api.webhooks.setWebhookEnabled, { webhookId: id, enabled });
+      toast.success(enabled ? 'Webhook enabled' : 'Webhook disabled');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update the webhook'));
+    }
   }
 </script>
 

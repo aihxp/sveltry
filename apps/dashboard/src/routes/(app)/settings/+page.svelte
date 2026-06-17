@@ -10,6 +10,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import CopyButton from '$lib/components/CopyButton.svelte';
+  import { toast, errorMessage } from '$lib/toast.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import AlertTriangleIcon from '@lucide/svelte/icons/triangle-alert';
   import { relativeTime } from '$lib/utils';
@@ -111,6 +112,7 @@
       });
       newToken = res.token;
       tokenName = '';
+      toast.success('API token created');
     } catch (err) {
       tokenError = err instanceof Error ? err.message : 'Could not create token';
     } finally {
@@ -149,12 +151,17 @@
   }
 
   async function setRole(m: OrgMember, role: Role) {
-    await client.mutation(api.roles.setMemberRole, {
-      userId: m.userId,
-      role,
-      email: m.user?.email,
-      name: m.user?.name,
-    });
+    try {
+      await client.mutation(api.roles.setMemberRole, {
+        userId: m.userId,
+        role,
+        email: m.user?.email,
+        name: m.user?.name,
+      });
+      toast.success('Role updated');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update the role'));
+    }
   }
 
   const roleBadge: Record<Role, 'success' | 'default' | 'muted' | 'outline'> = {

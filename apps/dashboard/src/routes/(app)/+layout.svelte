@@ -7,6 +7,7 @@
   import { authRedirect } from '$lib/auth-redirect';
   import Logo from '$lib/components/Logo.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import Toaster from '$lib/components/Toaster.svelte';
   import { cn } from '$lib/utils';
   import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
   import CompassIcon from '@lucide/svelte/icons/compass';
@@ -213,3 +214,5 @@
     </main>
   </div>
 </div>
+
+<Toaster />

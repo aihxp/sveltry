@@ -12,6 +12,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { selectClass, textareaClass } from '$lib/components/ui/control-classes';
   import CopyButton from '$lib/components/CopyButton.svelte';
+  import { toast, errorMessage } from '$lib/toast.svelte';
   import { buildDsn } from '$lib/utils';
   import GitBranchIcon from '@lucide/svelte/icons/git-branch';
   // Each feature section is its own focused component; this page composes them
@@ -62,6 +63,9 @@
     try {
       const allowedOrigins = lines(originDrafts[keyId] ?? '');
       await client.mutation(api.projects.setKeyAllowedOrigins, { keyId, allowedOrigins });
+      toast.success('Allowed domains saved');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not save allowed domains'));
     } finally {
       savingOrigins = null;
     }
@@ -77,6 +81,9 @@
         projectId,
         teamId: value ? (value as Id<'teams'>) : null,
       });
+      toast.success('Project team updated');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update the team'));
     } finally {
       assigningTeam = false;
     }
@@ -127,6 +134,9 @@
         monthlyEventQuota: quota === '' ? null : Number(quota),
         spikeThresholdPerMinute: spike === '' ? null : Number(spike),
       });
+      toast.success('Settings saved');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not save settings'));
     } finally {
       savingSettings = false;
     }
@@ -173,6 +183,9 @@
           ? null
           : { ignoreErrors, ignoreReleases, ignoreEnvironments, ignorePaths, filterBots },
       });
+      toast.success('Inbound filters saved');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not save filters'));
     } finally {
       savingFilters = false;
     }
@@ -223,6 +236,7 @@
           }
         : null;
       await client.mutation(api.projects.updateProjectSettings, { projectId, repoConfig });
+      toast.success('Repository saved');
     } catch (err) {
       repoError = err instanceof Error ? err.message : 'Failed to save repository config.';
     } finally {
@@ -241,6 +255,7 @@
       repoBaseUrl = '';
       repoDefaultBranch = '';
       repoSourceRoot = '';
+      toast.success('Repository removed');
     } catch (err) {
       repoError = err instanceof Error ? err.message : 'Failed to remove repository config.';
     } finally {
