@@ -4,6 +4,51 @@ All notable changes to Sveltry are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-06-17
+
+UX-audit remediation: a pass over the dashboard's interaction feedback,
+destructive-action safety, mobile reach, error handling, and accessibility
+(tracked in `uxaudit.md`). No breaking changes.
+
+### Added
+
+- **Toast feedback on every mutation.** Saving settings, creating a project or
+  webhook, changing a role, and other writes now confirm themselves with a brief
+  toast (and surface failures as an error toast) instead of succeeding silently.
+  The toast viewport is an `aria-live` region, so messages are announced to
+  assistive technology.
+- **Confirmation before destructive actions.** Deleting or revoking a webhook,
+  API token, invitation, team, team member, alert rule, metric/usage alert,
+  uptime monitor, saved view, comment, dashboard, widget, issue-tracker
+  integration, or repository link now requires confirming in an accessible
+  dialog (focus-trapped, Escape/backdrop to cancel) rather than firing on a
+  single click. The two highest-stakes actions, deleting a team and revoking an
+  API token, require typing the name to confirm.
+- **Mobile navigation.** Below the `md` breakpoint, where the sidebar is hidden,
+  a header menu button opens the full navigation in a slide-over drawer that
+  reuses the exact same nav list as the desktop sidebar and closes on selection,
+  Escape, an outside tap, or navigation.
+- **Branded error pages.** A root and an in-app `+error.svelte` replace
+  SvelteKit's default error screen with a branded page that shows the status, a
+  plain message, and a way forward ("Back to home" / "Back to overview" and
+  "Report an issue").
+
+### Fixed
+
+- **Human-readable load errors.** The eleven views that printed a raw
+  `error.toString()` on a failed query now show a plain "couldn't load this"
+  message with a Retry action; the raw error is logged to the console for
+  developers instead of being rendered to users.
+
+### Accessibility
+
+- The issue and merge search inputs now carry an `aria-label`, so their
+  accessible name no longer disappears when the field is filled.
+- The app honors `prefers-reduced-motion`: pulse/spin/skeleton animations and
+  transitions collapse to near-instant when the OS requests reduced motion.
+- The header Help and user-menu dropdowns close on an outside click and on
+  Escape, not only when their button is clicked again.
+
 ## [0.10.0] - 2026-06-17
 
 ### Added

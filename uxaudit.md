@@ -208,7 +208,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Trigger a route error and confirm the branded error page renders with a working recovery link.
 - Related: `CNT-001`.
 
-### [PRF-001] Core Web Vitals and layout-shift not verified (runtime check needed)
+### [PRF-001] Core Web Vitals and layout-shift not verified (runtime check needed) [VERIFIED - UX-Slice 6: no structural issue found]
+- Resolution: Ran a runtime check on the live preview (Overview and the Issues live-stream page, the flagged CLS risk). Measured **CLS = 0** on both, **zero long tasks (>50ms)**, a lean DOM (~225 nodes), and **no failed network requests** (`performance` navigation/layout-shift/longtask observers + the network panel). No structural performance problem was found, and the reactive lists do not shift layout as they hydrate. Caveat: this was a development build, so absolute LCP/INP timings are not production-representative; a production Lighthouse / CrUX pass is still the definitive source for those numbers, but there is no code change to make here.
 - Severity: Low | Confidence: Suspected | Effort: S | Dimension: Performance and Responsiveness
 - Location: whole dashboard; e.g. images/media sizing, the live-updating lists.
 - Evidence: From static code the perceived-performance signals are good (reactive Convex data, 15 routes with skeleton loaders, a sane viewport). But real LCP/INP/CLS, runtime contrast, and focus order cannot be read from source; the app has no `<img>` media to mis-size (a plus), yet late-loading reactive lists could shift layout.
