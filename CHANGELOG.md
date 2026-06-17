@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **In-app Help menu.** The app shell header now has a Help (`?`) dropdown linking to the docs,
+  quickstart, Sentry SDK compatibility, the self-hosting guide, "report an issue," and the GitHub
+  repo, with the running version shown (`Sveltry vX.Y.Z`, injected at build time so it tracks
+  package.json). Press `?` anywhere (outside an input) to open it.
 - **First-run setup checklist on the Overview.** A new org sees a "Get started with Sveltry" card
   with two steps, create a project, then send your first event, that tick off live as each is done
   (driven by a reactive `onboardingStatus` query). It self-hides once both are complete and can be
