@@ -206,6 +206,71 @@ describe('transaction lean projection (PERF-001)', () => {
   });
 });
 
+describe('first-event activation check (firstEventForProject)', () => {
+  async function seedIssueAndEvent(t: ReturnType<typeof convexTest>, projectId: Id<'projects'>) {
+    return await t.run(async (ctx) => {
+      const issueId = await ctx.db.insert('issues', {
+        organizationId: 'org-a',
+        projectId,
+        fingerprint: 'fp',
+        groupingConfig: 'g',
+        title: 'boom',
+        culprit: 'c',
+        level: 'error',
+        platform: 'node',
+        status: 'unresolved',
+        substatus: 'new',
+        count: 1,
+        userCount: 0,
+        firstSeen: 0,
+        lastSeen: 0,
+      });
+      await ctx.db.insert('events', {
+        organizationId: 'org-a',
+        projectId,
+        issueId,
+        eventId: 'e1',
+        timestamp: 0,
+        receivedAt: 0,
+        level: 'error',
+        platform: 'node',
+        environment: 'production',
+        message: 'm',
+        culprit: 'c',
+        tags: {},
+        payload: {},
+      });
+      return issueId;
+    });
+  }
+
+  test('reports received=false before any event, true (with the issue) after', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+    const asMember = t.withIdentity({ subject: 'u', activeOrganizationId: 'org-a' });
+
+    const before = await asMember.query(api.projects.firstEventForProject, { projectId });
+    expect(before.received).toBe(false);
+    expect(before.issueId).toBe(null);
+
+    const issueId = await seedIssueAndEvent(t, projectId);
+    const after = await asMember.query(api.projects.firstEventForProject, { projectId });
+    expect(after.received).toBe(true);
+    expect(after.issueId).toBe(issueId);
+  });
+
+  test('is org-scoped: another org cannot see this project as activated', async () => {
+    const t = convexTest(schema, modules);
+    const { projectId } = await seed(t);
+    await seedIssueAndEvent(t, projectId);
+    // A caller in a different org gets received=false (project not found for them).
+    const asOther = t.withIdentity({ subject: 'v', activeOrganizationId: 'org-b' });
+    const res = await asOther.query(api.projects.firstEventForProject, { projectId });
+    expect(res.received).toBe(false);
+    expect(res.issueId).toBe(null);
+  });
+});
+
 describe('project lifecycle (registry-driven purge / restamp)', () => {
   // Seed one row in a representative spread of tenant tables: a hot table
   // (events), the historically-orphaned webhooks (with a secret), an issue plus

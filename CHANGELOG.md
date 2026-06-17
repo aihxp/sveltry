@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Live first-event verification.** Right after you create a project, the setup card now subscribes
+  to whether that project has received its first event and flips, with no refresh, from "Listening for
+  your first event..." to a green "First event received" the instant your SDK sends one, with a link
+  straight to the issue it created. Backed by a new reactive, org-scoped `firstEventForProject` query.
 - **Activation: platform-tailored SDK setup + a real fresh-install Overview.** Creating a project now
   uses the platform you picked to show the actual install command and init code for that SDK
   (`pip install sentry-sdk` + `sentry_sdk.init(...)` for Python, `npm install @sentry/node` for Node,
