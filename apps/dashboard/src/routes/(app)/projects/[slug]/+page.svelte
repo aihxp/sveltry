@@ -13,6 +13,7 @@
   import { selectClass, textareaClass } from '$lib/components/ui/control-classes';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import { buildDsn } from '$lib/utils';
   import GitBranchIcon from '@lucide/svelte/icons/git-branch';
   // Each feature section is its own focused component; this page composes them
@@ -245,6 +246,13 @@
   }
   async function removeRepo() {
     if (!projectId) return;
+    const ok = await confirm({
+      title: 'Remove repository link?',
+      description:
+        'Stack frames will no longer show an "open in repo" link. You can re-add the repository later.',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     repoError = '';
     savingRepo = true;
     try {

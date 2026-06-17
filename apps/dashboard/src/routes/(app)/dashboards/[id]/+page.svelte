@@ -9,6 +9,8 @@
   import { Skeleton } from '$lib/components/ui/skeleton';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import DiscoverWidget from '$lib/components/DiscoverWidget.svelte';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import PlusIcon from '@lucide/svelte/icons/plus';
 
@@ -99,8 +101,19 @@
       saving = false;
     }
   }
-  async function removeWidget(widgetId: Id<'dashboardWidgets'>) {
-    await client.mutation(api.dashboards.removeWidget, { widgetId });
+  async function removeWidget(widgetId: Id<'dashboardWidgets'>, title: string) {
+    const ok = await confirm({
+      title: 'Remove widget?',
+      description: `"${title}" will be removed from this dashboard. You can add it again later.`,
+      confirmLabel: 'Remove widget',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.dashboards.removeWidget, { widgetId });
+      toast.success('Widget removed');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not remove the widget'));
+    }
   }
 
   const selectClass =
@@ -185,7 +198,7 @@
             hours={w.hours}
             projectId={w.projectId}
             filters={w.filters}
-            onremove={() => removeWidget(w.id)}
+            onremove={() => removeWidget(w.id, w.title)}
           />
         {/each}
       </div>

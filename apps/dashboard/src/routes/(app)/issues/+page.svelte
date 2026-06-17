@@ -8,6 +8,8 @@
   import IssueRow from '$lib/components/IssueRow.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import { cn } from '$lib/utils';
   import SearchIcon from '@lucide/svelte/icons/search';
   import BookmarkIcon from '@lucide/svelte/icons/bookmark';
@@ -78,8 +80,19 @@
     }
   }
 
-  async function deleteView(viewId: Id<'savedViews'>) {
-    await client.mutation(api.savedViews.deleteSavedView, { viewId });
+  async function deleteView(viewId: Id<'savedViews'>, name: string) {
+    const ok = await confirm({
+      title: 'Delete saved view?',
+      description: `"${name}" will be removed. This cannot be undone.`,
+      confirmLabel: 'Delete view',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.savedViews.deleteSavedView, { viewId });
+      toast.success('Saved view deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the view'));
+    }
   }
 </script>
 
@@ -123,7 +136,7 @@
           <button
             class="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={`Delete view ${view.name}`}
-            onclick={() => deleteView(view._id)}
+            onclick={() => deleteView(view._id, view.name)}
           >
             <XIcon class="size-3" />
           </button>

@@ -9,6 +9,7 @@
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import UsersIcon from '@lucide/svelte/icons/users';
   import XIcon from '@lucide/svelte/icons/x';
   import BoxIcon from '@lucide/svelte/icons/box';
@@ -69,11 +70,35 @@
       toast.error(errorMessage(err, 'Could not add the member'));
     }
   }
-  async function removeMember(memberId: Id<'teamMembers'>) {
-    await client.mutation(api.teams.removeTeamMember, { memberId });
+  async function removeMember(memberId: Id<'teamMembers'>, label: string) {
+    const ok = await confirm({
+      title: 'Remove team member?',
+      description: `${label} will be removed from this team. You can add them back later.`,
+      confirmLabel: 'Remove member',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.teams.removeTeamMember, { memberId });
+      toast.success('Member removed');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not remove the member'));
+    }
   }
-  async function deleteTeam(teamId: Id<'teams'>) {
-    await client.mutation(api.teams.deleteTeam, { teamId });
+  async function deleteTeam(teamId: Id<'teams'>, name: string) {
+    const ok = await confirm({
+      title: 'Delete team?',
+      description:
+        'This deletes the team and removes every member from it. Projects assigned to the team become org-wide. This cannot be undone.',
+      confirmLabel: 'Delete team',
+      requireText: name,
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.teams.deleteTeam, { teamId });
+      toast.success('Team deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the team'));
+    }
   }
 </script>
 
@@ -114,7 +139,9 @@
             {team.name}
             <span class="font-mono text-xs font-normal text-muted-foreground">#{team.slug}</span>
           </Card.Title>
-          <Button variant="ghost" size="sm" onclick={() => deleteTeam(team.id)}>Delete</Button>
+          <Button variant="ghost" size="sm" onclick={() => deleteTeam(team.id, team.name)}
+            >Delete</Button
+          >
         </Card.Header>
         <Card.Content class="space-y-4">
           <div>
@@ -131,7 +158,7 @@
                     <button
                       class="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                       aria-label="Remove member"
-                      onclick={() => removeMember(m.id)}
+                      onclick={() => removeMember(m.id, m.email ?? m.name ?? m.userId)}
                     >
                       <XIcon class="size-3" />
                     </button>

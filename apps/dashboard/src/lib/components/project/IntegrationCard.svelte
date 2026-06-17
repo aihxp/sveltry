@@ -6,6 +6,8 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
 
   let { projectId }: { projectId: Id<'projects'> } = $props();
 
@@ -70,11 +72,23 @@
   }
   async function removeIntegration() {
     if (!integration.data) return;
-    await client.mutation(api.integrations.deleteIntegration, {
-      integrationId: integration.data.id,
+    const ok = await confirm({
+      title: 'Remove issue-tracker integration?',
+      description:
+        'This deletes the stored credentials and stops creating tickets from issues. You can reconnect later.',
+      confirmLabel: 'Remove integration',
     });
-    intSeeded = false;
-    provider = '';
+    if (!ok) return;
+    try {
+      await client.mutation(api.integrations.deleteIntegration, {
+        integrationId: integration.data.id,
+      });
+      intSeeded = false;
+      provider = '';
+      toast.success('Integration removed');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not remove the integration'));
+    }
   }
 </script>
 

@@ -7,6 +7,8 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { selectClass } from '$lib/components/ui/control-classes';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import { CHANNEL_OPTIONS, type ChannelType } from './channels';
 
@@ -42,8 +44,19 @@
       savingRule = false;
     }
   }
-  async function deleteRule(ruleId: Id<'alertRules'>) {
-    await client.mutation(api.alerts.deleteAlertRule, { ruleId });
+  async function deleteRule(ruleId: Id<'alertRules'>, name: string) {
+    const ok = await confirm({
+      title: 'Delete alert rule?',
+      description: `"${name}" will stop firing notifications. This cannot be undone.`,
+      confirmLabel: 'Delete rule',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.alerts.deleteAlertRule, { ruleId });
+      toast.success('Alert rule deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the alert rule'));
+    }
   }
 </script>
 
@@ -73,7 +86,7 @@
             <Button
               variant="ghost"
               size="icon"
-              onclick={() => deleteRule(rule._id)}
+              onclick={() => deleteRule(rule._id, rule.name)}
               aria-label="Delete rule"
             >
               <TrashIcon class="size-4 text-destructive" />

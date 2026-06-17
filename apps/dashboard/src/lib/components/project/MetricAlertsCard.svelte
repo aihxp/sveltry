@@ -7,6 +7,8 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { selectClass } from '$lib/components/ui/control-classes';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import { CHANNEL_OPTIONS, type ChannelType } from './channels';
 
@@ -49,8 +51,19 @@
       savingMetric = false;
     }
   }
-  async function deleteMetricAlert(id: Id<'metricAlerts'>) {
-    await client.mutation(api.metricAlerts.deleteMetricAlert, { alertId: id });
+  async function deleteMetricAlert(id: Id<'metricAlerts'>, name: string) {
+    const ok = await confirm({
+      title: 'Delete metric alert?',
+      description: `"${name}" will stop firing notifications. This cannot be undone.`,
+      confirmLabel: 'Delete alert',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.metricAlerts.deleteMetricAlert, { alertId: id });
+      toast.success('Metric alert deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the metric alert'));
+    }
   }
 </script>
 
@@ -80,7 +93,7 @@
             <Button
               variant="ghost"
               size="icon"
-              onclick={() => deleteMetricAlert(a._id)}
+              onclick={() => deleteMetricAlert(a._id, a.name)}
               aria-label="Delete metric alert"
             >
               <TrashIcon class="size-4 text-destructive" />

@@ -9,6 +9,8 @@
   import { selectClass } from '$lib/components/ui/control-classes';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import { cn, formatDuration, relativeTime } from '$lib/utils';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
 
@@ -52,8 +54,19 @@
       saving = false;
     }
   }
-  async function deleteUptime(id: Id<'uptimeMonitors'>) {
-    await client.mutation(api.monitors.deleteUptimeMonitor, { monitorId: id });
+  async function deleteUptime(id: Id<'uptimeMonitors'>, label: string) {
+    const ok = await confirm({
+      title: 'Delete uptime monitor?',
+      description: `"${label}" will stop being checked and its check history is removed. This cannot be undone.`,
+      confirmLabel: 'Delete monitor',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.monitors.deleteUptimeMonitor, { monitorId: id });
+      toast.success('Uptime monitor deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the monitor'));
+    }
   }
 
   // ok = healthy, error/crashed/timeout = down, in_progress = running.
@@ -99,7 +112,7 @@
               <Button
                 variant="ghost"
                 size="icon"
-                onclick={() => deleteUptime(u._id)}
+                onclick={() => deleteUptime(u._id, u.slug)}
                 aria-label="Delete uptime monitor"
               >
                 <TrashIcon class="size-4 text-destructive" />

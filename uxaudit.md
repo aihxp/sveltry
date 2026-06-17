@@ -67,7 +67,7 @@ defaults are kept so this score is comparable to a re-run.
 
 ## What to fix first
 
-1. `[USE-001]` Destructive deletes fire on one click with no confirm and no undo - High, M - a misclick permanently destroys webhooks (incl. their one-time secret), API tokens, teams, and alert rules.
+1. `[USE-001]` Destructive deletes fire on one click with no confirm and no undo - High, M - a misclick permanently destroys webhooks (incl. their one-time secret), API tokens, teams, and alert rules. [RESOLVED - UX-Slice 2]
 2. `[JRN-001]` No navigation on mobile / narrow viewports - High, M - the sidebar is hidden below `md` with no menu to replace it, so a phone user cannot reach most of the app.
 3. `[USE-002]` No success feedback after any mutation - Medium, M - saves, creates, and deletes succeed silently, so the user cannot tell an action worked. [RESOLVED - UX-Slice 1]
 4. `[CNT-001]` Raw `error.toString()` strings shown to users on load failures - Medium, S - list views render technical error text instead of a human, recoverable message.
@@ -128,7 +128,8 @@ defaults are kept so this score is comparable to a re-run.
 
 ## Findings
 
-### [USE-001] Destructive deletes fire on a single click with no confirmation and no undo
+### [USE-001] Destructive deletes fire on a single click with no confirmation and no undo [RESOLVED - UX-Slice 2]
+- Resolution: Added a reusable, accessible confirm dialog (`apps/dashboard/src/lib/confirm.svelte.ts` + `apps/dashboard/src/lib/components/ConfirmDialog.svelte`, mounted once in `(app)/+layout.svelte`): `role="alertdialog"`, `aria-modal`, labelled/described by its heading and body, focus moved in on open and restored on close, Tab trapped, Escape and backdrop cancel. Gated all 13 one-click delete/revoke handlers behind `await confirm(...)` (webhooks, API tokens, invites, team members, teams, alert/metric/usage alerts, uptime monitors, saved views, comments, dashboards, widgets, issue-tracker integration, repository link), each emitting a "Deleted" toast on success and an error toast on failure. The two highest-stakes actions (delete team, revoke API token) require typing the team/token name to arm the confirm, reusing the typed-name pattern already used for project delete/transfer. Verified at runtime: the dialog opens accessibly, the confirm stays disabled until the exact name is typed, Escape cancels without deleting, and confirming deletes and shows the toast.
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: Usability and Heuristics
 - Location: `apps/dashboard/src/lib/components/project/WebhooksCard.svelte:61` (removeWebhook), `apps/dashboard/src/routes/(app)/settings/+page.svelte:121` (revokeToken) and `:87` (revokeInvite), `apps/dashboard/src/routes/(app)/teams/+page.svelte:63,66` (removeMember, deleteTeam), `AlertRulesCard.svelte:45`, `MetricAlertsCard.svelte:52`, `UsageAlertsCard.svelte:38`, `monitors/+page.svelte:55` (deleteUptime), `issues/+page.svelte:81` (deleteView), `issues/[id]/+page.svelte:164` (deleteComment), `dashboards/+page.svelte:35` and `dashboards/[id]/+page.svelte:102` (remove, removeWidget), `IntegrationCard.svelte:71`, `projects/[slug]/+page.svelte:232` (removeRepo).
 - Evidence: 14 of the 16 delete/remove/revoke handlers call the Convex mutation immediately from an icon button's `onclick`, with no confirmation step and no undo. Only `deleteProject` and `transferProject` (`projects/[slug]/+page.svelte:265,298`) require a typed-name confirmation. Deleting a webhook also destroys its HMAC signing secret (shown only once at creation); revoking an API token silently breaks every integration using it; deleting a team removes its membership.

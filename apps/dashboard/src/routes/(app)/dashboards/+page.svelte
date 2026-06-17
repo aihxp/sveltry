@@ -8,6 +8,8 @@
   import { Input } from '$lib/components/ui/input';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import { relativeTime } from '$lib/utils';
   import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
   import XIcon from '@lucide/svelte/icons/x';
@@ -32,8 +34,19 @@
       creating = false;
     }
   }
-  async function remove(id: Id<'dashboards'>) {
-    await client.mutation(api.dashboards.deleteDashboard, { dashboardId: id });
+  async function remove(id: Id<'dashboards'>, name: string) {
+    const ok = await confirm({
+      title: 'Delete dashboard?',
+      description: `"${name}" and all of its widgets will be deleted. This cannot be undone.`,
+      confirmLabel: 'Delete dashboard',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.dashboards.deleteDashboard, { dashboardId: id });
+      toast.success('Dashboard deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the dashboard'));
+    }
   }
 </script>
 
@@ -82,7 +95,7 @@
           <button
             class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label="Delete dashboard"
-            onclick={() => remove(d.id)}
+            onclick={() => remove(d.id, d.name)}
           >
             <XIcon class="size-4" />
           </button>
