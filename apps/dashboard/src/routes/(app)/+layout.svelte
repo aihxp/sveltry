@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { goto, afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
   import { useQuery, useAuth } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
@@ -27,6 +27,8 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
   import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
+  import MenuIcon from '@lucide/svelte/icons/menu';
+  import XIcon from '@lucide/svelte/icons/x';
 
   const REPO = 'https://github.com/aihxp/sveltry';
   const helpLinks = [
@@ -38,7 +40,36 @@
 
   // The Help dropdown, openable with `?` from anywhere (except while typing).
   let helpDetails = $state<HTMLDetailsElement | null>(null);
+
+  // Mobile navigation drawer (the sidebar is hidden below md, so this is the only
+  // way to reach the nav on a phone).
+  let mobileNavOpen = $state(false);
+  let mobileNavPanel = $state<HTMLElement | null>(null);
+
   function onKey(e: KeyboardEvent) {
+    if (mobileNavOpen) {
+      if (e.key === 'Escape') {
+        mobileNavOpen = false;
+        return;
+      }
+      if (e.key === 'Tab' && mobileNavPanel) {
+        // Trap Tab inside the open drawer.
+        const items = [...mobileNavPanel.querySelectorAll<HTMLElement>('a, button')];
+        if (items.length > 0) {
+          const first = items[0];
+          const last = items[items.length - 1];
+          const current = document.activeElement as HTMLElement;
+          if (e.shiftKey && current === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && current === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+        return;
+      }
+    }
     const el = e.target as HTMLElement | null;
     const typing =
       !!el &&
@@ -92,6 +123,18 @@
     if (target) goto(target);
   });
 
+  // Close the mobile drawer after any navigation (a nav link click, or a
+  // programmatic redirect), so it never lingers over the new page.
+  afterNavigate(() => {
+    mobileNavOpen = false;
+  });
+
+  // Move keyboard focus into the drawer when it opens, so it is operable by
+  // keyboard and announced as the active region.
+  $effect(() => {
+    if (mobileNavOpen) mobileNavPanel?.querySelector<HTMLElement>('a, button')?.focus();
+  });
+
   async function signOut() {
     await authClient.signOut();
     await goto('/login');
@@ -100,26 +143,29 @@
 
 <svelte:window onkeydown={onKey} />
 
+{#snippet navList()}
+  {#each nav as item (item.href)}
+    {@const active = path === item.href || path.startsWith(item.href + '/')}
+    <a
+      href={item.href}
+      aria-current={active ? 'page' : undefined}
+      class={cn(
+        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+        active
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+      )}
+    >
+      <item.icon class="size-4" />
+      {item.label}
+    </a>
+  {/each}
+{/snippet}
+
 <div class="flex min-h-screen bg-background">
   <aside class="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
     <div class="flex h-14 items-center border-b px-5"><Logo /></div>
-    <nav class="flex-1 space-y-1 p-3">
-      {#each nav as item (item.href)}
-        {@const active = path === item.href || path.startsWith(item.href + '/')}
-        <a
-          href={item.href}
-          class={cn(
-            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-            active
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
-          )}
-        >
-          <item.icon class="size-4" />
-          {item.label}
-        </a>
-      {/each}
-    </nav>
+    <nav class="flex-1 space-y-1 p-3">{@render navList()}</nav>
     <div class="border-t p-3 text-xs text-muted-foreground">
       <div class="truncate font-medium text-foreground">
         {activeOrg.data?.name ?? 'Organization'}
@@ -130,7 +176,17 @@
 
   <div class="flex min-w-0 flex-1 flex-col">
     <header class="flex h-14 items-center justify-between border-b px-5">
-      <div class="flex items-center gap-2 md:hidden"><Logo /></div>
+      <div class="flex items-center gap-2 md:hidden">
+        <button
+          onclick={() => (mobileNavOpen = true)}
+          aria-label="Open navigation menu"
+          aria-expanded={mobileNavOpen}
+          class="-ml-1 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <MenuIcon class="size-5" />
+        </button>
+        <Logo />
+      </div>
       <div class="hidden text-sm text-muted-foreground md:block">{activeOrg.data?.name ?? ''}</div>
       <div class="flex items-center gap-1.5">
         <details class="group relative" bind:this={helpDetails}>
@@ -215,6 +271,43 @@
     </main>
   </div>
 </div>
+
+{#if mobileNavOpen}
+  <div class="fixed inset-0 z-40 md:hidden">
+    <button
+      type="button"
+      class="absolute inset-0 cursor-default bg-black/50"
+      aria-label="Close navigation menu"
+      tabindex="-1"
+      onclick={() => (mobileNavOpen = false)}
+    ></button>
+    <div
+      bind:this={mobileNavPanel}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Navigation"
+      class="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col border-r bg-sidebar"
+    >
+      <div class="flex h-14 items-center justify-between border-b px-5">
+        <Logo />
+        <button
+          onclick={() => (mobileNavOpen = false)}
+          aria-label="Close navigation menu"
+          class="-mr-1 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <XIcon class="size-5" />
+        </button>
+      </div>
+      <nav class="flex-1 space-y-1 overflow-y-auto p-3">{@render navList()}</nav>
+      <div class="border-t p-3 text-xs text-muted-foreground">
+        <div class="truncate font-medium text-foreground">
+          {activeOrg.data?.name ?? 'Organization'}
+        </div>
+        <div class="truncate">{user?.email ?? ''}</div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <Toaster />
 <ConfirmDialog />

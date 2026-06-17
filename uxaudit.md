@@ -68,7 +68,7 @@ defaults are kept so this score is comparable to a re-run.
 ## What to fix first
 
 1. `[USE-001]` Destructive deletes fire on one click with no confirm and no undo - High, M - a misclick permanently destroys webhooks (incl. their one-time secret), API tokens, teams, and alert rules. [RESOLVED - UX-Slice 2]
-2. `[JRN-001]` No navigation on mobile / narrow viewports - High, M - the sidebar is hidden below `md` with no menu to replace it, so a phone user cannot reach most of the app.
+2. `[JRN-001]` No navigation on mobile / narrow viewports - High, M - the sidebar is hidden below `md` with no menu to replace it, so a phone user cannot reach most of the app. [RESOLVED - UX-Slice 3]
 3. `[USE-002]` No success feedback after any mutation - Medium, M - saves, creates, and deletes succeed silently, so the user cannot tell an action worked. [RESOLVED - UX-Slice 1]
 4. `[CNT-001]` Raw `error.toString()` strings shown to users on load failures - Medium, S - list views render technical error text instead of a human, recoverable message.
 5. `[FRM-001]` Search inputs are placeholder-only (no accessible label) - Medium, S - the label vanishes on input and is an unreliable accessible name for screen readers.
@@ -138,7 +138,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Click each delete control and confirm a confirmation appears before the mutation runs; for webhooks/tokens, confirm the action cannot complete without an explicit second step; add a component test that the mutation is not called until confirmed.
 - Related: systemic "No global feedback layer for mutations."
 
-### [JRN-001] Primary navigation is unreachable on mobile / narrow viewports
+### [JRN-001] Primary navigation is unreachable on mobile / narrow viewports [RESOLVED - UX-Slice 3]
+- Resolution: Added a hamburger button to the mobile header (`(app)/+layout.svelte`) that opens the full nav in a left slide-over drawer (`role="dialog"`, `aria-modal`, `aria-label="Navigation"`). The drawer reuses the exact same `nav` list as the desktop sidebar via a shared `{#snippet navList()}`, so they cannot drift; the active link carries `aria-current="page"`. Focus moves into the drawer on open and Tab is trapped inside; it closes on Escape, backdrop click, and (via `afterNavigate`) on any navigation. Verified at 375px: sidebar hidden + hamburger shown, drawer lists all 14 links, Escape/backdrop/nav-link all close it with no lingering overlay; at 1280px the sidebar shows and the hamburger is hidden. Resolves the systemic "app shell is desktop-only" pattern (and its `IA-001` member).
 - Severity: High | Confidence: Confirmed | Effort: M | Dimension: User Journeys and Flows
 - Location: `apps/dashboard/src/routes/(app)/+layout.svelte:102` (`<aside class="hidden ... md:flex">`), `:131` (the `md:hidden` header shows only the Logo); zero `Menu`/hamburger references in the file.
 - Evidence: The sidebar that holds all 14 primary nav links (Overview, Issues, Performance, Discover, Dashboards, Releases, Monitors, Replays, Profiles, Feedback, Stats, Projects, Teams, Settings) is `hidden md:flex`, so it disappears below 768px. The mobile header renders only the logo, the Help dropdown, the theme toggle, and the user-avatar menu, no navigation. Confirmed at runtime: a 375px screenshot of `/dashboard` shows the page content but no way to navigate; the only escapes are "View all issues," Settings/Sign out in the avatar menu, and the Help links.
