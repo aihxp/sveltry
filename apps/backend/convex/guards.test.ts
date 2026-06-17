@@ -206,6 +206,65 @@ describe('transaction lean projection (PERF-001)', () => {
   });
 });
 
+describe('onboarding status (setup checklist)', () => {
+  test('reflects project + event state, and dismissal sticks', async () => {
+    const t = convexTest(schema, modules);
+    const asMember = t.withIdentity({ subject: 'u', activeOrganizationId: 'org-a' });
+
+    // Fresh org: nothing done yet.
+    let s = await asMember.query(api.organizations.onboardingStatus, {});
+    expect(s).toEqual({ hasProject: false, hasEvent: false, dismissed: false });
+
+    // After a project exists.
+    const { projectId } = await seed(t);
+    s = await asMember.query(api.organizations.onboardingStatus, {});
+    expect(s.hasProject).toBe(true);
+    expect(s.hasEvent).toBe(false);
+
+    // After a first event lands.
+    await t.run(async (ctx) => {
+      const issueId = await ctx.db.insert('issues', {
+        organizationId: 'org-a',
+        projectId,
+        fingerprint: 'fp',
+        groupingConfig: 'g',
+        title: 'boom',
+        culprit: 'c',
+        level: 'error',
+        platform: 'node',
+        status: 'unresolved',
+        substatus: 'new',
+        count: 1,
+        userCount: 0,
+        firstSeen: 0,
+        lastSeen: 0,
+      });
+      await ctx.db.insert('events', {
+        organizationId: 'org-a',
+        projectId,
+        issueId,
+        eventId: 'e1',
+        timestamp: 0,
+        receivedAt: 0,
+        level: 'error',
+        platform: 'node',
+        environment: 'production',
+        message: 'm',
+        culprit: 'c',
+        tags: {},
+        payload: {},
+      });
+    });
+    s = await asMember.query(api.organizations.onboardingStatus, {});
+    expect(s.hasEvent).toBe(true);
+
+    // Dismissal persists for the user.
+    await asMember.mutation(api.organizations.dismissOnboarding, {});
+    s = await asMember.query(api.organizations.onboardingStatus, {});
+    expect(s.dismissed).toBe(true);
+  });
+});
+
 describe('first-event activation check (firstEventForProject)', () => {
   async function seedIssueAndEvent(t: ReturnType<typeof convexTest>, projectId: Id<'projects'>) {
     return await t.run(async (ctx) => {

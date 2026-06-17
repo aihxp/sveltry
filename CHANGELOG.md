@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **First-run setup checklist on the Overview.** A new org sees a "Get started with Sveltry" card
+  with two steps, create a project, then send your first event, that tick off live as each is done
+  (driven by a reactive `onboardingStatus` query). It self-hides once both are complete and can be
+  dismissed (persisted per user).
 - **Live first-event verification.** Right after you create a project, the setup card now subscribes
   to whether that project has received its first event and flips, with no refresh, from "Listening for
   your first event..." to a green "First event received" the instant your SDK sends one, with a link
