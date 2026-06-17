@@ -13,6 +13,11 @@
   const recent = useQuery(api.issues.recentIssues, () =>
     auth.isAuthenticated ? { limit: 12 } : ('skip' as const),
   );
+  // Distinguish "no issues because all is well" from "no issues because there are
+  // no projects yet" so a brand-new org gets a get-started nudge, not a false
+  // "everything is running smoothly".
+  const projects = useQuery(api.projects.listProjects, skip);
+  const hasProjects = $derived((projects.data?.length ?? 0) > 0);
 
   const cards = $derived([
     { label: 'Unresolved', value: stats.data?.unresolved ?? 0, accent: true },
@@ -67,9 +72,18 @@
         <p class="px-4 text-sm text-destructive">Failed to load: {recent.error.toString()}</p>
       {:else if !recent.data || recent.data.length === 0}
         <div class="px-6 py-4">
-          <EmptyState title="No unresolved issues" description="Everything is running smoothly.">
-            <Button href="/projects">Connect a project</Button>
-          </EmptyState>
+          {#if !hasProjects}
+            <EmptyState
+              title="Create your first project"
+              description="You haven't connected any projects yet. Create one to get a DSN and start receiving events."
+            >
+              <Button href="/projects/new">New project</Button>
+            </EmptyState>
+          {:else}
+            <EmptyState title="No unresolved issues" description="Everything is running smoothly.">
+              <Button href="/projects">View projects</Button>
+            </EmptyState>
+          {/if}
         </div>
       {:else}
         <div class="border-t">

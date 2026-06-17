@@ -4,6 +4,17 @@ All notable changes to Sveltry are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Activation: platform-tailored SDK setup + a real fresh-install Overview.** Creating a project now
+  uses the platform you picked to show the actual install command and init code for that SDK
+  (`pip install sentry-sdk` + `sentry_sdk.init(...)` for Python, `npm install @sentry/node` for Node,
+  etc.) as three numbered, copyable steps, instead of a single generic `Sentry.init` snippet. The
+  Overview no longer tells a brand-new org "Everything is running smoothly" when it simply has no
+  projects yet, it detects the zero-project state and nudges "Create your first project."
+
 ## [0.9.4] - 2026-06-16
 
 ### Tested
