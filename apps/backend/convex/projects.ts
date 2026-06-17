@@ -158,6 +158,30 @@ export const listProjects = query({
   },
 });
 
+/**
+ * Whether a project has received its first event yet, for the activation flow.
+ * Reactive: the new-project setup card subscribes to this and flips from
+ * "waiting" to "received" the instant the first event is ingested, linking to the
+ * issue it created. Reads the oldest event over `by_project`.
+ */
+export const firstEventForProject = query({
+  args: { projectId: v.id('projects') },
+  returns: v.object({ received: v.boolean(), issueId: v.union(v.id('issues'), v.null()) }),
+  handler: async (ctx, { projectId }) => {
+    const { activeOrganizationId } = await requireOrg(ctx);
+    const project = await ctx.db.get(projectId);
+    if (!project || project.organizationId !== activeOrganizationId) {
+      return { received: false, issueId: null };
+    }
+    const first = await ctx.db
+      .query('events')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .order('asc')
+      .first();
+    return { received: first !== null, issueId: first?.issueId ?? null };
+  },
+});
+
 /** Fetch a single project (by slug) plus all of its DSN keys. */
 export const getProjectBySlug = query({
   args: { slug: v.string() },

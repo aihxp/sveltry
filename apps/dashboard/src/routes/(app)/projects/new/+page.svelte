@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { useConvexClient, useAuth } from 'convex-svelte';
+  import { useConvexClient, useAuth, useQuery } from 'convex-svelte';
   import { api } from '$convex/_generated/api';
   import { env } from '$env/dynamic/public';
   import * as Card from '$lib/components/ui/card';
@@ -10,6 +10,8 @@
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { buildDsn } from '$lib/utils';
   import { sdkSnippet } from '$lib/sdk-snippets';
+  import CheckCircleIcon from '@lucide/svelte/icons/circle-check-big';
+  import type { Id } from '$convex/_generated/dataModel';
 
   const client = useConvexClient();
   const auth = useAuth();
@@ -19,12 +21,26 @@
   let platform = $state('javascript');
   let creating = $state(false);
   let error = $state('');
-  let result = $state<{ slug: string; publicId: string; publicKey: string } | null>(null);
+  let result = $state<{
+    projectId: Id<'projects'>;
+    slug: string;
+    publicId: string;
+    publicKey: string;
+  } | null>(null);
 
   const ingestUrl = env.PUBLIC_SVELTRY_INGEST_URL ?? 'http://127.0.0.1:3211';
   const dsn = $derived(result ? buildDsn(ingestUrl, result.publicKey, result.publicId) : '');
   // The install + init snippet tailored to the platform picked above.
   const snippet = $derived(sdkSnippet(platform, dsn));
+
+  // Live activation check: once the project exists, subscribe to whether it has
+  // received its first event. Reactive, so it flips to "received" the moment the
+  // SDK sends one, without the user refreshing.
+  const firstEvent = useQuery(api.projects.firstEventForProject, () =>
+    result ? { projectId: result.projectId } : ('skip' as const),
+  );
+  const received = $derived(firstEvent.data?.received ?? false);
+  const firstIssueId = $derived(firstEvent.data?.issueId ?? null);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -116,10 +132,32 @@
             <CopyButton text={snippet.code} />
           </div>
           <p class="mt-2 text-xs text-muted-foreground">
-            Then trigger an error in your app (or call the SDK's capture method). The project page
-            will confirm when your first event arrives.
+            Then trigger an error in your app (or call the SDK's capture method).
           </p>
         </div>
+
+        <!-- Live first-event verification: flips from waiting to received the moment an event lands. -->
+        {#if received}
+          <div
+            class="border-success/40 bg-success/10 flex items-center gap-3 rounded-md border p-3 text-sm"
+          >
+            <CheckCircleIcon class="text-success size-5 shrink-0" />
+            <div class="flex-1">
+              <p class="font-medium">First event received</p>
+              <p class="text-muted-foreground text-xs">Your SDK is wired up correctly.</p>
+            </div>
+            {#if firstIssueId}
+              <Button size="sm" href={`/issues/${firstIssueId}`}>View issue</Button>
+            {/if}
+          </div>
+        {:else}
+          <div class="flex items-center gap-3 rounded-md border border-dashed p-3 text-sm">
+            <span class="bg-primary size-2.5 shrink-0 animate-pulse rounded-full"></span>
+            <p class="text-muted-foreground flex-1">
+              Listening for your first event from this project...
+            </p>
+          </div>
+        {/if}
 
         <div class="flex gap-2">
           <Button href={`/projects/${result.slug}`}>Go to project</Button>
