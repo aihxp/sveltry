@@ -11,6 +11,8 @@
   import LevelBadge from '$lib/components/LevelBadge.svelte';
   import StackTrace from '$lib/components/StackTrace.svelte';
   import { Input } from '$lib/components/ui/input';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import { formatBytes, relativeTime, safeHref } from '$lib/utils';
   import CheckIcon from '@lucide/svelte/icons/check';
   import BellOffIcon from '@lucide/svelte/icons/bell-off';
@@ -162,7 +164,18 @@
     }
   }
   async function deleteComment(commentId: Id<'issueComments'>) {
-    await client.mutation(api.issues.deleteComment, { commentId });
+    const ok = await confirm({
+      title: 'Delete comment?',
+      description: 'This permanently removes your comment. This cannot be undone.',
+      confirmLabel: 'Delete comment',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.issues.deleteComment, { commentId });
+      toast.success('Comment deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the comment'));
+    }
   }
 
   interface Breadcrumb {

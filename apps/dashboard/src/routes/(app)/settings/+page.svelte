@@ -11,6 +11,7 @@
   import { Label } from '$lib/components/ui/label';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import AlertTriangleIcon from '@lucide/svelte/icons/triangle-alert';
   import { relativeTime } from '$lib/utils';
@@ -85,8 +86,19 @@
     }
   }
 
-  async function revokeInvite(id: Id<'invitations'>) {
-    await client.mutation(api.invitations.revokeInvitation, { invitationId: id });
+  async function revokeInvite(id: Id<'invitations'>, email: string) {
+    const ok = await confirm({
+      title: 'Revoke invitation?',
+      description: `The invite link for ${email} will stop working. You can send a new invite later.`,
+      confirmLabel: 'Revoke invite',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.invitations.revokeInvitation, { invitationId: id });
+      toast.success('Invitation revoked');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not revoke the invitation'));
+    }
   }
 
   // API tokens (admin/owner only).
@@ -120,8 +132,21 @@
     }
   }
 
-  async function revokeToken(id: Id<'apiTokens'>) {
-    await client.mutation(api.apiTokens.revokeApiToken, { tokenId: id });
+  async function revokeToken(id: Id<'apiTokens'>, name: string) {
+    const ok = await confirm({
+      title: 'Revoke API token?',
+      description:
+        'Any integration using this token will immediately lose access to the API. This cannot be undone.',
+      confirmLabel: 'Revoke token',
+      requireText: name,
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.apiTokens.revokeApiToken, { tokenId: id });
+      toast.success('API token revoked');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not revoke the token'));
+    }
   }
 
   // Deployment config warnings (admin/owner only): surfaces a misconfiguration
@@ -316,7 +341,7 @@
                 <Button
                   variant="ghost"
                   size="icon"
-                  onclick={() => revokeInvite(inv.id)}
+                  onclick={() => revokeInvite(inv.id, inv.email)}
                   aria-label="Revoke invitation"
                 >
                   <TrashIcon class="size-4 text-destructive" />
@@ -393,7 +418,7 @@
                 <Button
                   variant="ghost"
                   size="icon"
-                  onclick={() => revokeToken(t.id)}
+                  onclick={() => revokeToken(t.id, t.name)}
                   aria-label="Revoke token"
                 >
                   <TrashIcon class="size-4 text-destructive" />

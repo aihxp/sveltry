@@ -8,6 +8,8 @@
   import { Label } from '$lib/components/ui/label';
   import { relativeTime } from '$lib/utils';
   import { selectClass } from '$lib/components/ui/control-classes';
+  import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
   import { CHANNEL_OPTIONS, type ChannelType } from './channels';
 
@@ -35,8 +37,19 @@
       savingUsageAlert = false;
     }
   }
-  async function deleteUsageAlert(id: Id<'usageAlerts'>) {
-    await client.mutation(api.usageAlerts.deleteUsageAlert, { alertId: id });
+  async function deleteUsageAlert(id: Id<'usageAlerts'>, thresholdPercent: number) {
+    const ok = await confirm({
+      title: 'Delete usage alert?',
+      description: `The alert at ${thresholdPercent}% of quota will stop firing. This cannot be undone.`,
+      confirmLabel: 'Delete alert',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.usageAlerts.deleteUsageAlert, { alertId: id });
+      toast.success('Usage alert deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the usage alert'));
+    }
   }
 </script>
 
@@ -64,7 +77,7 @@
             <Button
               variant="ghost"
               size="icon"
-              onclick={() => deleteUsageAlert(a._id)}
+              onclick={() => deleteUsageAlert(a._id, a.thresholdPercent)}
               aria-label="Delete usage alert"
             >
               <TrashIcon class="size-4 text-destructive" />

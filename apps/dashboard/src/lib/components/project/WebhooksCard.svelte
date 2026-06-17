@@ -9,6 +9,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { toast, errorMessage } from '$lib/toast.svelte';
+  import { confirm } from '$lib/confirm.svelte';
   import { relativeTime } from '$lib/utils';
   import TrashIcon from '@lucide/svelte/icons/trash-2';
 
@@ -61,7 +62,19 @@
     }
   }
   async function removeWebhook(id: Id<'webhooks'>) {
-    await client.mutation(api.webhooks.deleteWebhook, { webhookId: id });
+    const ok = await confirm({
+      title: 'Delete webhook?',
+      description:
+        'This permanently deletes the webhook and its signing secret. Your endpoint will stop receiving events.',
+      confirmLabel: 'Delete webhook',
+    });
+    if (!ok) return;
+    try {
+      await client.mutation(api.webhooks.deleteWebhook, { webhookId: id });
+      toast.success('Webhook deleted');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not delete the webhook'));
+    }
   }
   async function toggleWebhookEnabled(id: Id<'webhooks'>, enabled: boolean) {
     try {
