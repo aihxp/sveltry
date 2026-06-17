@@ -110,7 +110,12 @@
       <SearchIcon
         class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
       />
-      <Input bind:value={term} placeholder="Search issues by title…" class="pl-8" />
+      <Input
+        bind:value={term}
+        placeholder="Search issues by title…"
+        aria-label="Search issues by title"
+        class="pl-8"
+      />
     </div>
     <select
       bind:value={level}

@@ -444,7 +444,12 @@
         </Card.Description>
       </Card.Header>
       <Card.Content class="space-y-2">
-        <Input bind:value={mergeTerm} placeholder="Search issues to merge…" disabled={merging} />
+        <Input
+          bind:value={mergeTerm}
+          placeholder="Search issues to merge…"
+          aria-label="Search issues to merge"
+          disabled={merging}
+        />
         {#if mergeCandidates.data && mergeCandidates.data.length > 0}
           <div class="divide-y rounded-lg border">
             {#each mergeCandidates.data.filter((c) => c._id !== issueId) as c (c._id)}

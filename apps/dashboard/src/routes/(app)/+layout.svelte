@@ -38,8 +38,19 @@
     { label: 'Self-hosting guide', href: `${REPO}/blob/main/docs/SELF_HOSTING.md` },
   ];
 
-  // The Help dropdown, openable with `?` from anywhere (except while typing).
+  // The header dropdowns (Help, openable with `?`, and the user menu). Native
+  // <details> do not dismiss on outside-click or Escape, so we do it ourselves.
   let helpDetails = $state<HTMLDetailsElement | null>(null);
+  let userMenu = $state<HTMLDetailsElement | null>(null);
+  function closeMenus() {
+    if (helpDetails) helpDetails.open = false;
+    if (userMenu) userMenu.open = false;
+  }
+  function onWindowPointerDown(e: PointerEvent) {
+    const target = e.target as Node;
+    if (helpDetails?.open && !helpDetails.contains(target)) helpDetails.open = false;
+    if (userMenu?.open && !userMenu.contains(target)) userMenu.open = false;
+  }
 
   // Mobile navigation drawer (the sidebar is hidden below md, so this is the only
   // way to reach the nav on a phone).
@@ -69,6 +80,10 @@
         }
         return;
       }
+    }
+    if (e.key === 'Escape' && (helpDetails?.open || userMenu?.open)) {
+      closeMenus();
+      return;
     }
     const el = e.target as HTMLElement | null;
     const typing =
@@ -127,6 +142,7 @@
   // programmatic redirect), so it never lingers over the new page.
   afterNavigate(() => {
     mobileNavOpen = false;
+    closeMenus();
   });
 
   // Move keyboard focus into the drawer when it opens, so it is operable by
@@ -141,7 +157,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onpointerdown={onWindowPointerDown} />
 
 {#snippet navList()}
   {#each nav as item (item.href)}
@@ -237,7 +253,7 @@
           </div>
         </details>
         <ThemeToggle />
-        <details class="group relative">
+        <details class="group relative" bind:this={userMenu}>
           <summary
             class="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
           >

@@ -175,3 +175,19 @@ body {
   background-color: var(--border);
   border-radius: 9999px;
 }
+
+/*
+ * Honor the OS "reduce motion" setting: collapse animations and transitions to
+ * near-zero so the live/pulse indicators, spinners, and slide/fade effects stop
+ * moving for users who ask for it (WCAG 2.3.3 / inclusive design).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
