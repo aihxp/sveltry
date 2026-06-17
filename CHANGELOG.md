@@ -8,6 +8,10 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Landing page polished for launch.** The public landing gained a "From an SDK to a live issue in
+  three steps" section, a "Why self-host?" block (own your data, no per-event pricing, the SDKs you
+  already have), a Docs link in the header, a quickstart link under the hero, a closing get-started
+  CTA, and footer links to the docs, all in the existing design system.
 - **Journey-oriented docs: Quickstart + Integrations.** New `docs/QUICKSTART.md` ("send your first
   error in five minutes") and `docs/INTEGRATIONS.md` (copy-paste install + init + a test-event
   trigger for browser/Node/Python/Go/Ruby/Java/PHP/Rust, plus framework, source-map, and tunnel
