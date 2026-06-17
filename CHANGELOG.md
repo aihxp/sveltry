@@ -8,6 +8,11 @@ All notable changes to Sveltry are documented here. The format is based on
 
 ### Added
 
+- **Journey-oriented docs: Quickstart + Integrations.** New `docs/QUICKSTART.md` ("send your first
+  error in five minutes") and `docs/INTEGRATIONS.md` (copy-paste install + init + a test-event
+  trigger for browser/Node/Python/Go/Ruby/Java/PHP/Rust, plus framework, source-map, and tunnel
+  notes), tied together by a new `docs/README.md` index. The main README's Documentation section
+  now leads with the quickstart, and the in-app Help menu links to it.
 - **In-app Help menu.** The app shell header now has a Help (`?`) dropdown linking to the docs,
   quickstart, Sentry SDK compatibility, the self-hosting guide, "report an issue," and the GitHub
   repo, with the running version shown (`Sveltry vX.Y.Z`, injected at build time so it tracks

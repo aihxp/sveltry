@@ -29,7 +29,7 @@
   const REPO = 'https://github.com/aihxp/sveltry';
   const helpLinks = [
     { label: 'Documentation', href: `${REPO}/tree/main/docs` },
-    { label: 'Quickstart', href: `${REPO}#quick-start` },
+    { label: 'Quickstart', href: `${REPO}/blob/main/docs/QUICKSTART.md` },
     { label: 'Sentry SDK compatibility', href: `${REPO}/blob/main/docs/SENTRY_COMPATIBILITY.md` },
     { label: 'Self-hosting guide', href: `${REPO}/blob/main/docs/SELF_HOSTING.md` },
   ];
