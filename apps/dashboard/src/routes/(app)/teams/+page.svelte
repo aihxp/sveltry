@@ -8,6 +8,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import { toast, errorMessage } from '$lib/toast.svelte';
   import UsersIcon from '@lucide/svelte/icons/users';
   import XIcon from '@lucide/svelte/icons/x';
   import BoxIcon from '@lucide/svelte/icons/box';
@@ -41,6 +42,9 @@
     try {
       await client.mutation(api.teams.createTeam, { name });
       newTeam = '';
+      toast.success('Team created');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not create the team'));
     } finally {
       creating = false;
     }
@@ -52,13 +56,18 @@
     const userId = pick[teamId];
     if (!userId) return;
     const m = orgMembers.find((x) => x.userId === userId);
-    await client.mutation(api.teams.addTeamMember, {
-      teamId,
-      userId,
-      email: m?.user?.email,
-      name: m?.user?.name,
-    });
-    pick[teamId] = '';
+    try {
+      await client.mutation(api.teams.addTeamMember, {
+        teamId,
+        userId,
+        email: m?.user?.email,
+        name: m?.user?.name,
+      });
+      pick[teamId] = '';
+      toast.success('Member added');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not add the member'));
+    }
   }
   async function removeMember(memberId: Id<'teamMembers'>) {
     await client.mutation(api.teams.removeTeamMember, { memberId });
