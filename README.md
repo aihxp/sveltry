@@ -139,11 +139,15 @@ per-key rate limiting, PII scrubbing, retention crons, and a live dashboard.
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Sentry compatibility](docs/SENTRY_COMPATIBILITY.md)
+Start at the [documentation index](docs/README.md). Highlights:
+
+- [Quickstart](docs/QUICKSTART.md) - send your first error in five minutes
+- [Integrations](docs/INTEGRATIONS.md) - install an SDK for your platform
 - [Self-hosting guide](docs/SELF_HOSTING.md)
-- [Feature parity matrix](docs/FEATURE_PARITY.md)
-- [Roadmap](docs/ROADMAP.md)
+- [Sentry compatibility](docs/SENTRY_COMPATIBILITY.md)
+- [Public API](docs/API.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Feature parity matrix](docs/FEATURE_PARITY.md) · [Roadmap](docs/ROADMAP.md)
 - [SDK](packages/sdk/README.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
