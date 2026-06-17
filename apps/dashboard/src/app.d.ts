@@ -1,4 +1,6 @@
 declare global {
+  /** The package version, injected at build time by vite.config (see `define`). */
+  const __APP_VERSION__: string;
   namespace App {
     interface Error {
       errorId?: string;

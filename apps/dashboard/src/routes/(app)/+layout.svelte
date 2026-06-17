@@ -23,6 +23,32 @@
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import LogOutIcon from '@lucide/svelte/icons/log-out';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+  import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
+
+  const REPO = 'https://github.com/aihxp/sveltry';
+  const helpLinks = [
+    { label: 'Documentation', href: `${REPO}/tree/main/docs` },
+    { label: 'Quickstart', href: `${REPO}#quick-start` },
+    { label: 'Sentry SDK compatibility', href: `${REPO}/blob/main/docs/SENTRY_COMPATIBILITY.md` },
+    { label: 'Self-hosting guide', href: `${REPO}/blob/main/docs/SELF_HOSTING.md` },
+  ];
+
+  // The Help dropdown, openable with `?` from anywhere (except while typing).
+  let helpDetails = $state<HTMLDetailsElement | null>(null);
+  function onKey(e: KeyboardEvent) {
+    const el = e.target as HTMLElement | null;
+    const typing =
+      !!el &&
+      (el.tagName === 'INPUT' ||
+        el.tagName === 'TEXTAREA' ||
+        el.tagName === 'SELECT' ||
+        el.isContentEditable);
+    if (e.key === '?' && !typing && helpDetails) {
+      e.preventDefault();
+      helpDetails.open = !helpDetails.open;
+    }
+  }
 
   const nav = [
     { href: '/dashboard', label: 'Overview', icon: LayoutDashboardIcon },
@@ -70,6 +96,8 @@
   }
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 <div class="flex min-h-screen bg-background">
   <aside class="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
     <div class="flex h-14 items-center border-b px-5"><Logo /></div>
@@ -103,6 +131,53 @@
       <div class="flex items-center gap-2 md:hidden"><Logo /></div>
       <div class="hidden text-sm text-muted-foreground md:block">{activeOrg.data?.name ?? ''}</div>
       <div class="flex items-center gap-1.5">
+        <details class="group relative" bind:this={helpDetails}>
+          <summary
+            class="flex cursor-pointer list-none items-center rounded-md p-1.5 text-sm hover:bg-accent"
+            title="Help (press ?)"
+            aria-label="Help"
+          >
+            <CircleHelpIcon class="size-4 text-muted-foreground" />
+          </summary>
+          <div
+            class="absolute right-0 z-20 mt-2 w-60 overflow-hidden rounded-md border bg-popover p-1 shadow-md"
+          >
+            {#each helpLinks as link (link.href)}
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+              >
+                {link.label}
+                <ExternalLinkIcon class="size-3.5 shrink-0 text-muted-foreground" />
+              </a>
+            {/each}
+            <div class="my-1 border-t"></div>
+            <a
+              href={`${REPO}/issues/new`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+            >
+              Report an issue
+              <ExternalLinkIcon class="size-3.5 shrink-0 text-muted-foreground" />
+            </a>
+            <a
+              href={REPO}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm hover:bg-accent"
+            >
+              GitHub repository
+              <ExternalLinkIcon class="size-3.5 shrink-0 text-muted-foreground" />
+            </a>
+            <div class="my-1 border-t"></div>
+            <p class="px-3 py-1.5 text-xs text-muted-foreground">
+              Sveltry v{__APP_VERSION__} · press <kbd class="font-mono">?</kbd> for help
+            </p>
+          </div>
+        </details>
         <ThemeToggle />
         <details class="group relative">
           <summary
