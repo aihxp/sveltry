@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
   import * as Card from '$lib/components/ui/card';
@@ -186,7 +187,7 @@
           {#each Array(6) as _, i (i)}<Skeleton class="h-7 w-full" />{/each}
         </div>
       {:else if result.error}
-        <p class="text-sm text-destructive">Failed to run query: {result.error.toString()}</p>
+        <LoadError message="Couldn't run the query." error={result.error} />
       {:else if rows.length === 0}
         <EmptyState title="No data" description="No matching rows in this window." />
       {:else}

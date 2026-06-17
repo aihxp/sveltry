@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
   import * as Card from '$lib/components/ui/card';
@@ -203,7 +204,7 @@
           {#each Array(6) as _, i (i)}<Skeleton class="h-12 w-full" />{/each}
         </div>
       {:else if issues.error}
-        <p class="p-4 text-sm text-destructive">Failed to load: {issues.error.toString()}</p>
+        <LoadError message="Couldn't load issues." error={issues.error} />
       {:else if !issues.data || issues.data.length === 0}
         <div class="p-6">
           {#if searching}

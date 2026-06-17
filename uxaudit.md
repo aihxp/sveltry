@@ -70,7 +70,7 @@ defaults are kept so this score is comparable to a re-run.
 1. `[USE-001]` Destructive deletes fire on one click with no confirm and no undo - High, M - a misclick permanently destroys webhooks (incl. their one-time secret), API tokens, teams, and alert rules. [RESOLVED - UX-Slice 2]
 2. `[JRN-001]` No navigation on mobile / narrow viewports - High, M - the sidebar is hidden below `md` with no menu to replace it, so a phone user cannot reach most of the app. [RESOLVED - UX-Slice 3]
 3. `[USE-002]` No success feedback after any mutation - Medium, M - saves, creates, and deletes succeed silently, so the user cannot tell an action worked. [RESOLVED - UX-Slice 1]
-4. `[CNT-001]` Raw `error.toString()` strings shown to users on load failures - Medium, S - list views render technical error text instead of a human, recoverable message.
+4. `[CNT-001]` Raw `error.toString()` strings shown to users on load failures - Medium, S - list views render technical error text instead of a human, recoverable message. [RESOLVED - UX-Slice 4]
 5. `[FRM-001]` Search inputs are placeholder-only (no accessible label) - Medium, S - the label vanishes on input and is an unreliable accessible name for screen readers.
 
 ## Strengths (preserve these)
@@ -158,7 +158,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Save project settings and confirm a "Saved" toast appears within ~400ms (the Doherty threshold); delete an item and confirm a "Deleted" (ideally with Undo) toast.
 - Related: systemic "No global feedback layer for mutations."
 
-### [CNT-001] Raw `error.toString()` is shown to users on load failures
+### [CNT-001] Raw `error.toString()` is shown to users on load failures [RESOLVED - UX-Slice 4]
+- Resolution: Added a shared `<LoadError message error onretry />` block (`apps/dashboard/src/lib/components/LoadError.svelte`) that shows a plain, per-view message and a Retry action, and logs the raw error to the console for developers instead of rendering it. Replaced all 11 `{x.error.toString()}` sites (monitors, releases, discover, feedback, profiles, replays, performance, performance/issues, performance/spans, dashboard, issues) with it; zero `error.toString()` remain in the routes. Verified the happy path still renders and the same primitives render correctly (see the error-boundary screenshot).
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Content and UX Writing
 - Location: `monitors/+page.svelte:149` (`{monitors.error.toString()}`), `releases/+page.svelte:48` (`{health.error.toString()}`), `discover/+page.svelte:189` (`{result.error.toString()}`).
 - Evidence: When a reactive query errors, these views render the raw error object stringified directly into the page ("Failed to load: <technical string>"). A Convex/transport error message is developer-facing text, not a user message, and offers no recovery action.
@@ -194,7 +195,8 @@ defaults are kept so this score is comparable to a re-run.
 - Verify the fix: Open the Help menu, click elsewhere, and confirm it closes; press Escape and confirm it closes.
 - Related: none.
 
-### [USE-004] No application-level error boundary (`+error.svelte`)
+### [USE-004] No application-level error boundary (`+error.svelte`) [RESOLVED - UX-Slice 4]
+- Resolution: Added a root `apps/dashboard/src/routes/+error.svelte` (branded page with the status, a friendly message, "Back to home", and "Report an issue") and an `(app)/+error.svelte` (renders inside the app shell with "Back to overview" + report link). Verified at runtime: visiting an unknown route shows the branded 404 page with both recovery actions instead of SvelteKit's default.
 - Severity: Medium | Confidence: Confirmed | Effort: S | Dimension: Usability and Heuristics
 - Location: no `+error.svelte` exists under `apps/dashboard/src/routes` (find returns nothing).
 - Evidence: There is no SvelteKit error page, so an unhandled route error (a thrown load, a render error) falls through to SvelteKit's default unstyled error page with no branding and no recovery action. (A dev-only SSR hiccup was observed earlier on a hard reload; in production the same class of error would land here.)

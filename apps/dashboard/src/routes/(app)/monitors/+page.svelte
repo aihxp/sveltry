@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useConvexClient, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import type { Id } from '$convex/_generated/dataModel';
   import * as Card from '$lib/components/ui/card';
@@ -159,7 +160,7 @@
           {#each Array(4) as _, i (i)}<Skeleton class="h-10 w-full" />{/each}
         </div>
       {:else if monitors.error}
-        <p class="px-6 text-sm text-destructive">Failed to load: {monitors.error.toString()}</p>
+        <LoadError message="Couldn't load uptime monitors." error={monitors.error} class="mx-6" />
       {:else if !monitors.data || monitors.data.length === 0}
         <div class="px-6 pb-2">
           <EmptyState

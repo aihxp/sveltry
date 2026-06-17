@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { page } from '$app/state';
   import { replaceState, afterNavigate } from '$app/navigation';
   import { api } from '$convex/_generated/api';
@@ -124,7 +125,7 @@
           {#each Array(5) as _, i (i)}<Skeleton class="h-9 w-full" />{/each}
         </div>
       {:else if results.error}
-        <p class="px-6 text-sm text-destructive">Failed to load: {results.error.toString()}</p>
+        <LoadError message="Couldn't load spans." error={results.error} class="mx-6" />
       {:else if !results.data || results.data.matches.length === 0}
         <p class="px-6 text-sm text-muted-foreground">
           No spans match "{term}" in the recent window.
