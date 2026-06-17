@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import * as Card from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
@@ -31,7 +32,7 @@
           {#each Array(4) as _, i (i)}<Skeleton class="h-12 w-full" />{/each}
         </div>
       {:else if replays.error}
-        <p class="px-6 text-sm text-destructive">Failed to load: {replays.error.toString()}</p>
+        <LoadError message="Couldn't load replays." error={replays.error} class="mx-6" />
       {:else if !replays.data || replays.data.length === 0}
         <div class="px-6 pb-2">
           <EmptyState

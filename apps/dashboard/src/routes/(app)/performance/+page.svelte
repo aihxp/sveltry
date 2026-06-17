@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import * as Card from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
@@ -241,7 +242,7 @@
           {#each Array(5) as _, i (i)}<Skeleton class="h-9 w-full" />{/each}
         </div>
       {:else if stats.error}
-        <p class="px-6 text-sm text-destructive">Failed to load: {stats.error.toString()}</p>
+        <LoadError message="Couldn't load performance stats." error={stats.error} class="mx-6" />
       {:else if !stats.data || stats.data.rows.length === 0}
         <div class="px-6 pb-2">
           <EmptyState

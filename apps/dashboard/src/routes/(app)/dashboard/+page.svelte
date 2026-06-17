@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
@@ -73,7 +74,7 @@
           {#each Array(4) as _, i (i)}<Skeleton class="h-12 w-full" />{/each}
         </div>
       {:else if recent.error}
-        <p class="px-4 text-sm text-destructive">Failed to load: {recent.error.toString()}</p>
+        <LoadError message="Couldn't load recent issues." error={recent.error} class="mx-4" />
       {:else if !recent.data || recent.data.length === 0}
         <div class="px-6 py-4">
           {#if !hasProjects}

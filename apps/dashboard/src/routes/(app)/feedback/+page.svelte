@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery, useAuth } from 'convex-svelte';
+  import LoadError from '$lib/components/LoadError.svelte';
   import { api } from '$convex/_generated/api';
   import * as Card from '$lib/components/ui/card';
   import EmptyState from '$lib/components/EmptyState.svelte';
@@ -27,7 +28,7 @@
       {#each Array(3) as _, i (i)}<Skeleton class="h-20 w-full rounded-xl" />{/each}
     </div>
   {:else if feedback.error}
-    <p class="text-sm text-destructive">Failed to load: {feedback.error.toString()}</p>
+    <LoadError message="Couldn't load feedback." error={feedback.error} />
   {:else if !feedback.data || feedback.data.length === 0}
     <EmptyState
       title="No feedback yet"
