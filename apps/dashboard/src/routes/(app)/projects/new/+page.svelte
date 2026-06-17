@@ -9,6 +9,7 @@
   import { selectClass } from '$lib/components/ui/control-classes';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import { buildDsn } from '$lib/utils';
+  import { sdkSnippet } from '$lib/sdk-snippets';
 
   const client = useConvexClient();
   const auth = useAuth();
@@ -22,6 +23,8 @@
 
   const ingestUrl = env.PUBLIC_SVELTRY_INGEST_URL ?? 'http://127.0.0.1:3211';
   const dsn = $derived(result ? buildDsn(ingestUrl, result.publicKey, result.publicId) : '');
+  // The install + init snippet tailored to the platform picked above.
+  const snippet = $derived(sdkSnippet(platform, dsn));
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -74,13 +77,13 @@
       <Card.Header>
         <Card.Title>Project created</Card.Title>
         <Card.Description>
-          Point a Sentry SDK at this DSN. The official <code class="font-mono">@sentry/*</code> clients
-          work unmodified.
+          Wire up the {snippet.label} SDK below, then send an event. The official Sentry clients work
+          unmodified, only the DSN changes.
         </Card.Description>
       </Card.Header>
-      <Card.Content class="space-y-4">
+      <Card.Content class="space-y-5">
         <div>
-          <Label>DSN</Label>
+          <Label>1. Your DSN</Label>
           <div class="mt-1.5 flex items-center gap-2">
             <code
               class="min-w-0 flex-1 truncate rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs"
@@ -90,9 +93,34 @@
             <CopyButton text={dsn} />
           </div>
         </div>
-        <pre class="overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs"><code
-            >Sentry.init({'{'} dsn: '{dsn}' });</code
-          ></pre>
+
+        <div>
+          <Label>2. Install the SDK</Label>
+          <div class="mt-1.5 flex items-center gap-2">
+            <code
+              class="min-w-0 flex-1 overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs"
+            >
+              {snippet.install}
+            </code>
+            <CopyButton text={snippet.install} />
+          </div>
+        </div>
+
+        <div>
+          <Label>3. Initialize it</Label>
+          <div class="mt-1.5 flex items-start gap-2">
+            <pre
+              class="min-w-0 flex-1 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs"><code
+                >{snippet.code}</code
+              ></pre>
+            <CopyButton text={snippet.code} />
+          </div>
+          <p class="mt-2 text-xs text-muted-foreground">
+            Then trigger an error in your app (or call the SDK's capture method). The project page
+            will confirm when your first event arrives.
+          </p>
+        </div>
+
         <div class="flex gap-2">
           <Button href={`/projects/${result.slug}`}>Go to project</Button>
           <Button variant="outline" href="/projects">All projects</Button>
