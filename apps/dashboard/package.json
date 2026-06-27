@@ -14,7 +14,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
-    "@convex-dev/better-auth": "0.12.3",
+    "@convex-dev/better-auth": "0.12.4",
     "@lucide/svelte": "catalog:",
     "@mmailaender/convex-better-auth-svelte": "0.8.0",
     "@sveltry/types": "workspace:*",
